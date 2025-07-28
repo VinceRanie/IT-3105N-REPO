@@ -1,7 +1,7 @@
 ## Biocella
 Capstone Project
 
-##Before Pushing run
+## Before Pushing run
 
 ```bash
 npm run lint
