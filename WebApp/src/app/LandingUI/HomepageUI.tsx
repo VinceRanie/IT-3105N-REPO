@@ -1,5 +1,9 @@
 import Navbar from "../UI Components/Nav";
 import Form from "../Login/Form";
+import AboutUs from "../UI Components/About";
+import Collections from "../UI Components/Collection";
+import Features from "../UI Components/Features";
+import Footer from "../UI Components/Footer";
 
 export default function Homepage(){
 return(
@@ -21,6 +25,10 @@ return(
          </div>
         </div> */}
         <Form/>
+        <AboutUs/>
+        <Collections/>
+        <Features/>
+        <Footer/>
     </>
    
 )

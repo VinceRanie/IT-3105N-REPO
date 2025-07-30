@@ -3,7 +3,7 @@ import Image from "next/image";
 
 const Form = () => {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background to-secondary/30 flex text-[#113F67]">
+    <div id="form" className="min-h-screen bg-gradient-to-br from-background to-secondary/30 flex text-[#113F67]">
       {/* Left Content Section */}
       <div className="flex-1 flex items-center justify-center px-8 lg:px-16">
         <div className="max-w-lg space-y-8">
@@ -17,14 +17,14 @@ const Form = () => {
           {/* Tagline */}
           <div className="space-y-4">
             <p className="text-xl font-medium text-[#113F67] leading-relaxed ">
-              Welcome University of San Carlos Students! Sign in to explore exclusive BioCella features
+              Welcome University of San Carlos Students! Sign in to explore exclusive BioCella features.
             </p>
           </div>
 
           {/* Login Button */}
           <div className="pt-2 text-white">
             <button 
-              className="cursor-pointer bg-[#113F67] rounded-xl px-12 py-6 text-lg uppercase tracking-wider transform transition-all duration-300 hover:shadow-2xl"
+              className="cursor-pointer bg-[#113F67] rounded-xl px-12 py-3 text-lg uppercase tracking-wider transform transition-all duration-300 hover:shadow-2xl"
             >
               LOGIN
             </button>
@@ -32,15 +32,15 @@ const Form = () => {
 
           {/* Additional Features Hint */}
           <div className="pt-8 space-y-2 text-sm text-muted-foreground">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center">
               <div className="w-2 h-2 bg-biocella-green rounded-full"></div>
               <span>Research collaboration tools</span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-biocella-blue rounded-full"></div>
+            <div className="flex items-center">
+              <div className="w-2 h-2  rounded-full"></div>
               <span>Laboratory management system</span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center">
               <div className="w-2 h-2 bg-biocella-molecular rounded-full"></div>
               <span>Academic resource sharing</span>
             </div>
@@ -54,7 +54,7 @@ const Form = () => {
         <Image
           src="/UI/img/Laboratory.jpg"
           alt="Scientific laboratory research"
-          className="w-full h-screen object-cover"
+          className="w-full h-full rounded-tl-2xl rounded-bl-2xl object-cover"
           width={4000}     
           height={4000} 
         />

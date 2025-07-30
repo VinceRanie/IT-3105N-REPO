@@ -1,23 +1,55 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Menu, X } from "lucide-react"
 import { usePathname } from "next/navigation"
 
 const navigation = [
   { name: "Home", href: "/" },
-  { name: "About", href: "/about" },
-  { name: "Services", href: "/services" },
-  { name: "Contact", href: "/contact" },
+  { name: "About", href: "#AboutUs" },
+  { name: "Collection", href: "#collection" },
+  { name: "Features", href: "#features" },
+  { name: "Contact", href: "#contact" },
 ]
 
 export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const pathname = usePathname()
+  const [activeHash, setActiveHash] = useState("")
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollPosition = window.scrollY + 100 
+
+      const sections = navigation
+        .filter((item) => item.href.startsWith("#"))
+        .map((item) => {
+          const element = document.querySelector(item.href)
+          if (!element) return null
+          const top = element.getBoundingClientRect().top + window.scrollY
+          return { href: item.href, top }
+        })
+        .filter((s): s is { href: string; top: number } => s !== null)
+
+      const current = sections
+        .reverse()
+        .find((section) => scrollPosition >= section.top)
+
+      setActiveHash(current?.href || "#")
+    }
+
+    window.addEventListener("scroll", handleScroll)
+    window.addEventListener("load", handleScroll)
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll)
+      window.removeEventListener("load", handleScroll)
+    }
+  }, [])
 
   return (
-    <nav className="bg-white shadow-lg mb-0.5">
+    <nav className="sticky top-0 z-50 bg-white shadow-lg mb-1 opacity-90">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           {/* Logo */}
@@ -26,17 +58,21 @@ export default function Navbar() {
               <span className="text-2xl font-bold text-gray-800">BIOCELLA</span>
             </Link>
           </div>
-          
+
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center space-x-8 justify-content-center ">
+          <div className="hidden md:flex items-center space-x-8 justify-content-center">
             {navigation.map((item) => {
-              const isActive = pathname === item.href
+              const isActive =
+                item.href === "/"
+                  ? pathname === "/" && (activeHash === "" || activeHash === "#")
+                  : activeHash === item.href
+
               return (
                 <Link
                   key={item.name}
                   href={item.href}
                   className={`relative px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${
-                    isActive ? "text-[#113F67]" : "text-[#113F67] hover:text-[#113F67]"
+                    isActive ? "text-[#113F67] font-semibold" : "text-[#113F67] hover:text-[#113F67]"
                   }`}
                 >
                   {item.name}
@@ -46,9 +82,8 @@ export default function Navbar() {
                 </Link>
               )
             })}
-          
           </div>
-        
+
           {/* Mobile menu button */}
           <div className="md:hidden flex items-center rounded-b-md">
             <button
@@ -72,7 +107,11 @@ export default function Navbar() {
         <div className="md:hidden">
           <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 bg-white border-t border-gray-200">
             {navigation.map((item) => {
-              const isActive = pathname === item.href
+              const isActive =
+                item.href === "/"
+                  ? pathname === "/" && (activeHash === "" || activeHash === "#")
+                  : activeHash === item.href
+
               return (
                 <Link
                   key={item.name}
