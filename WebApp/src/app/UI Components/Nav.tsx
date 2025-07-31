@@ -6,7 +6,7 @@ import { Menu, X } from "lucide-react"
 import { usePathname } from "next/navigation"
 
 const navigation = [
-  { name: "Home", href: "/" },
+  { name: "Home", href: "#form" },
   { name: "About", href: "#AboutUs" },
   { name: "Collection", href: "#collection" },
   { name: "Features", href: "#features" },
@@ -20,7 +20,7 @@ export default function Navbar() {
 
   useEffect(() => {
     const handleScroll = () => {
-      const scrollPosition = window.scrollY + 100 
+      const scrollPosition = window.scrollY + 50 
 
       const sections = navigation
         .filter((item) => item.href.startsWith("#"))
@@ -63,8 +63,8 @@ export default function Navbar() {
           <div className="hidden md:flex items-center space-x-8 justify-content-center">
             {navigation.map((item) => {
               const isActive =
-                item.href === "/"
-                  ? pathname === "/" && (activeHash === "" || activeHash === "#")
+                item.href === "#"
+                  ? pathname === "#" && (activeHash === "" || activeHash === "#")
                   : activeHash === item.href
 
               return (

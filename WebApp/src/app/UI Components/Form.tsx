@@ -1,7 +1,9 @@
 "use client"
 import Image from "next/image";
+import {useRouter} from "next/navigation"
 
 const Form = () => {
+  const router = useRouter();
   return (
     <div id="form" className="min-h-screen bg-gradient-to-br from-background to-secondary/30 flex text-[#113F67]">
       {/* Left Content Section */}
@@ -20,16 +22,14 @@ const Form = () => {
               Welcome University of San Carlos Students! Sign in to explore exclusive BioCella features.
             </p>
           </div>
-
           {/* Login Button */}
           <div className="pt-2 text-white">
-            <button 
+            <button onClick={()=>router.push("/Login")}
               className="cursor-pointer bg-[#113F67] rounded-xl px-12 py-3 text-lg uppercase tracking-wider transform transition-all duration-300 hover:shadow-2xl"
             >
               LOGIN
             </button>
           </div>
-
           {/* Additional Features Hint */}
           <div className="pt-8 space-y-2 text-sm text-muted-foreground">
             <div className="flex items-center">
@@ -47,7 +47,6 @@ const Form = () => {
           </div>
         </div>
       </div>
-
       {/* Right Image Section */}
       <div className="rounded-tl-2xl rounded-bl-2xl flex-1 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-l from-transparent to-background/10"></div>
