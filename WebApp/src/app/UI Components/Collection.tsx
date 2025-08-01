@@ -1,6 +1,7 @@
 "use client"
 import Image from "next/image"
 import { motion } from "framer-motion";
+import { useRouter } from "next/navigation";
 
 export default function Collections() {
     const collections = [
@@ -71,6 +72,7 @@ export default function Collections() {
       }
       return colorMap[color as keyof typeof colorMap] || colorMap.blue
     }
+    const router = useRouter();
   
     return (
       <motion.section 
@@ -149,7 +151,7 @@ export default function Collections() {
   
           <div className="mt-12 text-center">
             <p className="text-gray-600 mb-6">Set an Appointment to our Laboratory.</p>
-            <button className="bg-[#113F67] text-white px-8 py-3 rounded-lg font-large capitalize hover:shadow-2xl cursor-pointer">
+            <button onClick={() => router.push("/Appointment")} className="bg-[#113F67] text-white px-8 py-3 rounded-lg font-large capitalize hover:shadow-2xl cursor-pointer">
              Request an Appointment
             </button>
           </div>
