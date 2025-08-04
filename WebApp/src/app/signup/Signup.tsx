@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Mail, Lock, User, Eye, EyeOff } from "lucide-react";
+import { Mail } from "lucide-react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 
 export default function SignupForm() {
-  const [showPassword, setShowPassword] = useState(false);
+  // const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -28,7 +29,7 @@ export default function SignupForm() {
 
     // TODO: Handle signup logic or API call here
   };
-
+  const router = useRouter();
   return (
     <div className="min-h-screen grid grid-cols-1 md:grid-cols-2">
       {/* Left: Form */}
@@ -60,7 +61,6 @@ export default function SignupForm() {
                 />
               </div>
             </div>
-
             {/* Submit */}
             <button
               type="submit"
@@ -69,14 +69,13 @@ export default function SignupForm() {
               Send
             </button>
           </form>
-
           {/* Login Redirect */}
           <div className="text-center pt-4 border-t border-gray-200">
             <p className="text-sm text-gray-600">
               Already have an account?{" "}
               <button
-                className="text-[#113F67] hover:text-[#0a2a4a] font-medium transition-colors"
-                onClick={() => console.log("Redirect to login")}
+                className="text-[#113F67] hover:text-[#0a2a4a] font-medium transition-colors cursor-pointer hover:underline"
+                onClick={() => router.push("/Login")}
               >
                 Log in
               </button>
@@ -84,7 +83,6 @@ export default function SignupForm() {
           </div>
         </div>
       </div>
-
       {/* Right: Image Section */}
       <div className="relative hidden md:block">
         <Image
