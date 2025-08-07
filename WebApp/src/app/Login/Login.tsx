@@ -3,11 +3,11 @@
 import { useState } from 'react';
 import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
 import Image from 'next/image';
-import Link from 'next/link';
-
+import { useRouter } from 'next/navigation';
 
 export default function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
+
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -23,10 +23,21 @@ export default function LoginForm() {
   const handleInputChange = (field: string, value: string | boolean) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
-
+  const router = useRouter();
   return (
-    <div className="min-h-screen grid grid-cols-1 md:grid-cols-2">
-      {/* Left: Form Section */}
+    <div className="min-h-screen grid grid-cols-1 md:grid-cols-2 ease-in-out duration-300">
+      {/* Left: Image Section */}
+      <div className="relative hidden md:block">
+        <Image
+          src="/UI/img/Laboratory.jpg"
+          alt="Scientific laboratory research"
+          fill
+          className="object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-l from-transparent to-background/10" />
+      </div>
+
+      {/* Right: Form Section */}
       <div className="bg-gradient-to-br from-background to-secondary/30 flex items-center justify-center p-4">
         <div className="w-full max-w-md bg-white rounded-lg shadow-lg p-6">
           <div className="space-y-1 pb-6">
@@ -37,7 +48,6 @@ export default function LoginForm() {
               Sign in to your account to continue
             </p>
           </div>
-
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Email Field */}
             <div className="space-y-2">
@@ -111,7 +121,7 @@ export default function LoginForm() {
         />
               <button
                 type="button"
-                className="text-sm text-[#113F67] hover:text-[#0a2a4a] font-medium transition-colors cursor-pointer"
+                className="text-sm text-[#113F67] hover:text-[#0a2a4a] font-medium transition-colors cursor-pointer hover:underline"
                 onClick={() => console.log('Forgot password clicked')}
               >
                 Forgot password?
@@ -121,6 +131,7 @@ export default function LoginForm() {
             {/* Submit Button */}
             <button
               type="submit"
+              onClick={()=>router.push("/AdminUI/AdminDashBoard")}
               className="w-full bg-[#113F67] text-white py-2 px-4 rounded-md hover:bg-[#0a2a4a] transition-all duration-200 shadow-md hover:shadow-lg cursor-pointer"
             >
               Sign In
@@ -131,27 +142,14 @@ export default function LoginForm() {
           <div className="text-center pt-4 border-t border-gray-200">
             <p className="text-sm text-gray-600">
               Don&apos;t have an account?{' '}
-              <Link
-                href="/signup"
-                className="text-[#113F67] hover:text-[#0a2a4a] font-medium transition-colors"
-                onClick={() => console.log('Sign up clicked')}
+
+              <button
+                className="text-[#113F67] hover:text-[#0a2a4a] font-medium transition-colors cursor-pointer hover:underline"
+                onClick={()=>router.push("/signup")}
               >
-                Sign up
-              </Link>
             </p>
           </div>
         </div>
-      </div>
-
-      {/* Right: Image Section */}
-      <div className="relative hidden md:block">
-        <Image
-          src="/UI/img/Laboratory.jpg"
-          alt="Scientific laboratory research"
-          fill
-          className="object-cover"
-        />
-        <div className="absolute inset-0 bg-gradient-to-l from-transparent to-background/10" />
       </div>
     </div>
   );

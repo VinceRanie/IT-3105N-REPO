@@ -23,7 +23,6 @@ export default function AboutUs() {
                 microorganisms. Our mission is to unlock the potential of these microscopic life forms to solve real-world
                 challenges.
               </p>
-  
               <p className="text-gray-600">
                 From beneficial bacteria that support human health to innovative applications in biotechnology, we study
                 how microorganisms can contribute to a sustainable future for our planet.
@@ -63,7 +62,6 @@ export default function AboutUs() {
               </div>
             </div>
           </div>
-  
           <div className="mt-12 text-center">
             <p className="text-gray-600 italic">&quot;Exploring the invisible world to create visible impact&quot;</p>
           </div>
