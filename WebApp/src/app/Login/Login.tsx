@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
 import Image from 'next/image';
+import Link from 'next/link';
+
 
 export default function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
@@ -129,12 +131,13 @@ export default function LoginForm() {
           <div className="text-center pt-4 border-t border-gray-200">
             <p className="text-sm text-gray-600">
               Don&apos;t have an account?{' '}
-              <button
+              <Link
+                href="/signup"
                 className="text-[#113F67] hover:text-[#0a2a4a] font-medium transition-colors"
                 onClick={() => console.log('Sign up clicked')}
               >
                 Sign up
-              </button>
+              </Link>
             </p>
           </div>
         </div>

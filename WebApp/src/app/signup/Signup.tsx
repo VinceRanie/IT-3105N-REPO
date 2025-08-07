@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Mail, Lock, User, Eye, EyeOff } from "lucide-react";
 import Image from "next/image";
+import Link from 'next/link';
 
 export default function SignupForm() {
   const [showPassword, setShowPassword] = useState(false);
@@ -74,13 +75,27 @@ export default function SignupForm() {
           <div className="text-center pt-4 border-t border-gray-200">
             <p className="text-sm text-gray-600">
               Already have an account?{" "}
-              <button
+              <Link
+                href="/Login"
                 className="text-[#113F67] hover:text-[#0a2a4a] font-medium transition-colors"
                 onClick={() => console.log("Redirect to login")}
               >
                 Log in
-              </button>
+              </Link>
+             
+              
             </p>
+           <p className="text-sm text-gray-600">
+  <Link href="/signup/finalize">
+    <button
+      onClick={() => console.log("Redirect to FinalizeSignup")}
+      className="bg-[#113F67] hover:bg-[#0a2a4a] text-white font-medium py-2 px-4 rounded transition-colors cursor-pointer"
+    >
+      Test FinalizeSignup
+    </button>
+  </Link>
+</p>
+
           </div>
         </div>
       </div>
