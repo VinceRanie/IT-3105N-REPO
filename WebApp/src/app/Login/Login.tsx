@@ -146,7 +146,7 @@ export default function LoginForm() {
               <button
                 className="text-[#113F67] hover:text-[#0a2a4a] font-medium transition-colors cursor-pointer hover:underline"
                 onClick={()=>router.push("/signup")}
-              >
+              >Sign up</button>
             </p>
           </div>
         </div>

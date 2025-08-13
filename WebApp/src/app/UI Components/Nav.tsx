@@ -4,19 +4,19 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Menu, X } from "lucide-react"
 import { usePathname } from "next/navigation"
+import Image from "next/image"
 
 const navigation = [
   { name: "Home", href: "#form" },
   { name: "About", href: "#AboutUs" },
   { name: "Collection", href: "#collection" },
   { name: "Features", href: "#features" },
-  { name: "Contact", href: "#contact" },
 ]
 
 export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const pathname = usePathname()
-  const [activeHash, setActiveHash] = useState("")
+  const [activeHash, setActiveHash] = useState("#form") 
 
   useEffect(() => {
     const handleScroll = () => {
@@ -48,15 +48,23 @@ export default function Navbar() {
     }
   }, [])
 
+
   return (
     <nav className="sticky top-0 z-50 bg-white shadow-lg mb-1 opacity-90">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           {/* Logo */}
           <div className="flex items-center">
-            <Link href="/" className="flex-shrink-0">
-              <span className="text-2xl font-bold text-gray-800">BIOCELLA</span>
-            </Link>
+          <Link href="/" className="flex items-center space-x-2 flex-shrink-0">
+  <Image
+    src="/UI/img/BiocellaLogo.png"
+    alt="Scientific laboratory research"
+    className="w-10 h-10 rounded-tl-2xl rounded-bl-2xl object-cover"
+    width={40}
+    height={40}
+  />
+  <span className="text-2xl font-bold text-gray-800">BIOCELLA</span>
+</Link>
           </div>
 
           {/* Desktop Navigation */}

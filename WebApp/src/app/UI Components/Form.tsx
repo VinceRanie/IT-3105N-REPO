@@ -11,6 +11,7 @@ const Form = () => {
         <div className="max-w-lg space-y-8">
           {/* BioCella Logo and Branding */}
           <div className="space-y-2">
+         
             <h1 className="text-5xl font-bold text-[#113F67] flex items-center gap-3">
               Biocella
             </h1>

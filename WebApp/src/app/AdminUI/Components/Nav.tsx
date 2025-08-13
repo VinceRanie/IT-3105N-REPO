@@ -15,7 +15,8 @@ const navigation = [
 
 export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [activeLink, setActiveLink] = useState<string | null>(null)
+  const [activeLink, setActiveLink] = useState<string | null>("#Dashboard")
+  
 
   const handleClick = (href: string) => {
     setActiveLink(href)

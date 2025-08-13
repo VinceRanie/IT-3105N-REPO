@@ -3,10 +3,9 @@
 import { useState } from "react";
 import { Mail } from "lucide-react";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 export default function SignupForm() {
-  const router = useRouter();
 
   const [formData, setFormData] = useState({
     name: "",
@@ -74,37 +73,23 @@ export default function SignupForm() {
           <div className="text-center pt-4 border-t border-gray-200">
             <p className="text-sm text-gray-600">
               Already have an account?{" "}
-         <Link
+              <Link
                 href="/Login"
                 className="text-[#113F67] hover:text-[#0a2a4a] font-medium transition-colors"
                 onClick={() => console.log("Redirect to login")}
               >
                 Log in
               </Link>
-             
-              
             </p>
-           <p className="text-sm text-gray-600">
-  <Link href="/signup/finalize">
-    <button
-      onClick={() => console.log("Redirect to FinalizeSignup")}
-      className="bg-[#113F67] hover:bg-[#0a2a4a] text-white font-medium py-2 px-4 rounded transition-colors cursor-pointer"
-    >
-      Test FinalizeSignup
-    </button>
-  </Link>
-</p>
-
-          </div>
-        </div>
-      </div>
-
-              <button
-                className="text-[#113F67] hover:text-[#0a2a4a] font-medium transition-colors cursor-pointer hover:underline"
-                onClick={() => router.push("/Login")}
-              >
-                Log in
-              </button>
+            <p className="text-sm text-gray-600 mt-2">
+              <Link href="/signup/finalize">
+                <button
+                  onClick={() => console.log("Redirect to FinalizeSignup")}
+                  className="bg-[#113F67] hover:bg-[#0a2a4a] text-white font-medium py-2 px-4 rounded transition-colors cursor-pointer"
+                >
+                  Test FinalizeSignup
+                </button>
+              </Link>
             </p>
           </div>
         </div>
