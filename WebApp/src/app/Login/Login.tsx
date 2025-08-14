@@ -5,7 +5,6 @@ import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 
-
 export default function LoginForm() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
@@ -168,6 +167,7 @@ export default function LoginForm() {
             {/* Submit Button */}
             <button
               type="submit"
+              onClick={()=>router.push("/AdminUI/AdminDashBoard")}
               className="w-full bg-[#113F67] text-white py-2 px-4 rounded-md hover:bg-[#0a2a4a] transition-all duration-200 shadow-md hover:shadow-lg cursor-pointer"
               disabled={loading} // Disable button while loading
             >
@@ -179,12 +179,11 @@ export default function LoginForm() {
           <div className="text-center pt-4 border-t border-gray-200">
             <p className="text-sm text-gray-600">
               Don&apos;t have an account?{' '}
+
               <button
                 className="text-[#113F67] hover:text-[#0a2a4a] font-medium transition-colors cursor-pointer hover:underline"
                 onClick={()=>router.push("/signup")}
-              >
-                Sign up
-              </button>
+              >Sign up</button>
             </p>
           </div>
         </div>
