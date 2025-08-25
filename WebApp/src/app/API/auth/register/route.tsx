@@ -1,6 +1,5 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
+
 import { NextResponse } from "next/server";
-import { Query } from "mysql2";
 import bcrypt from "bcryptjs";
 import { v4 as uuidv4} from 'uuid';
 import nodemailer from 'nodemailer'
@@ -16,12 +15,6 @@ interface RegisterSucessResponse{
     message: string;
     userId: number;
     email: string;
-}
-
-interface ErrorResponse{
-    message: string;
-    error?: string;
-    statusCode: number;
 }
 
 interface UserRow extends RowDataPacket{
@@ -111,9 +104,6 @@ export async function POST(req: Request){
 
         const hashedPassword = await bcrypt.hash(plainTextPassword, 10);
 
-        console.log('Generated Plain Text Password:', plainTextPassword); // <-- Add this line
-        console.log('Length of Plain Text Password:', plainTextPassword.length); // <-- Add this line
-
         const resetToken = uuidv4();
 
         const insertResultArray = await query<ResultSetHeader>(
@@ -162,7 +152,7 @@ export async function POST(req: Request){
         );
     }
 }
-export async function GET(req:Request) {
+export async function GET() {
     return NextResponse.json(
         {message: 'Method not allowed.', statusCode: HttpStatus.METHOD_NOT_ALLOWED,}, {status: HttpStatus.METHOD_NOT_ALLOWED}
     );

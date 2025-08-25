@@ -29,7 +29,7 @@ interface UserRow extends RowDataPacket {
     reset_token?: string | null;
 }
 
-const JWT_SECRET = process.env.JWT_TOKEN || '7acc8c020412ccb24f15c8c9868202ec48ca7a40743c3f9b957fbd4b7014bbf2';
+const JWT_SECRET = process.env.JWT_TOKEN as string;
 
 export async function POST(req: Request) {
     try {
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
         }
 
         const users = await query<UserRow>(
-            'SELECT user_id, email, password, failed_login_attempts, lockout_until FROM user WHERE email = ?',
+            'SELECT user_id, email, password, failed_login_attempts, lockout_until, role FROM user WHERE email = ?',
             [email]
         );
 
@@ -57,7 +57,7 @@ export async function POST(req: Request) {
 
         if (user.lockout_until && new Date() < new Date(user.lockout_until)){
             return NextResponse.json(
-                { message: 'Account is locked please try again.', statudCode: HttpStatus.FORBIDDEN },
+                { message: 'Account is locked please try again.', statusCode: HttpStatus.FORBIDDEN },
                 { status: HttpStatus.FORBIDDEN}
             );
         }
@@ -70,7 +70,7 @@ export async function POST(req: Request) {
             );
 
             const token = jwt.sign(
-                { userId: user.user_id, email: user.email, rolse: user.role}, JWT_SECRET, {expiresIn: '1h'}
+                { userId: user.user_id, email: user.email, role: user.role}, JWT_SECRET, {expiresIn: '1h'}
             )
 
             return NextResponse.json(
@@ -83,7 +83,7 @@ export async function POST(req: Request) {
             const lockoutTime: Date | null = newAttempts >= 5? new Date( new Date().getTime() + 15 * 60000): null;
 
             if(lockoutTime){
-                message = 'Maximum logig attemptes exceeded. Account locked for 15 minutes';
+                message = 'Maximum login attemptes exceeded. Account locked for 15 minutes';
             }
 
             await query(
