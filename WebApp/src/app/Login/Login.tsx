@@ -36,7 +36,7 @@ export default function LoginForm() {
 
       if (response.ok) {
         setMessage({ text: data.message || 'Login successful!', type: 'success' });
-        router.push('/dashboard');
+        router.push('/AdminUI/AdminDashBoard');
         console.log('Login successful:', data);
       } else {
         setMessage({ text: data.message || 'Invalid credentials. Please try again.', type: 'error' });
@@ -141,13 +141,6 @@ export default function LoginForm() {
                   Remember me
                 </label>
               </div>
-              <Image
-                src="/UI/img/gmailsvg.svg"
-                alt="GmailSvg"
-                className="hover:bg-shadow-lg cursor-pointer"
-                width={30}
-                height={30}
-              />
               <button
                 type="button"
                 className="text-sm text-[#113F67] hover:text-[#0a2a4a] font-medium transition-colors cursor-pointer hover:underline"
