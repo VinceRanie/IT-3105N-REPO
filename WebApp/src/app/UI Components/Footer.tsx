@@ -26,7 +26,7 @@ export default function Footer() {
             width={40}
             height={40}
           />
-          <span>BIOCella</span>
+          <span>Biocella</span>
         </a>
 
         <a
