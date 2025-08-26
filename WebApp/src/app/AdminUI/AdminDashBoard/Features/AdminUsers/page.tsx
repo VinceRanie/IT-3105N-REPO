@@ -1,5 +1,12 @@
 import AdminUser from "./AdminUsers";
+import AdminControls from "./AdminControls"
 
 export default function AdminUsers(){
-    return <AdminUser/>;
+
+    return(
+        <>
+        <AdminControls/>
+        <AdminUser/>
+        </> 
+    )
 }
