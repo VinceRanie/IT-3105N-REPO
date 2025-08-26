@@ -103,7 +103,7 @@ export default function UserTable() {
   };
 
   return (
-    <div className="w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 relative">
+    <div className="w-full  h-210 mx-auto px-4 sm:px-6 lg:px-8 py-6 relative">
       <div className="bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden w-full">
         <div className="overflow-auto max-h-[32rem] relative">
           <table className="table-auto w-full relative">
