@@ -91,25 +91,25 @@ export default function ProfilePage() {
           <p className="text-sm text-gray-500">Your basic information (read-only)</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium">First Name</label>
+              <label className="block text-sm font-medium text-[#113F67]">First Name</label>
               <input className="w-full border rounded p-2 bg-gray-100 text-[#113F67]" value={userData.firstName} readOnly />
             </div>
             <div>
-              <label className="block text-sm font-medium">Last Name</label>
+              <label className="block text-sm font-medium text-[#113F67]">Last Name</label>
               <input className="w-full border rounded p-2 bg-gray-100 text-[#113F67]" value={userData.lastName} readOnly />
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium">Middle Name</label>
+            <label className="block text-sm font-medium text-[#113F67]">Middle Name</label>
             <input className="w-full border rounded p-2 bg-gray-100 text-[#113F67]" value={userData.middleName} readOnly />
           </div>
           <div>
-            <label className="block text-sm font-medium">Email</label>
+            <label className="block text-sm font-medium text-[#113F67]">Email</label>
             <input className="w-full border rounded p-2 bg-gray-100 text-[#113F67]" value={userData.email} readOnly />
           </div>
           <div>
-            <label className="block text-sm font-medium flex items-center gap-2">
-              <Shield className="h-4 w-4" /> Role
+            <label className="block text-sm font-medium flex items-center gap-2 text-[#113F67]">
+              <Shield className="h-4 w-4 text-[#113F67]" /> Role
             </label>
             <input className="w-full border rounded p-2 bg-gray-100 text-[#113F67]" value={userData.role} readOnly />
           </div>
@@ -122,7 +122,7 @@ export default function ProfilePage() {
           </h2>
           <p className="text-sm text-gray-500">Select your university department and course</p>
           <div>
-            <label className="block text-sm font-medium">Department</label>
+            <label className="block text-sm font-medium text-[#113F67]">Department</label>
             <select
               className="w-full border rounded p-2 text-[#113F67]"
               value={selectedDepartment}
@@ -138,7 +138,7 @@ export default function ProfilePage() {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium">Course</label>
+            <label className="block text-sm font-medium text-[#113F67]">Course</label>
             <select
               className="w-full border rounded p-2 text-[#113F67]"
               value={selectedCourse}
