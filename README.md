@@ -7,4 +7,4 @@ Capstone Project
 npm run lint
 ```
 
-checking for errors
+checking for errors. 
