@@ -4,32 +4,55 @@ import { useState } from "react";
 import { Mail } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+// import { useRouter } from "next/router";
+import { useRouter } from "next/navigation";
 
 export default function SignupForm() {
-
+  const router = useRouter();
   const [formData, setFormData] = useState({
-    name: "",
     email: "",
-    password: "",
-    confirmPassword: "",
   });
+
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<{ text: string, type: 'error' | 'success' } | null>(null);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
+    setMessage(null);
     console.log("Signup attempt:", formData);
 
-    if (formData.password !== formData.confirmPassword) {
-      alert("Passwords do not match!");
-      return;
-    }
+    try {
+      const response = await fetch("/API/auth/register", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email: formData.email }),
+      });
 
-    // TODO: Handle signup logic or API call here
+      const data = await response.json();
+
+      if (response.ok) {
+        setMessage({ text: data.message || 'Registration successful! Check your email for password.', type: 'success' });
+        // Optionally redirect after a short delay
+        setTimeout(() => {
+          router.push('/Login');
+        }, 5000); // Redirect to login after 3 seconds
+      } else {
+        setMessage({ text: data.message || 'Registration failed. Please try again.', type: 'error' });
+      }
+    } catch (error) {
+      console.error('Network or unexpected error during signup:', error);
+      setMessage({ text: 'An unexpected error occurred. Please try again.', type: 'error' });
+    } finally {
+      setLoading(false);
+    }
   };
-  
   return (
     <div className="min-h-screen grid grid-cols-1 md:grid-cols-2">
       {/* Left: Form */}
@@ -39,11 +62,13 @@ export default function SignupForm() {
             <h2 className="text-2xl font-bold text-center text-[#113F67]">
               Biocella
             </h2>
+            <p className="text-center text-gray-600">
+              Register your USC email to get started
+            </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-
-            {/* Email */}
+            {/* Email Field */}
             <div className="space-y-2">
               <label htmlFor="email" className="text-sm font-medium text-[#113F67]">
                 Email Address
@@ -61,14 +86,24 @@ export default function SignupForm() {
                 />
               </div>
             </div>
-            {/* Submit */}
+
+            {/* Message Display Area */}
+            {message && (
+              <p className={`text-center text-sm ${message.type === 'error' ? 'text-red-600' : 'text-green-600'}`}>
+                {message.text}
+              </p>
+            )}
+
+            {/* Submit Button */}
             <button
               type="submit"
               className="w-full bg-[#113F67] text-white py-2 px-4 rounded-md hover:bg-[#0a2a4a] transition-all duration-200 shadow-md hover:shadow-lg cursor-pointer"
+              disabled={loading}
             >
-              Send
+              {loading ? 'Sending...' : 'Send'}
             </button>
           </form>
+
           {/* Login Redirect */}
           <div className="text-center pt-4 border-t border-gray-200">
             <p className="text-sm text-gray-600">

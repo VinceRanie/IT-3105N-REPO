@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 
 export default function LoginForm() {
+  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -14,16 +15,44 @@ export default function LoginForm() {
     rememberMe: false,
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<{ text: string, type: 'error' | 'success' } | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Login attempt:', formData);
-    // Handle login logic here
+    setLoading(true); 
+    setMessage(null); 
+
+    try {
+      const response = await fetch("/API/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email: formData.email, password: formData.password }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setMessage({ text: data.message || 'Login successful!', type: 'success' });
+        router.push('/AdminUI/AdminDashBoard');
+        console.log('Login successful:', data);
+      } else {
+        setMessage({ text: data.message || 'Invalid credentials. Please try again.', type: 'error' });
+      }
+    } catch (error) {
+      console.error('Network or unexpected error during login:', error);
+      setMessage({ text: 'An unexpected error occurred. Please try again.', type: 'error' });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleInputChange = (field: string, value: string | boolean) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
-  const router = useRouter();
+
   return (
     <div className="min-h-screen grid grid-cols-1 md:grid-cols-2 ease-in-out duration-300">
       {/* Left: Image Section */}
@@ -112,13 +141,6 @@ export default function LoginForm() {
                   Remember me
                 </label>
               </div>
-              <Image
-          src="/UI/img/gmailsvg.svg"
-          alt="GmailSvg"
-          className="hover:bg-shadow-lg cursor-pointer"
-          width={30}     
-          height={30} 
-        />
               <button
                 type="button"
                 className="text-sm text-[#113F67] hover:text-[#0a2a4a] font-medium transition-colors cursor-pointer hover:underline"
@@ -128,13 +150,21 @@ export default function LoginForm() {
               </button>
             </div>
 
+            {/* Message Display Area */}
+            {message && (
+              <p className={`text-center text-sm ${message.type === 'error' ? 'text-red-600' : 'text-green-600'}`}>
+                {message.text}
+              </p>
+            )}
+
             {/* Submit Button */}
             <button
               type="submit"
               onClick={()=>router.push("/AdminUI/AdminDashBoard")}
               className="w-full bg-[#113F67] text-white py-2 px-4 rounded-md hover:bg-[#0a2a4a] transition-all duration-200 shadow-md hover:shadow-lg cursor-pointer"
+              disabled={loading} // Disable button while loading
             >
-              Sign In
+              {loading ? 'Signing In...' : 'Sign In'}
             </button>
           </form>
 
