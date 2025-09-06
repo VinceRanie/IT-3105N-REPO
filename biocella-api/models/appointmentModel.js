@@ -16,7 +16,7 @@ exports.getAllAppointments = async () => {
   return rows;
 };
 
-// READ ONE
+// READ ONE By ID
 exports.getAppointmentById = async (id) => {
   const [rows] = await db.execute("SELECT * FROM appointment WHERE appointment_id = ?", [id]);
   return rows[0];
