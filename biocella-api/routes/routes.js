@@ -12,6 +12,7 @@ router.use('/biochemical', require('./biochemicalRoutes'));
 router.use('/genome', require('./genomeRoutes'));
 router.use('/bioactivity', require('./bioactivityRoutes'));
 router.use('/resource', require('./resourceRoutes'));
+router.use('/appointments', require('./appointmentRoutes'));
 
 //Blaast
 router.post('/submit', blastController.runBlast);
