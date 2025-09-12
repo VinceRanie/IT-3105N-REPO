@@ -3,11 +3,20 @@
 <p align="center">
   <img src="/img/image.png" alt="Biocella Landing Page" width="800"/>
 </p>
+
+
 ---
 
 ## 🚀 Getting Started
 
 Before pushing changes, always check for errors by running:
 
+
+## 🎨 Project Style Guide
+
+Primary Color: #113F67
+
 ```bash
 npm run lint
+```
+
