@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="/WebApp/public/UI/img/Laboratory.jpg" alt="Data Structures and Algorithms Banner" width="800"/>
+  <img src="/img/image.png" alt="Biocella Landing Page" width="800"/>
 </p>
 
 # 🧫 Biocella
