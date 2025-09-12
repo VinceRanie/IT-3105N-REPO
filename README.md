@@ -16,6 +16,8 @@ Before pushing changes, always check for errors by running:
 
 Primary Color: #113F67
 
+---
+
 ```bash
 npm run lint
 ```
