@@ -1,11 +1,11 @@
-## Biocella
-Capstone Project
+# 🧫 Biocella
+**Capstone Project – Web-Based Information and Inventory Management System**  
 
-## RUN BEFORE PUSHING
+---
+
+## 🚀 Getting Started
+
+Before pushing changes, always check for errors by running:
 
 ```bash
 npm run lint
-```
-PRIMARY COLOR : #113F67
-
-checking for errors
