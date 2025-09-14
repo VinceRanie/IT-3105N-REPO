@@ -12,13 +12,15 @@
 Before pushing changes, always check for errors by running:
 
 
+```bash
+npm run lint
+```
+
+
+
+
 ## 🎨 Project Style Guide
 
 Primary Color: #113F67
 
 ---
-
-```bash
-npm run lint
-```
-
