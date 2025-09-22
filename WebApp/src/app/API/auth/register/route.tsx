@@ -1,4 +1,3 @@
-
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { v4 as uuidv4} from 'uuid';
@@ -21,47 +20,57 @@ interface UserRow extends RowDataPacket{
     user_id: number;
     email: string;
     password?:string;
-    failed_login_attempts?: number; 
-    lockout_until?: Date | null;    
+    failed_login_attempts?: number;
+    lockout_until?: Date | null;
     reset_token?: string | null;
 }
 
-const createTransporter = async() => {
+const createTransporter = async () => {
     const oauth2Client = new google.auth.OAuth2(
-        process.env.EMAIL_CLIENT_ID,
-        process.env.EMAIL_CLIENT_SECRET,
-        'https://developers.google.com/oauthplayground'
-    );
+    process.env.EMAIL_CLIENT_ID,
+    process.env.EMAIL_CLIENT_SECRET,
+    "https://developers.google.com/oauthplayground"
+);
 
-    oauth2Client.setCredentials({
-        refresh_token: process.env.EMAIL_CLIENT_REFRESH_TOKEN
-    });
-    const accessToken = await new Promise<string>((resolve, reject) => {
-        oauth2Client.getAccessToken((err: Error | null | undefined, token: string | null | undefined) => {
-        if(err){
-            console.error("Failed to retrieve access token", err);
-            reject (new Error("Failed to retrieve access token: " + err.message)); // Added err.message
-        }
-        if (token) { 
-            resolve(token);
-        } else {
-            reject(new Error("Access token was null or undefined, but no explicit error received."));
-        }
-    });
+oauth2Client.setCredentials({
+    refresh_token: process.env.EMAIL_CLIENT_REFRESH_TOKEN,
 });
-    return nodemailer.createTransport({
-        service: process.env.EMAIL_SERVICE,
-        auth:{
-            type: 'OAuth2',
-            user: process.env.EMAIL_USER,
-            clientId: process.env.EMAIL_CLIENT_ID,
-            clientSecret: process.env.EMAIL_CLIENT_SECRET,
-            refreshToken: process.env.EMAIL_CLIENT_REFRESH_TOKEN,
-            accessToken: accessToken
-        }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
+
+const accessToken = await new Promise<string>((resolve, reject) => {
+oauth2Client.getAccessToken(
+    (err: Error | null | undefined, token: string | null | undefined) => {
+    if (err) {
+        console.error("Failed to retrieve access token", err);
+        reject(new Error("Failed to retrieve access token: " + err.message));
+    }
+    if (token) {
+        resolve(token);
+    } else {
+        reject(
+        new Error(
+            "Access token was null or undefined, but no explicit error received."
+        )
+        );
+    }
+    }
+    );
+});
+
+return nodemailer.createTransport({
+    host: "smtp.gmail.com",
+    port: 465,
+    secure: true, // use TLS
+    auth: {
+    type: "OAuth2",
+    user: process.env.EMAIL_USER,
+    clientId: process.env.EMAIL_CLIENT_ID,
+    clientSecret: process.env.EMAIL_CLIENT_SECRET,
+    refreshToken: process.env.EMAIL_CLIENT_REFRESH_TOKEN,
+    accessToken,
+    },
+});
 };
+
 
 const HttpStatus = {
     OK: 200,
@@ -88,10 +97,10 @@ export async function POST(req: Request){
         const existingUsers = await query<UserRow>(
             'SELECT user_id, email FROM user WHERE email = ?', [email]
         );
-        if(existingUsers.length>0){
+        if(existingUsers.length > 0){
             return NextResponse.json(
-                {message: 'User already exists.', statusCode: HttpStatus.BAD_REQUEST},
-                {status: HttpStatus.BAD_REQUEST}
+                {message: 'User already exists.', statusCode: HttpStatus.CONFLICT},
+                {status: HttpStatus.CONFLICT}
             );
         }
 
@@ -107,17 +116,18 @@ export async function POST(req: Request){
         const resetToken = uuidv4();
 
         const insertResultArray = await query<ResultSetHeader>(
-            'INSERT INTO user (email, password, reset_token, name, role) VALUES (?, ?, ?, ?, ?)',
-            [email, hashedPassword, resetToken, '', 'student']
+        `INSERT INTO user (email, password, reset_token, first_name, last_name, role) 
+        VALUES (?, ?, ?, ?, ?, ?)`,
+        [email, hashedPassword, resetToken, '', '', 'student']
         );
-        const insertResult  = insertResultArray[0];
+        const insertResult = insertResultArray[0];
         const newUserId = insertResult.insertId;
         const transporter = await createTransporter();
         await transporter.sendMail({
             from: '"BIOCELLA App" <'+ process.env.EMAIL_USER + '>',
             to: email,
             subject: 'Your Registration and Password.',
-            html:  `<p>Hi,</p>
+            html: `<p>Hi,</p>
             <p>Thank you for registering for our application!</p>
             <p>Your default login password is: <strong>${plainTextPassword}</strong></p>
             <p>IMPORTANT: For security reasons, please click the link below to set your own secure password immediately after your first login:</p>
@@ -128,7 +138,7 @@ export async function POST(req: Request){
         });
 
         return NextResponse.json<RegisterSucessResponse>(
-            { 
+            {
                 message: 'User registered successfully. An initial password and changepassword link was sent to your email.',
                 userId: newUserId,
                 email: email
@@ -157,4 +167,3 @@ export async function GET() {
         {message: 'Method not allowed.', statusCode: HttpStatus.METHOD_NOT_ALLOWED,}, {status: HttpStatus.METHOD_NOT_ALLOWED}
     );
 }
-
