@@ -36,7 +36,7 @@ export default function FinalizeSignup({
     }
 
     try {
-      const res = await fetch("/API/auth/verify-student", {
+      const res = await fetch("/API/auth/finalize-setup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -24,7 +24,7 @@ export default function LoginForm() {
     setMessage(null); 
 
     try {
-      const response = await fetch("/API/auth/login", {
+      const response = await fetch("/API/auth/temp", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
