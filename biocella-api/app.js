@@ -1,21 +1,25 @@
 const express = require('express');
-const cors = require('cors'); // ✅ Import cors
+const cors = require('cors');
 const app = express();
 
-const connectMongo = require('../biocella-api/config/mongo'); 
-const mainRoutes = require('../biocella-api/routes/routes');
+const connectMongo = require('../biocella-api/config/mongo');
+const mainRoutes = require('./routes/routes');
 
-// ✅ Enable CORS for your frontend origin
+// Enable CORS
 app.use(cors({
-  origin: 'http://localhost:5173', // your React frontend
-  methods: ['GET', 'POST', 'PUT', 'DELETE'], // optional, if you're restricting methods
-  credentials: true // optional, only if you're using cookies/auth
+  origin: 'http://localhost:5173',
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  credentials: true
 }));
 
+// Body parser middleware
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-connectMongo(); 
+// Connect to MongoDB
+connectMongo();
 
+// Routes
 app.use('/api', mainRoutes);
 
 app.listen(3000, () => {
