@@ -1,10 +1,26 @@
-## Biocella
-Capstone Project
+# 🧫 Biocella
+**Capstone Project – Web-Based Information and Inventory Management System**  
+<p align="center">
+  <img src="/img/image.png" alt="Biocella Landing Page" width="800"/>
+</p>
 
-## RUN BEFORE PUSHING
+
+---
+
+## 🚀 Getting Started
+
+Before pushing changes, always check for errors by running:
+
 
 ```bash
 npm run lint
 ```
 
-checking for errors
+
+
+
+## 🎨 Project Style Guide
+
+Primary Color: #113F67
+
+---
