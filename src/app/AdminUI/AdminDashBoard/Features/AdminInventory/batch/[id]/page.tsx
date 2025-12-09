@@ -33,6 +33,7 @@ export default function BatchEditPage() {
 
   useEffect(() => {
     fetchBatch();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [batchId]);
 
   const fetchBatch = async () => {

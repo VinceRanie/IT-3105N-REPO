@@ -73,7 +73,7 @@ export default function EditChemicalModal({
         const batchResponse = await fetch(`http://localhost:3000/api/batches`);
         const batches = await batchResponse.json();
         console.log('All batches:', batches);
-        const chemicalBatch = batches.find((b: any) => b.chemical_id === chemical.chemical_id);
+        const chemicalBatch = batches.find((b: { chemical_id: number }) => b.chemical_id === chemical.chemical_id);
         console.log('Found batch for chemical:', chemicalBatch);
         
         if (chemicalBatch) {

@@ -295,6 +295,7 @@ export default function AdminInventory() {
                           className="inline-block"
                           title="Download QR Code"
                         >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img 
                             src={chemicalBatch.qr_code} 
                             alt={`QR Code for ${chemical.name}`}
