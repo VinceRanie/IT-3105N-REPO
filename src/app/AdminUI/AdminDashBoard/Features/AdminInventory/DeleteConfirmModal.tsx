@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { X, AlertTriangle } from "lucide-react";
 import { Chemical } from "./types";
+import { API_URL } from "@/config/api";
 
 interface DeleteConfirmModalProps {
   isOpen: boolean;
@@ -26,7 +27,7 @@ export default function DeleteConfirmModal({
 
     try {
       const response = await fetch(
-        `http://localhost:3000/api/chemicals/${chemical.chemical_id}`,
+        `${API_URL}/api/chemicals/${chemical.chemical_id}`,
         {
           method: "DELETE",
         }

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { X } from "lucide-react";
 import { ChemicalFormData } from "./types";
+import { API_URL } from "@/config/api";
 
 interface AddChemicalModalProps {
   isOpen: boolean;
@@ -33,7 +34,7 @@ export default function AddChemicalModal({
     setError(null);
 
     try {
-      const response = await fetch("http://localhost:3000/api/chemicals", {
+      const response = await fetch(`${API_URL}/api/chemicals`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

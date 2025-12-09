@@ -34,8 +34,8 @@ export default function AdminInventory() {
     setLoading(true);
     try {
       const [chemicalsRes, batchesRes] = await Promise.all([
-        fetch("http://localhost:3000/api/chemicals"),
-        fetch("http://localhost:3000/api/batches")
+        fetch(`${API_URL}/api/chemicals`),
+        fetch(`${API_URL}/api/batches`)
       ]);
       
       if (!chemicalsRes.ok) throw new Error("Failed to fetch chemicals");

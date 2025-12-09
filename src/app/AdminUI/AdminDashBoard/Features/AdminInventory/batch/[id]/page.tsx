@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Save, ArrowLeft } from "lucide-react";
+import { API_URL } from "@/config/api";
 
 interface Batch {
   batch_id: number;
@@ -38,7 +39,7 @@ export default function BatchEditPage() {
 
   const fetchBatch = async () => {
     try {
-      const response = await fetch(`http://localhost:3000/api/batches/${batchId}`);
+      const response = await fetch(`${API_URL}/api/batches/${batchId}`);
       if (!response.ok) throw new Error("Failed to fetch batch");
       const data = await response.json();
       setBatch(data);

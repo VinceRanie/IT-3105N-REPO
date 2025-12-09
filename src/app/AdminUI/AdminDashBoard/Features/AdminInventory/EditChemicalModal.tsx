@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import { Chemical } from "./types";
+import { API_URL } from "@/config/api";
 
 interface EditChemicalModalProps {
   isOpen: boolean;
@@ -51,7 +52,7 @@ export default function EditChemicalModal({
       // Update chemical
       console.log('Updating chemical with data:', formData);
       const response = await fetch(
-        `http://localhost:3000/api/chemicals/${chemical.chemical_id}`,
+        `${API_URL}/api/chemicals/${chemical.chemical_id}`,
         {
           method: "PUT",
           headers: {
@@ -72,7 +73,7 @@ export default function EditChemicalModal({
       if (amountUsed > 0 && purpose.trim()) {
         console.log('Logging usage...');
         // First, get the batch ID for this chemical
-        const batchResponse = await fetch(`http://localhost:3000/api/batches`);
+        const batchResponse = await fetch(`${API_URL}/api/batches`);
         const batches = await batchResponse.json();
         console.log('All batches:', batches);
         const chemicalBatch = batches.find((b: { chemical_id: number }) => b.chemical_id === chemical.chemical_id);
@@ -83,7 +84,7 @@ export default function EditChemicalModal({
           const newUsedQuantity = (chemicalBatch.used_quantity || 0) + amountUsed;
           console.log('Updating batch used_quantity to:', newUsedQuantity);
           
-          const updateBatchResponse = await fetch(`http://localhost:3000/api/batches/${chemicalBatch.batch_id}`, {
+          const updateBatchResponse = await fetch(`${API_URL}/api/batches/${chemicalBatch.batch_id}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
