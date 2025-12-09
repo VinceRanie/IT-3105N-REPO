@@ -3,9 +3,12 @@ const Usage = require("../models/usageModel");
 // CREATE
 exports.create = async (req, res) => {
   try {
+    console.log('Usage log request received:', req.body);
     const id = await Usage.createUsageLog(req.body);
+    console.log('Usage log created with ID:', id);
     res.status(201).json({ message: "Usage log created", log_id: id });
   } catch (err) {
+    console.error('Error creating usage log:', err);
     res.status(500).json({ error: err.message });
   }
 };

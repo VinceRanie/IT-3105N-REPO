@@ -2,10 +2,10 @@ const db = require("../config/mysql.js");
 
 // CREATE
 exports.createReagent = async (data) => {
-  const { name, quantity, unit, threshold } = data;
+  const { name, type, quantity, unit, threshold } = data;
   const [result] = await db.execute(
-    "INSERT INTO reagents_chemicals (name, quantity, unit, threshold, last_updated) VALUES (?, ?, ?, ?, NOW())",
-    [name, quantity, unit, threshold]
+    "INSERT INTO reagents_chemicals (name, type, quantity, unit, threshold, last_updated) VALUES (?, ?, ?, ?, ?, NOW())",
+    [name, type || 'General', quantity, unit, threshold]
   );
   return result.insertId;
 };
@@ -24,10 +24,10 @@ exports.getReagentById = async (id) => {
 
 // UPDATE
 exports.updateReagent = async (id, data) => {
-  const { name, quantity, unit, threshold } = data;
+  const { name, type, quantity, unit, threshold } = data;
   const [result] = await db.execute(
-    "UPDATE reagents_chemicals SET name=?, quantity=?, unit=?, threshold=?, last_updated=NOW() WHERE chemical_id=?",
-    [name, quantity, unit, threshold, id]
+    "UPDATE reagents_chemicals SET name=?, type=?, quantity=?, unit=?, threshold=?, last_updated=NOW() WHERE chemical_id=?",
+    [name, type || 'General', quantity, unit, threshold, id]
   );
   return result.affectedRows;
 };

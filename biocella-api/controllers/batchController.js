@@ -1,10 +1,31 @@
 const Batch = require("../models/batchModel");
+const QRCode = require("qrcode");
 
 // CREATE
 exports.create = async (req, res) => {
   try {
-    const id = await Batch.createBatch(req.body);
-    res.status(201).json({ message: "Batch created", batch_id: id });
+    // First create the batch to get the ID
+    const tempData = {
+      ...req.body,
+      qr_code: null
+    };
+    const batchId = await Batch.createBatch(tempData);
+    
+    // Generate QR code with URL to the batch edit page
+    const qrUrl = `${process.env.FRONTEND_URL || 'http://localhost:3001'}/AdminUI/AdminDashBoard/Features/AdminInventory/batch/${batchId}`;
+    const qrCodeDataURL = await QRCode.toDataURL(qrUrl);
+    
+    // Update the batch with the QR code
+    await Batch.updateBatch(batchId, {
+      ...req.body,
+      qr_code: qrCodeDataURL
+    });
+    
+    res.status(201).json({ 
+      message: "Batch created", 
+      batch_id: batchId,
+      qr_code: qrCodeDataURL
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

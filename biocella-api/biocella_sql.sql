@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Oct 15, 2025 at 08:14 AM
+-- Generation Time: Dec 09, 2025 at 05:23 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -53,8 +53,17 @@ CREATE TABLE `chemical_stock_batch` (
   `used_quantity` int(11) DEFAULT 0,
   `date_received` datetime DEFAULT current_timestamp(),
   `expiration_date` date DEFAULT NULL,
-  `qr_code` varchar(255) DEFAULT NULL
+  `location` varchar(255) DEFAULT NULL,
+  `qr_code` text DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `chemical_stock_batch`
+--
+
+INSERT INTO `chemical_stock_batch` (`batch_id`, `chemical_id`, `quantity`, `used_quantity`, `date_received`, `expiration_date`, `location`, `qr_code`) VALUES
+(1, 5, 50, 20, '2025-12-08 00:47:53', NULL, 'some where', NULL),
+(2, 6, 50, 25, '2025-12-08 01:01:45', NULL, 'some where2', 'data:image/png;base64,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');
 
 -- --------------------------------------------------------
 
@@ -71,6 +80,15 @@ CREATE TABLE `chemical_usage_log` (
   `purpose` varchar(255) DEFAULT NULL,
   `batch_id` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `chemical_usage_log`
+--
+
+INSERT INTO `chemical_usage_log` (`log_id`, `chemical_id`, `user_id`, `date_used`, `amount_used`, `purpose`, `batch_id`) VALUES
+(3, 6, 3, '2025-12-08 01:18:53', 5, 'hmm', 2),
+(4, 6, 3, '2025-12-08 01:19:56', 5, 'take 2', 2),
+(5, 5, 3, '2025-12-08 01:22:14', 20, 'lets see', 1);
 
 -- --------------------------------------------------------
 
@@ -107,11 +125,20 @@ CREATE TABLE `password_reset_requests` (
 CREATE TABLE `reagents_chemicals` (
   `chemical_id` int(11) NOT NULL,
   `name` varchar(255) DEFAULT NULL,
+  `type` varchar(100) DEFAULT NULL,
   `quantity` int(11) DEFAULT NULL,
   `unit` varchar(50) DEFAULT NULL,
   `threshold` int(11) DEFAULT NULL,
   `last_updated` datetime DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `reagents_chemicals`
+--
+
+INSERT INTO `reagents_chemicals` (`chemical_id`, `name`, `type`, `quantity`, `unit`, `threshold`, `last_updated`) VALUES
+(5, 'Ethanol', 'Base', 50, 'L', 3, '2025-12-08 01:22:14'),
+(6, 'Ethanol', 'General', 50, 'L', 3, '2025-12-08 01:19:56');
 
 -- --------------------------------------------------------
 
@@ -219,13 +246,13 @@ ALTER TABLE `appointment`
 -- AUTO_INCREMENT for table `chemical_stock_batch`
 --
 ALTER TABLE `chemical_stock_batch`
-  MODIFY `batch_id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `batch_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT for table `chemical_usage_log`
 --
 ALTER TABLE `chemical_usage_log`
-  MODIFY `log_id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `log_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
 
 --
 -- AUTO_INCREMENT for table `digital_logbook`
@@ -243,7 +270,7 @@ ALTER TABLE `password_reset_requests`
 -- AUTO_INCREMENT for table `reagents_chemicals`
 --
 ALTER TABLE `reagents_chemicals`
-  MODIFY `chemical_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `chemical_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
 -- AUTO_INCREMENT for table `user`
