@@ -39,7 +39,7 @@ export default function BatchEditPage() {
 
   const fetchBatch = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/batches/${batchId}`);
+      const response = await fetch(`${API_URL}/batches/${batchId}`);
       if (!response.ok) throw new Error("Failed to fetch batch");
       const data = await response.json();
       setBatch(data);
@@ -66,7 +66,7 @@ export default function BatchEditPage() {
       }
 
       // Update batch used_quantity
-      await fetch(`http://localhost:3000/api/batches/${batchId}`, {
+      await fetch(`${API_URL}/batches/${batchId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -78,7 +78,7 @@ export default function BatchEditPage() {
       });
 
       // Log usage
-      await fetch("http://localhost:3000/api/usage", {
+      await fetch(`${API_URL}/usage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

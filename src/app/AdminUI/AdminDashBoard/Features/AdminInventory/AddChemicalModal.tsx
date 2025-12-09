@@ -34,7 +34,7 @@ export default function AddChemicalModal({
     setError(null);
 
     try {
-      const response = await fetch(`${API_URL}/api/chemicals`, {
+      const response = await fetch(`${API_URL}/chemicals`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -27,7 +27,7 @@ export default function DeleteConfirmModal({
 
     try {
       const response = await fetch(
-        `${API_URL}/api/chemicals/${chemical.chemical_id}`,
+        `${API_URL}/chemicals/${chemical.chemical_id}`,
         {
           method: "DELETE",
         }
