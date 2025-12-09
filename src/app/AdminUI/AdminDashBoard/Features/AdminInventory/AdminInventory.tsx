@@ -6,6 +6,8 @@ import AddChemicalModal from "./AddChemicalModal";
 import EditChemicalModal from "./EditChemicalModal";
 import DeleteConfirmModal from "./DeleteConfirmModal";
 import { Search, Plus, Edit, Trash2, ChevronLeft, ChevronRight, Package } from "lucide-react";
+import { API_URL } from "@/config/api";
+import { useRouter } from "next/navigation";
 
 export default function AdminInventory() {
   const [chemicals, setChemicals] = useState<Chemical[]>([]);
