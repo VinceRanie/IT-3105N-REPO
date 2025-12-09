@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { X } from "lucide-react";
-import { Chemical, ChemicalFormData } from "./types";
+import { Chemical } from "./types";
 
 interface EditChemicalModalProps {
   isOpen: boolean;
@@ -11,13 +11,15 @@ interface EditChemicalModalProps {
   chemical: Chemical;
 }
 
+type EditChemicalFormData = Omit<Chemical, 'chemical_id' | 'last_updated'>;
+
 export default function EditChemicalModal({
   isOpen,
   onClose,
   onSuccess,
   chemical,
 }: EditChemicalModalProps) {
-  const [formData, setFormData] = useState<ChemicalFormData>({
+  const [formData, setFormData] = useState<EditChemicalFormData>({
     name: chemical.name,
     type: chemical.type,
     quantity: chemical.quantity,
