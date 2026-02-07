@@ -70,8 +70,7 @@ export default function AdminAppointmentDashboard() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          remarks,
-          userEmail: 'user@example.com' // TODO: Get from user data
+          remarks
         }),
       });
 
@@ -94,8 +93,7 @@ export default function AdminAppointmentDashboard() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          reason: remarks,
-          userEmail: 'user@example.com' // TODO: Get from user data
+          reason: remarks
         }),
       });
 
