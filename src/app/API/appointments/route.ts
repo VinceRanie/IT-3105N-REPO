@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://22102959.dcism.org';
 
 export async function GET() {
   try {
@@ -41,3 +41,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
