@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://22102959.dcism.org';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
 export async function GET() {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/appointment`);
+    const response = await fetch(`${API_BASE_URL}/api/appointments`);
     const data = await response.json();
     return NextResponse.json(data);
   } catch (error) {
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     
-    const response = await fetch(`${API_BASE_URL}/api/appointment`, {
+    const response = await fetch(`${API_BASE_URL}/api/appointments`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -41,4 +41,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
