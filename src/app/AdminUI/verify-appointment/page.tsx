@@ -1,7 +1,7 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { format } from 'date-fns';
 
 interface Appointment {
@@ -15,7 +15,7 @@ interface Appointment {
   created_at: string;
 }
 
-export default function VerifyAppointmentPage() {
+function VerifyAppointmentContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
   const id = searchParams.get('id');
@@ -183,5 +183,20 @@ export default function VerifyAppointmentPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function VerifyAppointmentPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    }>
+      <VerifyAppointmentContent />
+    </Suspense>
   );
 }
