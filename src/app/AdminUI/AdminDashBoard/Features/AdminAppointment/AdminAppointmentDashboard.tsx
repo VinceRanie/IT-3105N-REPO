@@ -49,10 +49,14 @@ export default function AdminAppointmentDashboard() {
     setLoading(true);
     try {
       const response = await fetch(`/API/appointments/status/${activeTab}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
       const data = await response.json();
-      setAppointments(data);
+      setAppointments(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching appointments:', error);
+      setAppointments([]);
     } finally {
       setLoading(false);
     }
@@ -359,3 +363,5 @@ export default function AdminAppointmentDashboard() {
     </div>
   );
 }
+
+
