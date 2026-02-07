@@ -48,11 +48,16 @@ export default function AdminAppointmentDashboard() {
   const fetchAppointments = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/appointments/status/${activeTab}`);
+      const response = await fetch(`/API/appointments/status/${activeTab}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
       const data = await response.json();
-      setAppointments(data);
+      // Ensure data is an array
+      setAppointments(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching appointments:', error);
+      setAppointments([]); // Set empty array on error
     } finally {
       setLoading(false);
     }
@@ -62,7 +67,7 @@ export default function AdminAppointmentDashboard() {
     if (!selectedAppointment) return;
     
     try {
-      const response = await fetch(`/api/appointments/${selectedAppointment.appointment_id}/approve`, {
+      const response = await fetch(`/API/appointments/${selectedAppointment.appointment_id}/approve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -75,6 +80,9 @@ export default function AdminAppointmentDashboard() {
         alert('Appointment approved! Email sent to user with QR code.');
         fetchAppointments();
         closeModal();
+      } else {
+        const error = await response.json();
+        alert(`Failed to approve: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error approving appointment:', error);
@@ -83,10 +91,7 @@ export default function AdminAppointmentDashboard() {
   };
 
   const handleDeny = async () => {
-    if (!selectedAppointment) return;
-    
-    try {
-      const response = await fetch(`/api/appointments/${selectedAppointment.appointment_id}/deny`, {
+    if (!selectedAppointment) return;API/appointments/${selectedAppointment.appointment_id}/deny`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -99,6 +104,12 @@ export default function AdminAppointmentDashboard() {
         alert('Appointment denied. Email sent to user.');
         fetchAppointments();
         closeModal();
+      } else {
+        const error = await response.json();
+        alert(`Failed to deny: ${error.error || 'Unknown error'}`ok) {
+        alert('Appointment denied. Email sent to user.');
+        fetchAppointments();
+        closeModal();
       }
     } catch (error) {
       console.error('Error denying appointment:', error);
@@ -108,7 +119,7 @@ export default function AdminAppointmentDashboard() {
 
   const handleScanQR = async () => {
     try {
-      const response = await fetch('/api/appointments/verify-qr', {
+      const response = await fetch('/API/appointments/verify-qr', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ qrCode: qrInput }),
