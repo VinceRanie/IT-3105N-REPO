@@ -8,7 +8,9 @@ export async function GET(
 ) {
   try {
     const { status } = await params;
-    console.log(`Fetching appointments with status: ${status} from ${API_BASE_URL}`);
+    console.log(`[API Route] Fetching appointments with status: ${status}`);
+    console.log(`[API Route] API_BASE_URL: ${API_BASE_URL}`);
+    console.log(`[API Route] Full URL: ${API_BASE_URL}/appointments/status/${status}`);
     
     const response = await fetch(`${API_BASE_URL}/appointments/status/${status}`, {
       cache: 'no-store',
@@ -17,9 +19,11 @@ export async function GET(
       }
     });
     
+    console.log(`[API Route] Response status: ${response.status}`);
+    
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`Backend error ${response.status}:`, errorText);
+      console.error(`[API Route] Backend error ${response.status}:`, errorText);
       return NextResponse.json(
         { error: `Backend returned ${response.status}`, details: errorText },
         { status: response.status }
@@ -27,9 +31,10 @@ export async function GET(
     }
     
     const data = await response.json();
+    console.log(`[API Route] Successfully fetched ${Array.isArray(data) ? data.length : 0} appointments`);
     return NextResponse.json(data);
   } catch (error: any) {
-    console.error('API Route Error:', error);
+    console.error('[API Route] Error:', error.message, error.stack);
     return NextResponse.json(
       { error: 'Failed to fetch appointments', message: error.message },
       { status: 500 }
