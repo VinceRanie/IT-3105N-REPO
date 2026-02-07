@@ -48,13 +48,6 @@ export default function AdminAppointmentDashboard() {
   const fetchAppointments = async () => {
     setLoading(true);
     try {
-<<<<<<< HEAD
-      const response = await fetch(`/api/appointments/status/${activeTab}`);
-      const data = await response.json();
-      setAppointments(data);
-    } catch (error) {
-      console.error('Error fetching appointments:', error);
-=======
       const response = await fetch(`/API/appointments/status/${activeTab}`);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -64,7 +57,6 @@ export default function AdminAppointmentDashboard() {
     } catch (error) {
       console.error('Error fetching appointments:', error);
       setAppointments([]);
->>>>>>> b77e970241954cd12d50a12eaa40733b3fbcec13
     } finally {
       setLoading(false);
     }
@@ -74,11 +66,7 @@ export default function AdminAppointmentDashboard() {
     if (!selectedAppointment) return;
     
     try {
-<<<<<<< HEAD
-      const response = await fetch(`/api/appointments/${selectedAppointment.appointment_id}/approve`, {
-=======
       const response = await fetch(`/API/appointments/${selectedAppointment.appointment_id}/approve`, {
->>>>>>> b77e970241954cd12d50a12eaa40733b3fbcec13
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -102,11 +90,7 @@ export default function AdminAppointmentDashboard() {
     if (!selectedAppointment) return;
     
     try {
-<<<<<<< HEAD
-      const response = await fetch(`/api/appointments/${selectedAppointment.appointment_id}/deny`, {
-=======
       const response = await fetch(`/API/appointments/${selectedAppointment.appointment_id}/deny`, {
->>>>>>> b77e970241954cd12d50a12eaa40733b3fbcec13
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -128,11 +112,7 @@ export default function AdminAppointmentDashboard() {
 
   const handleScanQR = async () => {
     try {
-<<<<<<< HEAD
-      const response = await fetch('/api/appointments/verify-qr', {
-=======
       const response = await fetch('/API/appointments/verify-qr', {
->>>>>>> b77e970241954cd12d50a12eaa40733b3fbcec13
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ qrCode: qrInput }),
@@ -383,8 +363,3 @@ export default function AdminAppointmentDashboard() {
     </div>
   );
 }
-<<<<<<< HEAD
-=======
-
-
->>>>>>> b77e970241954cd12d50a12eaa40733b3fbcec13

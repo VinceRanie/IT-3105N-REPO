@@ -41,11 +41,7 @@ export default function AppointmentForm() {
       // For now, you'll need to add this manually or get from auth
       const user_id = 1; // TODO: Get from auth context
 
-<<<<<<< HEAD
-      const response = await fetch('/api/appointments', {
-=======
       const response = await fetch('/API/appointments', {
->>>>>>> b77e970241954cd12d50a12eaa40733b3fbcec13
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
