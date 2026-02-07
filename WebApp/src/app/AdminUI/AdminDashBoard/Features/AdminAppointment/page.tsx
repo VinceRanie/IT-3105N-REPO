@@ -1,5 +1,5 @@
-import AdminAppointment from "./AdminAppointment";
+import AdminAppointmentDashboard from "./AdminAppointmentDashboard";
 
 export default function AdminAppointmentPage(){
-    return <AdminAppointment/>;
+    return <AdminAppointmentDashboard/>;
 }

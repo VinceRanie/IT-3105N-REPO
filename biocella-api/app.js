@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const app = express();
 
-const connectMongo = require('../biocella-api/config/mongo');
+// const connectMongo = require('../biocella-api/config/mongo');
 const mainRoutes = require('./routes/routes');
 
 // Enable CORS
@@ -12,7 +12,8 @@ app.use(cors({
     'http://localhost:3001', 
     'http://localhost:3002', 
     'http://localhost:3000',
-    'https://it-3105-n-repo-98sx.vercel.app'
+    'https://it-3105-n-repo-98sx.vercel.app',
+    'https://it-3105-n-repo-sqsf.vercel.app'
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   credentials: true
@@ -22,11 +23,11 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Connect to MongoDB
-connectMongo();
+// Connect to MongoDB - Disabled for now (only using MySQL)
+// connectMongo();
 
-// Routes
-app.use('/api', mainRoutes);
+// Routes - mounted at root because Apache proxy already adds /api
+app.use('/', mainRoutes);
 
 app.listen(3000, () => {
   console.log('Server is running on port 3000');

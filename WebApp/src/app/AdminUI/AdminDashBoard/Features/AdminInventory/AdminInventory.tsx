@@ -3,9 +3,10 @@
 import { useState, useEffect } from "react";
 import { Chemical, Batch } from "./types";
 import AddChemicalModal from "./AddChemicalModal";
-import EditChemicalModal from "./EditChemicalModal";
 import DeleteConfirmModal from "./DeleteConfirmModal";
 import { Search, Plus, Edit, Trash2, ChevronLeft, ChevronRight, Package } from "lucide-react";
+import { API_URL } from "@/config/api";
+import { useRouter } from "next/navigation";
 
 export default function AdminInventory() {
   const [chemicals, setChemicals] = useState<Chemical[]>([]);
@@ -16,7 +17,6 @@ export default function AdminInventory() {
   
   // Modal states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedChemical, setSelectedChemical] = useState<Chemical | null>(null);
   
@@ -34,8 +34,8 @@ export default function AdminInventory() {
     setLoading(true);
     try {
       const [chemicalsRes, batchesRes] = await Promise.all([
-        fetch("http://localhost:3000/api/chemicals"),
-        fetch("http://localhost:3000/api/batches")
+        fetch(`${API_URL}/chemicals`),
+        fetch(`${API_URL}/batches`)
       ]);
       
       if (!chemicalsRes.ok) throw new Error("Failed to fetch chemicals");
@@ -96,10 +96,14 @@ export default function AdminInventory() {
   const uniqueUnits = Array.from(new Set(chemicals.map((c) => c.unit)));
   const uniqueTypes = Array.from(new Set(chemicals.map((c) => c.type)));
 
+  const router = useRouter();
+
   // Handler functions
   const handleEdit = (chemical: Chemical) => {
-    setSelectedChemical(chemical);
-    setIsEditModalOpen(true);
+    const chemicalBatch = batches.find(b => b.chemical_id === chemical.chemical_id);
+    if (chemicalBatch) {
+      router.push(`/AdminUI/AdminDashBoard/Features/AdminInventory/batch/${chemicalBatch.batch_id}`);
+    }
   };
 
   const handleDelete = (chemical: Chemical) => {
@@ -110,11 +114,6 @@ export default function AdminInventory() {
   const handleAddSuccess = () => {
     fetchChemicals();
     setIsAddModalOpen(false);
-  };
-
-  const handleEditSuccess = () => {
-    fetchChemicals();
-    setIsEditModalOpen(false);
   };
 
   const handleDeleteSuccess = () => {
@@ -295,6 +294,7 @@ export default function AdminInventory() {
                           className="inline-block"
                           title="Download QR Code"
                         >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img 
                             src={chemicalBatch.qr_code} 
                             alt={`QR Code for ${chemical.name}`}
@@ -374,21 +374,12 @@ export default function AdminInventory() {
       />
       
       {selectedChemical && (
-        <>
-          <EditChemicalModal
-            isOpen={isEditModalOpen}
-            onClose={() => setIsEditModalOpen(false)}
-            onSuccess={handleEditSuccess}
-            chemical={selectedChemical}
-          />
-          
-          <DeleteConfirmModal
-            isOpen={isDeleteModalOpen}
-            onClose={() => setIsDeleteModalOpen(false)}
-            onSuccess={handleDeleteSuccess}
-            chemical={selectedChemical}
-          />
-        </>
+        <DeleteConfirmModal
+          isOpen={isDeleteModalOpen}
+          onClose={() => setIsDeleteModalOpen(false)}
+          onSuccess={handleDeleteSuccess}
+          chemical={selectedChemical}
+        />
       )}
     </div>
   );
