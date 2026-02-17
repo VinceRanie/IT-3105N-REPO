@@ -1,57 +1,51 @@
 "use client";
 
 import { useState } from "react";
+import { Plus, FolderPlus } from "lucide-react";
 
-export default function AdminControls() {
-  // Separate active states for each button group
-  const [activeStatus, setActiveStatus] = useState("Published");
-  const [activeAction, setActiveAction] = useState("");
+interface AdminControlsProps {
+  onAddProject: () => void;
+  onAddSpecimen: () => void;
+  searchQuery: string;
+  onSearchChange: (query: string) => void;
+}
 
-  const statusButtons = ["Published", "Unpublished"];
-  const actionButtons = ["Select", "Remove", "Add"];
-
+export default function AdminControls({ onAddProject, onAddSpecimen, searchQuery, onSearchChange }: AdminControlsProps) {
   return (
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4">
-      {/* Left group: Published / Unpublished */}
-      <div className="flex flex-wrap gap-2 sm:gap-3">
-        {statusButtons.map((label) => (
-          <button
-            key={label}
-            onClick={() => setActiveStatus(label)}
-            className={`h-8 px-3 py-1 text-sm cursor-pointer rounded-lg shadow-md transition-colors ${
-              activeStatus === label
-                ? "bg-[#113F67] text-white"
-                : "bg-white text-[#113F67]"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+      {/* Left group: Title */}
+      <div>
+        <h2 className="text-2xl font-bold text-[#113F67]">Collection Management</h2>
+        <p className="text-sm text-gray-600">Manage specimen inventory and project data</p>
       </div>
 
       {/* Right group: Action buttons + Search */}
       <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto sm:items-center">
         {/* Action buttons */}
         <div className="flex flex-wrap gap-2 sm:gap-3">
-          {actionButtons.map((label) => (
-            <button
-              key={label}
-              onClick={() => setActiveAction(label)}
-              className={`h-8 px-3 py-1 text-sm cursor-pointer rounded-lg shadow-md transition-colors ${
-                activeAction === label
-                  ? "bg-[#113F67] text-white"
-                  : "bg-white text-[#113F67]"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
+          <button
+            onClick={onAddProject}
+            className="flex items-center gap-2 h-9 px-4 py-1 text-sm cursor-pointer bg-[#113F67] text-white rounded-lg shadow-md hover:bg-[#0d2f4d] transition-colors"
+          >
+            <FolderPlus className="w-4 h-4" />
+            New Project
+          </button>
+          
+          <button
+            onClick={onAddSpecimen}
+            className="flex items-center gap-2 h-9 px-4 py-1 text-sm cursor-pointer bg-green-600 text-white rounded-lg shadow-md hover:bg-green-700 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            New Specimen
+          </button>
         </div>
 
         {/* Search input */}
         <input
-          className="shadow-md transition-colors w-full sm:w-80 h-8 text-sm text-[#113F67] rounded-lg border border-gray-300 px-3 py-1 focus:outline-none focus:ring focus:ring-[#113F67]"
-          placeholder="Search"
+          value={searchQuery}
+          onChange={(e) => onSearchChange(e.target.value)}
+          className="shadow-md transition-colors w-full sm:w-80 h-9 text-sm text-[#113F67] rounded-lg border border-gray-300 px-3 py-1 focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+          placeholder="Search by code, name, or project..."
         />
       </div>
     </div>
