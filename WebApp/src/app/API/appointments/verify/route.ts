@@ -2,18 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://22102959.dcism.org/biocella-api';
 
-export async function POST(request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
-    const body = await request.json();
+    const searchParams = request.nextUrl.searchParams;
+    const token = searchParams.get('token');
+    const id = searchParams.get('id');
     
-    const response = await fetch(`${API_BASE_URL}/appointments/verify-qr`, {
-      method: 'POST',
+    const response = await fetch(`${API_BASE_URL}/appointments/verify?token=${token}&id=${id}`, {
+      cache: 'no-store',
       headers: {
         'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
+      }
     });
-
+    
     const data = await response.json();
     
     if (!response.ok) {
@@ -21,10 +22,10 @@ export async function POST(request: NextRequest) {
     }
     
     return NextResponse.json(data);
-  } catch (error) {
-    console.error('[API Route] Verify QR Error:', error);
+  } catch (error: any) {
+    console.error('[API Route] Error:', error);
     return NextResponse.json(
-      { error: 'Failed to verify QR code' },
+      { error: 'Failed to verify QR code', details: error.message },
       { status: 500 }
     );
   }

@@ -94,15 +94,22 @@ exports.updateAppointmentStatus = async (id, status, remarks = null) => {
 
 // GENERATE QR CODE
 exports.generateQRCode = async (appointmentId) => {
+  // Generate unique verification token
   const qrData = crypto.randomBytes(16).toString('hex');
-  const qrCodeDataUrl = await QRCode.toDataURL(qrData);
   
+  // Create verification URL that admin will scan
+  const verificationUrl = `https://it-3105-n-repo-sqsf.vercel.app/AdminUI/verify-appointment?token=${qrData}&id=${appointmentId}`;
+  
+  // Generate QR code with the URL
+  const qrCodeDataUrl = await QRCode.toDataURL(verificationUrl);
+  
+  // Store the token in database
   await db.execute(
     "UPDATE appointment SET qr_code=? WHERE appointment_id=?",
     [qrData, appointmentId]
   );
   
-  return { qrData, qrCodeDataUrl };
+  return { qrData, qrCodeDataUrl, verificationUrl };
 };
 
 // VERIFY QR CODE
