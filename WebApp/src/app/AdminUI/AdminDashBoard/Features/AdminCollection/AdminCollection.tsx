@@ -26,6 +26,7 @@ interface Collection {
   fasta_file?: string;
   fasta_sequence?: string;
   blast_rid?: string;
+  blast_rid_expired_at?: string;
   blast_results?: any;
   biochemical_tests?: {
     onpg?: string;
