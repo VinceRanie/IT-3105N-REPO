@@ -157,7 +157,11 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
           return false;
         } else if (data.status === 'failed') {
           setBlastPolling(false);
-          alert("BLAST search failed");
+          alert("BLAST search failed on NCBI server");
+          return true;
+        } else if (data.status === 'error') {
+          setBlastPolling(false);
+          alert(`BLAST error: ${data.message || 'Unknown error occurred'}`);
           return true;
         }
       } else {

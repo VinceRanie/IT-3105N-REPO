@@ -331,9 +331,30 @@ exports.getBlastResults = async (req, res) => {
         timeout: 20000 // 20 second timeout for results (can be larger)
       });
 
+      console.log('BLAST results received, content type:', resultRes.headers['content-type']);
+      console.log('Response data type:', typeof resultRes.data);
+      
+      // Check if we got valid JSON
+      if (typeof resultRes.data === 'string') {
+        console.error('BLAST results returned as string instead of JSON');
+        return res.json({ 
+          status: 'error', 
+          message: 'Invalid response format from NCBI' 
+        });
+      }
+
       // Parse and extract top 10 matches
       const results = parseBlastResults(resultRes.data);
       
+      // Check if parsing succeeded
+      if (results.error) {
+        console.error('Failed to parse BLAST results:', results.error);
+        return res.json({ 
+          status: 'error', 
+          message: results.error 
+        });
+      }
+
       // Save results to specimen
       microbial.blast_results = results;
       if (results.topHit) {
@@ -341,6 +362,8 @@ exports.getBlastResults = async (req, res) => {
         microbial.accession_no = results.topHit.accession;
       }
       await microbial.save();
+
+      console.log(`Successfully saved BLAST results for ${microbial.code_name}: ${results.matches.length} matches`);
 
       return res.json({
         status: 'completed',
@@ -359,11 +382,44 @@ exports.getBlastResults = async (req, res) => {
 // Helper function to parse BLAST JSON results
 function parseBlastResults(data) {
   try {
-    const report = data.BlastOutput2[0].report;
-    const results = report.results;
+    // Log the data structure for debugging
+    console.log('Parsing BLAST data, type:', typeof data);
     
-    if (!results || !results.search || !results.search.hits || results.search.hits.length === 0) {
-      console.log('No BLAST hits found');
+    // Validate data structure exists
+    if (!data) {
+      console.error('BLAST data is null or undefined');
+      return { topHit: null, matches: [], totalHits: 0, error: 'No data received' };
+    }
+
+    if (!data.BlastOutput2) {
+      console.error('Missing BlastOutput2 in response. Data keys:', Object.keys(data));
+      return { topHit: null, matches: [], totalHits: 0, error: 'Invalid BLAST response format' };
+    }
+
+    if (!Array.isArray(data.BlastOutput2) || data.BlastOutput2.length === 0) {
+      console.error('BlastOutput2 is not an array or is empty');
+      return { topHit: null, matches: [], totalHits: 0, error: 'Empty BLAST response' };
+    }
+
+    const report = data.BlastOutput2[0].report;
+    if (!report) {
+      console.error('Missing report in BlastOutput2[0]');
+      return { topHit: null, matches: [], totalHits: 0, error: 'Missing report data' };
+    }
+
+    const results = report.results;
+    if (!results) {
+      console.error('Missing results in report');
+      return { topHit: null, matches: [], totalHits: 0, error: 'Missing results data' };
+    }
+
+    if (!results.search) {
+      console.error('Missing search in results');
+      return { topHit: null, matches: [], totalHits: 0, error: 'Missing search data' };
+    }
+
+    if (!results.search.hits || !Array.isArray(results.search.hits) || results.search.hits.length === 0) {
+      console.log('No BLAST hits found in search results');
       return { topHit: null, matches: [], totalHits: 0 };
     }
 
@@ -371,25 +427,36 @@ function parseBlastResults(data) {
     const hits = allHits.slice(0, 10); // Top 10
     
     const matches = hits.map((hit, index) => {
+      // Defensive checks for each hit
+      if (!hit.hsps || !hit.hsps[0]) {
+        console.warn(`Hit ${index} missing HSP data, skipping`);
+        return null;
+      }
+
+      if (!hit.description || !hit.description[0]) {
+        console.warn(`Hit ${index} missing description data, skipping`);
+        return null;
+      }
+
       const hsp = hit.hsps[0]; // Best HSP (High-scoring Segment Pair)
       const similarity = ((hsp.identity / hsp.align_len) * 100).toFixed(2);
       
       return {
-        accession: hit.description[0].accession,
-        title: hit.description[0].title,
+        accession: hit.description[0].accession || 'Unknown',
+        title: hit.description[0].title || 'No title available',
         similarity: parseFloat(similarity),
-        evalue: hsp.evalue,
-        score: hsp.bit_score,
-        identity: hsp.identity,
-        alignLength: hsp.align_len,
-        queryFrom: hsp.query_from,
-        queryTo: hsp.query_to,
-        hitFrom: hsp.hit_from,
-        hitTo: hsp.hit_to
+        evalue: hsp.evalue || 0,
+        score: hsp.bit_score || 0,
+        identity: hsp.identity || 0,
+        alignLength: hsp.align_len || 0,
+        queryFrom: hsp.query_from || 0,
+        queryTo: hsp.query_to || 0,
+        hitFrom: hsp.hit_from || 0,
+        hitTo: hsp.hit_to || 0
       };
-    });
+    }).filter(match => match !== null); // Remove any null entries
 
-    console.log(`BLAST parsing complete: Found ${allHits.length} total hits, returning top ${matches.length}`);
+    console.log(`BLAST parsing complete: Found ${allHits.length} total hits, returning ${matches.length} valid matches`);
     
     return {
       topHit: matches[0] || null,
@@ -398,6 +465,7 @@ function parseBlastResults(data) {
     };
   } catch (err) {
     console.error('Error parsing BLAST results:', err);
-    return { topHit: null, matches: [], totalHits: 0, error: 'Failed to parse results' };
+    console.error('Error stack:', err.stack);
+    return { topHit: null, matches: [], totalHits: 0, error: `Failed to parse results: ${err.message}` };
   }
 }
