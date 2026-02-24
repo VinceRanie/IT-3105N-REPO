@@ -309,6 +309,8 @@ exports.getBlastResults = async (req, res) => {
         },
         timeout: 20000 // 20 second timeout
       });
+      
+      console.log('BLAST status response received for RID:', microbial.blast_rid);
     } catch (axiosErr) {
       console.error('NCBI status check timeout or error:', axiosErr.message);
       return res.json({ 
@@ -318,6 +320,7 @@ exports.getBlastResults = async (req, res) => {
     }
 
     const status = statusCheck.data.match(/Status=([A-Z]+)/);
+    console.log('Parsed BLAST status:', status ? status[1] : 'NO_STATUS_FOUND');
     
     // Check if RID is expired or not found (NCBI returns UNKNOWN or empty status)
     if (!status) {
@@ -351,7 +354,7 @@ exports.getBlastResults = async (req, res) => {
     if (status[1] === 'READY') {
       let resultRes;
       try {
-        // Get results with timeout
+        // Get results with timeout - try JSON2 first
         resultRes = await axios.get('https://blast.ncbi.nlm.nih.gov/Blast.cgi', {
           params: {
             CMD: 'Get',
@@ -360,7 +363,11 @@ exports.getBlastResults = async (req, res) => {
             EMAIL,
             TOOL
           },
-          timeout: 25000 // 25 second timeout for results (larger files)
+          timeout: 25000, // 25 second timeout for results (larger files)
+          responseType: 'json', // Expect JSON
+          headers: {
+            'Accept': 'application/json'
+          }
         });
       } catch (axiosErr) {
         console.error('NCBI results fetch timeout or error:', axiosErr.message);
@@ -373,12 +380,40 @@ exports.getBlastResults = async (req, res) => {
       console.log('BLAST results received, content type:', resultRes.headers['content-type']);
       console.log('Response data type:', typeof resultRes.data);
       
-      // Check if we got valid JSON
+      // Check if we got valid JSON object
       if (typeof resultRes.data === 'string') {
         console.error('BLAST results returned as string instead of JSON');
+        console.log('First 500 chars of response:', resultRes.data.substring(0, 500));
+        
+        // Check if it's still processing (sometimes NCBI returns HTML when results aren't fully ready)
+        if (resultRes.data.includes('WAITING') || resultRes.data.includes('still being processed')) {
+          return res.json({ 
+            status: 'pending', 
+            message: 'BLAST results are still being processed. Please wait a moment.' 
+          });
+        }
+        
+        // Check if there's an error message in the HTML
+        if (resultRes.data.includes('error') || resultRes.data.includes('Error')) {
+          return res.json({ 
+            status: 'error', 
+            message: 'NCBI returned an error. The results may have expired or are unavailable.' 
+          });
+        }
+        
+        // Generic string response - might be due to format issue
         return res.json({ 
           status: 'error', 
-          message: 'Invalid response format from NCBI' 
+          message: 'Invalid response format from NCBI. Please try checking results again or re-submit BLAST.' 
+        });
+      }
+
+      // Validate it's actually an object
+      if (!resultRes.data || typeof resultRes.data !== 'object') {
+        console.error('BLAST results is not a valid object:', resultRes.data);
+        return res.json({ 
+          status: 'error', 
+          message: 'Received invalid data structure from NCBI. Please try again.' 
         });
       }
 

@@ -172,8 +172,14 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
           console.log("BLAST RID has expired:", data.message);
           return true;
         } else if (data.status === 'error') {
+          // Don't stop polling for format errors - might be temporary NCBI issue
+          if (data.message && data.message.includes('Invalid response format')) {
+            console.warn('NCBI format error - will retry:', data.message);
+            return false; // Continue polling
+          }
+          // For other errors, stop polling and alert
           setBlastPolling(false);
-          alert(`BLAST error: ${data.message || 'Unknown error occurred'}`);
+          alert(`BLAST error: ${data.message || 'Unknown error occurred'}\n\nYou may need to re-submit the BLAST search.`);
           return true;
         }
       } else {
