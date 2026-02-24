@@ -15,6 +15,7 @@ interface Collection {
   project_fund?: string;
   accession_number?: string;
   accession_no?: string;
+  similarity_percent?: string;
   project_id: {
     _id: string;
     title: string;
@@ -22,6 +23,40 @@ interface Collection {
     classification: string;
   };
   description?: string;
+  fasta_file?: string;
+  fasta_sequence?: string;
+  blast_rid?: string;
+  blast_results?: any;
+  biochemical_tests?: {
+    onpg?: string;
+    glu?: string;
+    adh?: string;
+    man?: string;
+    ldc?: string;
+    ino?: string;
+    odc?: string;
+    sor?: string;
+    cit?: string;
+    rha?: string;
+    h2s?: string;
+    sac?: string;
+    ure?: string;
+    mel?: string;
+    tda?: string;
+    amy?: string;
+    ind?: string;
+    ara?: string;
+    vp?: string;
+    no2?: string;
+    gel?: string;
+  };
+  catalase?: string;
+  hemolysis?: string;
+  oxidase?: string;
+  growth_media?: string;
+  special_reqs?: string;
+  activity?: string;
+  result?: string;
   custom_fields?: Record<string, string>;
 }
 
