@@ -266,16 +266,22 @@ exports.submitBlast = async (req, res) => {
     }
 
     // Save RID to specimen for tracking
+    // NCBI BLAST RIDs expire after 24-36 hours, we'll use 36 hours to be safe
+    const expirationTime = new Date();
+    expirationTime.setHours(expirationTime.getHours() + 36);
+    
     microbial.blast_rid = rid;
+    microbial.blast_rid_expired_at = expirationTime;
     await microbial.save();
 
-    console.log('BLAST submitted for specimen:', microbial.code_name, 'RID:', rid);
+    console.log('BLAST submitted for specimen:', microbial.code_name, 'RID:', rid, 'Expires at:', expirationTime);
     
     res.json({ 
       message: 'BLAST submitted successfully',
       rid,
       status: 'pending',
-      estimatedTime: '30-60 seconds'
+      estimatedTime: '30-60 seconds',
+      expiresAt: expirationTime
     });
 
   } catch (err) {
@@ -328,12 +334,31 @@ exports.getBlastResults = async (req, res) => {
       console.log('No status found in NCBI response - RID likely expired:', microbial.blast_rid);
       // Check for common expired/not found messages
       if (statusCheck.data.includes('expired') || statusCheck.data.includes('not found') || statusCheck.data.includes('UNKNOWN')) {
+        // Mark as expired now if not already set
+        if (!microbial.blast_rid_expired_at || microbial.blast_rid_expired_at > new Date()) {
+          microbial.blast_rid_expired_at = new Date();
+          await microbial.save();
+          console.log('Updated expired_at timestamp for expired RID:', microbial.blast_rid);
+        }
         return res.json({ 
           status: 'expired', 
           message: 'BLAST request has expired (RIDs are valid for 24-36 hours). Please re-submit the BLAST search.' 
         });
       }
       return res.json({ status: 'pending', message: 'Unable to determine BLAST status. Please try again.' });
+    }
+    
+    // Also check for UNKNOWN status explicitly
+    if (status[1] === 'UNKNOWN') {
+      if (!microbial.blast_rid_expired_at || microbial.blast_rid_expired_at > new Date()) {
+        microbial.blast_rid_expired_at = new Date();
+        await microbial.save();
+        console.log('Updated expired_at timestamp for UNKNOWN RID:', microbial.blast_rid);
+      }
+      return res.json({ 
+        status: 'expired', 
+        message: 'BLAST request ID is no longer valid. Please re-submit the BLAST search.' 
+      });
     }
     
     if (status[1] === 'WAITING') {

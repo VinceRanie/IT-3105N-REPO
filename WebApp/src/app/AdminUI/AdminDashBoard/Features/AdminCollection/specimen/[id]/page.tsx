@@ -96,6 +96,13 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
     });
   };
 
+  // Helper function to check if BLAST RID is expired
+  const isBlastRidExpired = () => {
+    if (!specimen?.blast_rid) return false;
+    if (!specimen?.blast_rid_expired_at) return false;
+    return new Date(specimen.blast_rid_expired_at) <= new Date();
+  };
+
   const submitBlast = async () => {
     if (!specimen.fasta_sequence) {
       alert("No FASTA sequence available to submit for BLAST");
@@ -487,7 +494,8 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
         doc.text(`FASTA File: ${specimen.fasta_file}`, margin, yPos);
         yPos += lineHeight;
       }
-      if (specimen.blast_rid) {
+      // Only show BLAST RID in PDF if it's not expired
+      if (specimen.blast_rid && !isBlastRidExpired()) {
         doc.text(`BLAST RID: ${specimen.blast_rid}`, margin, yPos);
         yPos += lineHeight;
       }
@@ -876,8 +884,8 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
                       </div>
                     )}
 
-                    {/* BLAST Status */}
-                    {specimen.blast_rid && (
+                    {/* BLAST Status - Only show if RID is not expired */}
+                    {specimen.blast_rid && !isBlastRidExpired() && (
                       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-medium text-blue-700 uppercase">BLAST Request ID</span>
@@ -1054,7 +1062,7 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
                       </div>
                     )}
 
-                    {/* No BLAST Results Yet */}
+                    {/* No BLAST Results Yet - Only show if RID is not expired or if showing expired state */}
                     {specimen.blast_rid && (!specimen.blast_results || !specimen.blast_results.matches || specimen.blast_results.matches.length === 0) && (
                       <div className={`text-center py-8 border rounded-lg ${
                         blastExpired ? 'bg-red-50 border-red-200' : 'bg-yellow-50 border-yellow-200'
@@ -1064,14 +1072,16 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
                             <>
                               <Loader2 className="w-8 h-8 text-orange-600 animate-spin" />
                               <p className="text-gray-700 font-medium">Checking for BLAST results...</p>
-                              <p className="text-sm text-gray-600">
-                                RID: <span className="font-mono">{specimen.blast_rid}</span>
-                              </p>
+                              {!isBlastRidExpired() && (
+                                <p className="text-sm text-gray-600">
+                                  RID: <span className="font-mono">{specimen.blast_rid}</span>
+                                </p>
+                              )}
                               <p className="text-xs text-gray-500">
                                 Results typically available in 30-60 seconds after submission
                               </p>
                             </>
-                          ) : blastExpired ? (
+                          ) : blastExpired || isBlastRidExpired() ? (
                             <>
                               <div className="text-red-600 mb-2">
                                 <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1079,9 +1089,6 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
                                 </svg>
                               </div>
                               <p className="text-gray-800 font-semibold mb-1">BLAST Request Expired</p>
-                              <p className="text-sm text-gray-600 mb-2">
-                                RID: <span className="font-mono">{specimen.blast_rid}</span>
-                              </p>
                               <p className="text-xs text-gray-600 mb-4 max-w-md">
                                 NCBI BLAST results expire after 24-36 hours. This request is no longer available on NCBI servers.
                               </p>

@@ -24,6 +24,7 @@ const microbialInfoSchema = new Schema({
   similarity_percent: Number,
   blast_rid: String, // BLAST Request ID for tracking
   blast_results: { type: Schema.Types.Mixed }, // Top 10 similar sequences
+  blast_rid_expired_at: Date, // Timestamp when BLAST RID becomes invalid (24-36 hours after submission)
   
   // Biochemical Tests
   biochemical_tests: {
