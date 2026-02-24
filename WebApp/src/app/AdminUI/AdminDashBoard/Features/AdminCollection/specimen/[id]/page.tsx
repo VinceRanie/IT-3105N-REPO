@@ -113,7 +113,7 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
           
           <div className="flex gap-2">
             <button
-              onClick={() => router.push(`/AdminUI/AdminDashBoard/Features/AdminCollection?edit=${params.id}`)}
+              onClick={() => router.push(`/AdminUI/AdminDashBoard/Features/AdminCollection?edit=${resolvedParams.id}`)}
               className="flex items-center gap-2 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600"
             >
               <Edit className="w-4 h-4" />
