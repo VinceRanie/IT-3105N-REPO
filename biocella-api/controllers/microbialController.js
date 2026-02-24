@@ -393,8 +393,16 @@ exports.getBlastResults = async (req, res) => {
           
           console.log('ZIP contains', zipEntries.length, 'files');
           
-          // Find the JSON file in the ZIP
-          const jsonEntry = zipEntries.find(entry => entry.entryName.endsWith('.json'));
+          // Try to find the main results file first (e.g., RIDNUMBER_1.json)
+          // NCBI structure: RIDNUMBER.json (reference file) and RIDNUMBER_1.json (actual results)
+          let jsonEntry = zipEntries.find(entry => 
+            entry.entryName.endsWith('_1.json') || entry.entryName.endsWith('_1.JSON')
+          );
+          
+          // If _1.json not found, try any .json file
+          if (!jsonEntry) {
+            jsonEntry = zipEntries.find(entry => entry.entryName.endsWith('.json'));
+          }
           
           if (!jsonEntry) {
             console.error('No JSON file found in ZIP archive');
