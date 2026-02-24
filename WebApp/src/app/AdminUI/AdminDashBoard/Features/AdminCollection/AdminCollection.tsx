@@ -166,6 +166,8 @@ export default function CollectionTable({ specimens, onEdit, onDelete, onView }:
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
+                              console.log("View button clicked, specimen:", specimen);
+                              console.log("Specimen _id:", specimen._id);
                               onView(specimen);
                             }}
                             className="p-1 text-blue-600 hover:bg-blue-50 rounded"
@@ -176,6 +178,8 @@ export default function CollectionTable({ specimens, onEdit, onDelete, onView }:
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
+                              console.log("Edit button clicked, specimen:", specimen);
+                              console.log("Specimen _id:", specimen._id);
                               onEdit(specimen);
                             }}
                             className="p-1 text-yellow-600 hover:bg-yellow-50 rounded"

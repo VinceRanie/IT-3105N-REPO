@@ -19,16 +19,24 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
   const router = useRouter();
 
   useEffect(() => {
+    if (!params.id || params.id === 'undefined') {
+      console.error("Invalid specimen ID:", params.id);
+      setLoading(false);
+      return;
+    }
     fetchSpecimenDetails();
   }, [params.id]);
 
   const fetchSpecimenDetails = async () => {
     try {
       setLoading(true);
+      console.log("Fetching specimen with ID:", params.id);
       const response = await fetch(`${API_URL}/microbials/${params.id}`);
       if (response.ok) {
         const data = await response.json();
         setSpecimen(data);
+      } else {
+        console.error("Failed to fetch specimen:", response.status, response.statusText);
       }
     } catch (error) {
       console.error("Error fetching specimen details:", error);

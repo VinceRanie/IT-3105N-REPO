@@ -102,7 +102,11 @@ export default function AdminCollectionPage() {
       const response = await fetch(`${API_URL}/microbials`);
       if (response.ok) {
         const data = await response.json();
+        console.log("Fetched specimens:", data);
+        console.log("First specimen _id:", data[0]?._id);
         setSpecimens(data);
+      } else {
+        console.error("Failed to fetch specimens:", response.status);
       }
     } catch (error) {
       console.error("Error fetching specimens:", error);
