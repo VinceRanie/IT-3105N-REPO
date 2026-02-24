@@ -296,17 +296,26 @@ exports.getBlastResults = async (req, res) => {
     const EMAIL = process.env.EMAIL_USER || '22102959@usc.edu.ph';
     const TOOL = 'biocella-backend';
 
-    // Check BLAST status with timeout
-    const statusCheck = await axios.get('https://blast.ncbi.nlm.nih.gov/Blast.cgi', {
-      params: {
-        CMD: 'Get',
-        FORMAT_OBJECT: 'SearchInfo',
-        RID: microbial.blast_rid,
-        EMAIL,
-        TOOL
-      },
-      timeout: 15000 // 15 second timeout
-    });
+    let statusCheck;
+    try {
+      // Check BLAST status with timeout
+      statusCheck = await axios.get('https://blast.ncbi.nlm.nih.gov/Blast.cgi', {
+        params: {
+          CMD: 'Get',
+          FORMAT_OBJECT: 'SearchInfo',
+          RID: microbial.blast_rid,
+          EMAIL,
+          TOOL
+        },
+        timeout: 20000 // 20 second timeout
+      });
+    } catch (axiosErr) {
+      console.error('NCBI status check timeout or error:', axiosErr.message);
+      return res.json({ 
+        status: 'pending', 
+        message: 'NCBI server is slow or unreachable. Please try again in a moment.' 
+      });
+    }
 
     const status = statusCheck.data.match(/Status=([A-Z]+)/);
     
@@ -319,17 +328,26 @@ exports.getBlastResults = async (req, res) => {
     }
 
     if (status[1] === 'READY') {
-      // Get results with timeout
-      const resultRes = await axios.get('https://blast.ncbi.nlm.nih.gov/Blast.cgi', {
-        params: {
-          CMD: 'Get',
-          FORMAT_TYPE: 'JSON2',
-          RID: microbial.blast_rid,
-          EMAIL,
-          TOOL
-        },
-        timeout: 20000 // 20 second timeout for results (can be larger)
-      });
+      let resultRes;
+      try {
+        // Get results with timeout
+        resultRes = await axios.get('https://blast.ncbi.nlm.nih.gov/Blast.cgi', {
+          params: {
+            CMD: 'Get',
+            FORMAT_TYPE: 'JSON2',
+            RID: microbial.blast_rid,
+            EMAIL,
+            TOOL
+          },
+          timeout: 25000 // 25 second timeout for results (larger files)
+        });
+      } catch (axiosErr) {
+        console.error('NCBI results fetch timeout or error:', axiosErr.message);
+        return res.json({ 
+          status: 'error', 
+          message: 'Failed to download results from NCBI. The results are ready but the server timed out. Please try again.' 
+        });
+      }
 
       console.log('BLAST results received, content type:', resultRes.headers['content-type']);
       console.log('Response data type:', typeof resultRes.data);

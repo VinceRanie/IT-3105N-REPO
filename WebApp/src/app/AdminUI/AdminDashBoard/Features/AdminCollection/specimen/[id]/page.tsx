@@ -130,15 +130,19 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
 
   const checkBlastResults = async () => {
     try {
-      // Add timeout to prevent hanging
+      // Add timeout to prevent hanging - increased to 30 seconds for backend processing
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
       
       const response = await fetch(
         `${API_URL}/microbials/${resolvedParams.id}/blast/results`,
         { 
           signal: controller.signal,
-          mode: 'cors'
+          mode: 'cors',
+          cache: 'no-cache',
+          headers: {
+            'Content-Type': 'application/json',
+          }
         }
       );
       clearTimeout(timeoutId);
@@ -170,12 +174,35 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
     } catch (error: any) {
       if (error.name === 'AbortError') {
         console.warn("BLAST results check timed out - will retry");
+        // Don't alert on timeout, just log - polling will retry
+      } else if (error.message === 'Failed to fetch') {
+        console.error("Network error or backend server not responding:", error);
+        // Continue polling - might be temporary network issue
       } else {
         console.error("Error checking BLAST results:", error);
       }
       // Don't stop polling on network errors, just log and continue
     }
     return false;
+  };
+
+  const manualBlastCheck = async () => {
+    setBlastPolling(true);
+    try {
+      const isComplete = await checkBlastResults();
+      if (!isComplete) {
+        // Show helpful message if still pending
+        setTimeout(() => {
+          if (!specimen.blast_results) {
+            alert(`BLAST search is still processing. RID: ${specimen.blast_rid}\n\nThis can take 1-2 minutes. The page will auto-refresh when results are ready.`);
+          }
+          setBlastPolling(false);
+        }, 2000);
+      }
+    } catch (err) {
+      console.error("Manual check error:", err);
+      setBlastPolling(false);
+    }
   };
 
   const startBlastPolling = () => {
@@ -1035,21 +1062,25 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
                                 RID: <span className="font-mono">{specimen.blast_rid}</span>
                               </p>
                               <button
-                                onClick={async () => {
-                                  setBlastPolling(true);
-                                  const isComplete = await checkBlastResults();
-                                  if (!isComplete) {
-                                    setTimeout(() => setBlastPolling(false), 2000);
-                                  }
-                                }}
-                                className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                                onClick={manualBlastCheck}
+                                disabled={blastPolling}
+                                className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 <ExternalLink className="w-4 h-4" />
                                 Check Results Now
                               </button>
                               <p className="text-xs text-gray-500 mt-2">
-                                Click to manually check if results are ready
+                                Results typically take 1-2 minutes to process
                               </p>
+                              <a
+                                href={`https://blast.ncbi.nlm.nih.gov/Blast.cgi?CMD=Get&RID=${specimen.blast_rid}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-blue-600 hover:text-blue-800 underline mt-1 flex items-center gap-1"
+                              >
+                                View on NCBI Website
+                                <ExternalLink className="w-3 h-3" />
+                              </a>
                             </>
                           )}
                         </div>
