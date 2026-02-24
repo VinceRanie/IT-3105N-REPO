@@ -3,7 +3,7 @@
 import { useState, useEffect, use } from "react";
 import { API_URL } from "@/config/api";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Edit, QrCode, Trash2, Plus, Download } from "lucide-react";
+import { ArrowLeft, Edit, QrCode, Trash2, Plus, Download, ChevronDown, ChevronUp, ExternalLink, Loader2 } from "lucide-react";
 import Image from "next/image";
 import jsPDF from "jspdf";
 
@@ -19,6 +19,9 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
   const [loading, setLoading] = useState(true);
   const [generatingPDF, setGeneratingPDF] = useState(false);
   const [activeTab, setActiveTab] = useState("info");
+  const [expandedBlastResults, setExpandedBlastResults] = useState<Set<number>>(new Set());
+  const [blastLoading, setBlastLoading] = useState(false);
+  const [blastPolling, setBlastPolling] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -78,6 +81,95 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const toggleBlastResult = (index: number) => {
+    setExpandedBlastResults(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(index)) {
+        newSet.delete(index);
+      } else {
+        newSet.add(index);
+      }
+      return newSet;
+    });
+  };
+
+  const submitBlast = async () => {
+    if (!specimen.fasta_sequence) {
+      alert("No FASTA sequence available to submit for BLAST");
+      return;
+    }
+
+    setBlastLoading(true);
+    try {
+      const response = await fetch(`${API_URL}/microbials/${resolvedParams.id}/blast`, {
+        method: 'POST',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        alert(`BLAST submitted successfully! RID: ${data.rid}\n\nResults will be available in ${data.estimatedTime}`);
+        
+        // Refresh specimen to get the RID
+        await fetchSpecimenDetails();
+        
+        // Start polling for results
+        startBlastPolling();
+      } else {
+        const error = await response.json();
+        alert(`Failed to submit BLAST: ${error.error}`);
+      }
+    } catch (error) {
+      console.error("Error submitting BLAST:", error);
+      alert("Error submitting BLAST");
+    } finally {
+      setBlastLoading(false);
+    }
+  };
+
+  const checkBlastResults = async () => {
+    try {
+      const response = await fetch(`${API_URL}/microbials/${resolvedParams.id}/blast/results`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        
+        if (data.status === 'completed') {
+          // Refresh specimen to show results
+          await fetchSpecimenDetails();
+          setBlastPolling(false);
+          alert("BLAST results are ready!");
+          return true;
+        } else if (data.status === 'pending') {
+          return false;
+        } else if (data.status === 'failed') {
+          setBlastPolling(false);
+          alert("BLAST search failed");
+          return true;
+        }
+      }
+    } catch (error) {
+      console.error("Error checking BLAST results:", error);
+    }
+    return false;
+  };
+
+  const startBlastPolling = () => {
+    setBlastPolling(true);
+    
+    const pollInterval = setInterval(async () => {
+      const isComplete = await checkBlastResults();
+      if (isComplete) {
+        clearInterval(pollInterval);
+      }
+    }, 10000); // Check every 10 seconds
+
+    // Stop polling after 5 minutes
+    setTimeout(() => {
+      clearInterval(pollInterval);
+      setBlastPolling(false);
+    }, 300000);
   };
 
   const generatePDF = async () => {
@@ -672,29 +764,239 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
 
             {activeTab === "genome" && (
               <div className="bg-white shadow rounded-xl p-6">
-                <h2 className="text-lg font-semibold mb-4">Genome Sequence Data</h2>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold">Genome Sequence Data</h2>
+                  {specimen.fasta_sequence && !specimen.blast_results && !blastLoading && !blastPolling && (
+                    <button 
+                      onClick={submitBlast}
+                      className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      Run BLAST Analysis
+                    </button>
+                  )}
+                  {blastLoading && (
+                    <div className="flex items-center gap-2 text-blue-600">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Submitting to NCBI...
+                    </div>
+                  )}
+                  {blastPolling && (
+                    <div className="flex items-center gap-2 text-orange-600">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Waiting for results...
+                    </div>
+                  )}
+                </div>
+
                 {specimen.fasta_sequence || specimen.fasta_file || specimen.blast_results ? (
                   <div className="space-y-6">
+                    {/* FASTA File Name */}
                     {specimen.fasta_file && (
-                      <InfoItem label="FASTA File" value={specimen.fasta_file} mono />
+                      <div>
+                        <span className="text-xs font-medium text-gray-500 uppercase">FASTA File</span>
+                        <p className="mt-1 text-sm text-gray-800 font-mono">{specimen.fasta_file}</p>
+                      </div>
                     )}
+
+                    {/* FASTA Sequence */}
                     {specimen.fasta_sequence && (
                       <div>
                         <span className="text-xs font-medium text-gray-500 uppercase">FASTA Sequence</span>
-                        <pre className="mt-2 p-4 bg-gray-50 rounded text-xs font-mono overflow-x-auto max-h-64 overflow-y-auto">
+                        <pre className="mt-2 p-4 bg-gray-50 rounded text-xs font-mono overflow-x-auto max-h-64 overflow-y-auto border border-gray-200">
                           {specimen.fasta_sequence}
                         </pre>
                       </div>
                     )}
+
+                    {/* BLAST Status */}
                     {specimen.blast_rid && (
-                      <InfoItem label="BLAST RID" value={specimen.blast_rid} mono />
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-medium text-blue-700 uppercase">BLAST Request ID</span>
+                          <span className="text-sm font-mono text-blue-900">{specimen.blast_rid}</span>
+                        </div>
+                        {!specimen.blast_results && (
+                          <p className="text-xs text-blue-600 mt-2">
+                            BLAST analysis in progress. Results typically available in 30-60 seconds.
+                          </p>
+                        )}
+                      </div>
                     )}
-                    {specimen.blast_results && (
+
+                    {/* BLAST Results - Top 10 Similar Sequences */}
+                    {specimen.blast_results && specimen.blast_results.matches && specimen.blast_results.matches.length > 0 && (
                       <div>
-                        <span className="text-xs font-medium text-gray-500 uppercase">BLAST Results</span>
-                        <pre className="mt-2 p-4 bg-gray-50 rounded text-xs overflow-x-auto max-h-96 overflow-y-auto">
-                          {JSON.stringify(specimen.blast_results, null, 2)}
-                        </pre>
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-xs font-medium text-gray-500 uppercase">
+                            BLAST Results - Top {specimen.blast_results.matches.length} Similar Sequences
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {specimen.blast_results.totalHits} total hits found
+                          </span>
+                        </div>
+
+                        {/* Top Hit Summary */}
+                        {specimen.blast_results.topHit && (
+                          <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-sm font-semibold text-green-900">Best Match</p>
+                                <p className="text-xs text-green-700 mt-1">
+                                  {specimen.blast_results.topHit.title}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-2xl font-bold text-green-600">
+                                  {specimen.blast_results.topHit.similarity}%
+                                </div>
+                                <p className="text-xs text-green-700">Similarity</p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* All Results - Collapsible */}
+                        <div className="space-y-3">
+                          {specimen.blast_results.matches.map((match: any, index: number) => {
+                            const isExpanded = expandedBlastResults.has(index);
+                            const ncbiUrl = `https://www.ncbi.nlm.nih.gov/nuccore/${match.accession}`;
+                            
+                            return (
+                              <div 
+                                key={index} 
+                                className="border border-gray-200 rounded-lg overflow-hidden hover:border-blue-300 transition-colors"
+                              >
+                                {/* Header - Always Visible */}
+                                <div 
+                                  className="p-4 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors"
+                                  onClick={() => toggleBlastResult(index)}
+                                >
+                                  <div className="flex items-start justify-between gap-4">
+                                    <div className="flex-1 min-w-0">
+                                      {/* Rank and Accession */}
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <span className="inline-flex items-center justify-center w-6 h-6 text-xs font-bold text-white bg-blue-600 rounded-full">
+                                          {index + 1}
+                                        </span>
+                                        <a
+                                          href={ncbiUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-mono text-sm font-medium"
+                                        >
+                                          {match.accession}
+                                          <ExternalLink className="w-3 h-3" />
+                                        </a>
+                                      </div>
+                                      
+                                      {/* Title */}
+                                      <p className="text-sm text-gray-800 line-clamp-2">
+                                        {match.title}
+                                      </p>
+                                    </div>
+
+                                    {/* Similarity Badge */}
+                                    <div className="flex items-center gap-3 flex-shrink-0">
+                                      <div className="text-right">
+                                        <div className={`text-lg font-bold ${
+                                          match.similarity >= 95 ? 'text-green-600' :
+                                          match.similarity >= 85 ? 'text-blue-600' :
+                                          match.similarity >= 75 ? 'text-orange-600' :
+                                          'text-gray-600'
+                                        }`}>
+                                          {match.similarity}%
+                                        </div>
+                                        <p className="text-xs text-gray-500">identity</p>
+                                      </div>
+                                      
+                                      {isExpanded ? (
+                                        <ChevronUp className="w-5 h-5 text-gray-400" />
+                                      ) : (
+                                        <ChevronDown className="w-5 h-5 text-gray-400" />
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Expanded Details */}
+                                {isExpanded && (
+                                  <div className="p-4 bg-white border-t border-gray-200">
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                      <div>
+                                        <p className="text-xs text-gray-500 uppercase font-medium mb-1">E-value</p>
+                                        <p className="text-sm text-gray-800 font-mono">
+                                          {match.evalue.toExponential(2)}
+                                        </p>
+                                      </div>
+                                      <div>
+                                        <p className="text-xs text-gray-500 uppercase font-medium mb-1">Bit Score</p>
+                                        <p className="text-sm text-gray-800 font-mono">
+                                          {match.score.toFixed(1)}
+                                        </p>
+                                      </div>
+                                      <div>
+                                        <p className="text-xs text-gray-500 uppercase font-medium mb-1">Identity</p>
+                                        <p className="text-sm text-gray-800 font-mono">
+                                          {match.identity} / {match.alignLength}
+                                        </p>
+                                      </div>
+                                      <div>
+                                        <p className="text-xs text-gray-500 uppercase font-medium mb-1">Align Length</p>
+                                        <p className="text-sm text-gray-800 font-mono">
+                                          {match.alignLength} bp
+                                        </p>
+                                      </div>
+                                    </div>
+                                    
+                                    {/* Full Title */}
+                                    <div className="mt-4">
+                                      <p className="text-xs text-gray-500 uppercase font-medium mb-1">Full Description</p>
+                                      <p className="text-sm text-gray-700 leading-relaxed">
+                                        {match.title}
+                                      </p>
+                                    </div>
+
+                                    {/* View on NCBI Button */}
+                                    <div className="mt-4">
+                                      <a
+                                        href={ncbiUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
+                                      >
+                                        <ExternalLink className="w-4 h-4" />
+                                        View Full Details on NCBI
+                                      </a>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Analysis Info */}
+                        <div className="mt-4 p-3 bg-gray-50 rounded border border-gray-200">
+                          <p className="text-xs text-gray-600">
+                            <strong>Note:</strong> Results are from NCBI BLAST against the nucleotide (nt) database. 
+                            Click on any accession number or "View Full Details" to see complete information on the NCBI website.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* No BLAST Results Yet */}
+                    {specimen.blast_rid && (!specimen.blast_results || !specimen.blast_results.matches || specimen.blast_results.matches.length === 0) && !blastPolling && (
+                      <div className="text-center py-8">
+                        <p className="text-gray-500 mb-3">BLAST results not yet available</p>
+                        <button
+                          onClick={checkBlastResults}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                        >
+                          Check Results Now
+                        </button>
                       </div>
                     )}
                   </div>

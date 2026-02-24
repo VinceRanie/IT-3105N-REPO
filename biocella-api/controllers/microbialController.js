@@ -358,14 +358,16 @@ function parseBlastResults(data) {
     const report = data.BlastOutput2[0].report;
     const results = report.results;
     
-    if (!results || !results.search || !results.search.hits) {
-      return { topHit: null, matches: [] };
+    if (!results || !results.search || !results.search.hits || results.search.hits.length === 0) {
+      console.log('No BLAST hits found');
+      return { topHit: null, matches: [], totalHits: 0 };
     }
 
-    const hits = results.search.hits.slice(0, 10); // Top 10
+    const allHits = results.search.hits;
+    const hits = allHits.slice(0, 10); // Top 10
     
-    const matches = hits.map(hit => {
-      const hsp = hit.hsps[0]; // Best HSP
+    const matches = hits.map((hit, index) => {
+      const hsp = hit.hsps[0]; // Best HSP (High-scoring Segment Pair)
       const similarity = ((hsp.identity / hsp.align_len) * 100).toFixed(2);
       
       return {
@@ -375,17 +377,23 @@ function parseBlastResults(data) {
         evalue: hsp.evalue,
         score: hsp.bit_score,
         identity: hsp.identity,
-        alignLength: hsp.align_len
+        alignLength: hsp.align_len,
+        queryFrom: hsp.query_from,
+        queryTo: hsp.query_to,
+        hitFrom: hsp.hit_from,
+        hitTo: hsp.hit_to
       };
     });
 
+    console.log(`BLAST parsing complete: Found ${allHits.length} total hits, returning top ${matches.length}`);
+    
     return {
       topHit: matches[0] || null,
       matches: matches,
-      totalHits: hits.length
+      totalHits: allHits.length
     };
   } catch (err) {
     console.error('Error parsing BLAST results:', err);
-    return { topHit: null, matches: [], error: 'Failed to parse results' };
+    return { topHit: null, matches: [], totalHits: 0, error: 'Failed to parse results' };
   }
 }
