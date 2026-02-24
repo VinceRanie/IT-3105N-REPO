@@ -135,68 +135,66 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
       doc.line(margin, yPos, pageWidth - margin, yPos);
       yPos += 10;
 
-      // Add specimen image and/or QR code if available
-      let imageAdded = false;
+      // Add specimen image on the left if available
+      let imageHeight = 0;
       if (specimen.image_url) {
         const imageUrl = `${API_URL}${specimen.image_url}`;
         const imageData = await getImageBase64(imageUrl);
         
         if (imageData) {
           try {
-            const imgWidth = 60;
-            const imgHeight = 60;
-            const imgX = pageWidth - margin - imgWidth;
+            const imgWidth = 50;
+            const imgHeight = 50;
             
-            doc.addImage(imageData, 'JPEG', imgX, yPos, imgWidth, imgHeight);
-            imageAdded = true;
+            doc.addImage(imageData, 'JPEG', margin, yPos, imgWidth, imgHeight);
+            imageHeight = imgHeight + 5; // Add spacing
           } catch (error) {
             console.error("Error adding image to PDF:", error);
           }
         }
       }
 
-      // Add QR code (independent of photo)
-      if (specimen.qr_code) {
-        try {
-          const qrSize = 35;
-          const qrX = imageAdded 
-            ? pageWidth - margin - 65 - qrSize // Next to image
-            : pageWidth - margin - qrSize; // Standalone
-          doc.addImage(specimen.qr_code, 'PNG', qrX, yPos, qrSize, qrSize);
-        } catch (error) {
-          console.error("Error adding QR code to PDF:", error);
+      // Basic Information (next to or below image)
+      const infoStartX = specimen.image_url ? margin + 55 : margin;
+      const infoStartY = yPos;
+      
+      doc.setFontSize(14);
+      doc.setFont("helvetica", "bold");
+      doc.text("Basic Information", infoStartX, yPos);
+      yPos += lineHeight;
+
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      
+      const basicInfo = [
+        ["Code Name:", specimen.code_name],
+        ["Accession Number:", specimen.accession_no || specimen.accession_number || "N/A"],
+        ["Classification:", specimen.classification || "N/A"],
+        ["Source:", specimen.source || "N/A"],
+        ["Locale:", specimen.locale || "N/A"],
+        ["Project:", specimen.project_id?.title || "N/A"],
+        ["Project Fund:", specimen.project_fund || "N/A"],
+        ["Date Accessed:", specimen.date_accessed ? new Date(specimen.date_accessed).toLocaleDateString() : "N/A"],
+        ["Similarity:", specimen.similarity_percent ? `${specimen.similarity_percent}%` : "N/A"],
+      ];
+
+      basicInfo.forEach(([label, value]) => {
+        checkPageBreak();
+        doc.setFont("helvetica", "bold");
+        doc.text(label, infoStartX, yPos);
+        doc.setFont("helvetica", "normal");
+        const valueText = doc.splitTextToSize(String(value), pageWidth - infoStartX - margin - 45);
+        doc.text(valueText, infoStartX + 45, yPos);
+        yPos += lineHeight;
+      });
+
+      // Move yPos past image if it's taller than the info
+      if (imageHeight > 0) {
+        const textHeight = (basicInfo.length + 1) * lineHeight;
+        if (imageHeight > textHeight) {
+          yPos = infoStartY + imageHeight;
         }
       }
-
-    // Basic Information
-    doc.setFontSize(14);
-    doc.setFont("helvetica", "bold");
-    doc.text("Basic Information", margin, yPos);
-    yPos += lineHeight;
-
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    
-    const basicInfo = [
-      ["Code Name:", specimen.code_name],
-      ["Accession Number:", specimen.accession_no || specimen.accession_number || "N/A"],
-      ["Classification:", specimen.classification || "N/A"],
-      ["Source:", specimen.source || "N/A"],
-      ["Locale:", specimen.locale || "N/A"],
-      ["Project:", specimen.project_id?.title || "N/A"],
-      ["Project Fund:", specimen.project_fund || "N/A"],
-      ["Date Accessed:", specimen.date_accessed ? new Date(specimen.date_accessed).toLocaleDateString() : "N/A"],
-      ["Similarity:", specimen.similarity_percent ? `${specimen.similarity_percent}%` : "N/A"],
-    ];
-
-    basicInfo.forEach(([label, value]) => {
-      checkPageBreak();
-      doc.setFont("helvetica", "bold");
-      doc.text(label, margin, yPos);
-      doc.setFont("helvetica", "normal");
-      doc.text(String(value), margin + 50, yPos);
-      yPos += lineHeight;
-    });
 
     // Description
     if (specimen.description) {
