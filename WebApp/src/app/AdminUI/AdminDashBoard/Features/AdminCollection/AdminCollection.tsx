@@ -8,21 +8,21 @@ import { useRouter } from "next/navigation";
 interface Collection {
   _id: string;
   code_name: string;
-  accession_number: string;
+  classification: string;
+  source: string;
+  date_accessed: string;
+  locale?: string;
+  project_fund?: string;
+  accession_number?: string;
+  accession_no?: string;
   project_id: {
     _id: string;
     title: string;
     code: string;
     classification: string;
   };
-  description: string;
-  custom_fields?: {
-    locale?: string;
-    source?: string;
-    storage_type?: string;
-    shelf?: string;
-    funded_by?: string;
-  };
+  description?: string;
+  custom_fields?: Record<string, string>;
 }
 
 const sampleCollections_backup = [
@@ -112,19 +112,19 @@ export default function CollectionTable({ specimens, onEdit, onDelete, onView }:
                         {specimen.code_name}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-800">
-                        {specimen.accession_number || "N/A"}
+                        {specimen.accession_number || specimen.accession_no || "N/A"}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-800">
                         {specimen.project_id?.title || "N/A"}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-800">
-                        {specimen.custom_fields?.locale || "N/A"}
+                        {specimen.locale || "N/A"}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-800">
-                        {specimen.custom_fields?.source || "N/A"}
+                        {specimen.source || "N/A"}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-800">
-                        {specimen.project_id?.classification || "N/A"}
+                        {specimen.classification || specimen.project_id?.classification || "N/A"}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-800">
                         <div className="flex gap-2">
@@ -172,28 +172,60 @@ export default function CollectionTable({ specimens, onEdit, onDelete, onView }:
                             <p className="text-sm text-gray-600">
                               {specimen.description || "No description available"}
                             </p>
-                            {specimen.custom_fields && (
-                              <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-                                {specimen.custom_fields.storage_type && (
-                                  <div>
-                                    <span className="font-medium">Storage:</span>{" "}
-                                    {specimen.custom_fields.storage_type}
-                                  </div>
-                                )}
-                                {specimen.custom_fields.shelf && (
-                                  <div>
-                                    <span className="font-medium">Shelf:</span>{" "}
-                                    {specimen.custom_fields.shelf}
-                                  </div>
-                                )}
-                                {specimen.custom_fields.funded_by && (
-                                  <div>
-                                    <span className="font-medium">Funded by:</span>{" "}
-                                    {specimen.custom_fields.funded_by}
-                                  </div>
-                                )}
-                              </div>
-                            )}
+                            <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                              {specimen.project_fund && (
+                                <div>
+                                  <span className="font-medium">Project Fund:</span>{" "}
+                                  {specimen.project_fund}
+                                </div>
+                              )}
+                              {specimen.date_accessed && (
+                                <div>
+                                  <span className="font-medium">Date Accessed:</span>{" "}
+                                  {new Date(specimen.date_accessed).toLocaleDateString()}
+                                </div>
+                              )}
+                              {specimen.accession_no && (
+                                <div>
+                                  <span className="font-medium">Accession No:</span>{" "}
+                                  {specimen.accession_no}
+                                </div>
+                              )}
+                              {specimen.similarity_percent && (
+                                <div>
+                                  <span className="font-medium">Similarity:</span>{" "}
+                                  {specimen.similarity_percent}%
+                                </div>
+                              )}
+                              {specimen.catalase && (
+                                <div>
+                                  <span className="font-medium">Catalase:</span>{" "}
+                                  {specimen.catalase}
+                                </div>
+                              )}
+                              {specimen.oxidase && (
+                                <div>
+                                  <span className="font-medium">Oxidase:</span>{" "}
+                                  {specimen.oxidase}
+                                </div>
+                              )}
+                              {specimen.growth_media && (
+                                <div>
+                                  <span className="font-medium">Growth Media:</span>{" "}
+                                  {specimen.growth_media}
+                                </div>
+                              )}
+                              {specimen.custom_fields && Object.keys(specimen.custom_fields).length > 0 && (
+                                <>
+                                  {Object.entries(specimen.custom_fields).map(([key, value]) => (
+                                    <div key={key}>
+                                      <span className="font-medium capitalize">{key.replace(/_/g, ' ')}:</span>{" "}
+                                      {value}
+                                    </div>
+                                  ))}
+                                </>
+                              )}
+                            </div>
                           </div>
                         </td>
                       </tr>

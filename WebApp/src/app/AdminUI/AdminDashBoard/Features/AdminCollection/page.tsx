@@ -19,18 +19,53 @@ interface Project {
 interface Specimen {
   _id: string;
   code_name: string;
-  accession_number: string;
-  project_id: Project;
-  description: string;
+  classification: string;
+  source: string;
+  date_accessed: string;
+  locale?: string;
+  project_fund?: string;
+  accession_number?: string;
+  accession_no?: string;
+  similarity_percent?: string;
+  project_id: Project | string;
+  description?: string;
   qr_code?: string;
   image_url?: string;
-  custom_fields?: {
-    locale?: string;
-    source?: string;
-    storage_type?: string;
-    shelf?: string;
-    funded_by?: string;
+  fasta_file?: string;
+  fasta_sequence?: string;
+  blast_rid?: string;
+  blast_results?: any;
+  biochemical_tests?: {
+    onpg?: string;
+    glu?: string;
+    adh?: string;
+    man?: string;
+    ldc?: string;
+    ino?: string;
+    odc?: string;
+    sor?: string;
+    cit?: string;
+    rha?: string;
+    h2s?: string;
+    sac?: string;
+    ure?: string;
+    mel?: string;
+    tda?: string;
+    amy?: string;
+    ind?: string;
+    ara?: string;
+    vp?: string;
+    no2?: string;
+    gel?: string;
   };
+  catalase?: string;
+  hemolysis?: string;
+  oxidase?: string;
+  growth_media?: string;
+  special_reqs?: string;
+  activity?: string;
+  result?: string;
+  custom_fields?: Record<string, string>;
 }
 
 export default function AdminCollectionPage() {
@@ -158,11 +193,21 @@ export default function AdminCollectionPage() {
   };
 
   const handleViewSpecimen = (specimen: any) => {
+    console.log("View specimen:", specimen);
+    if (!specimen._id) {
+      alert("Error: Specimen ID is missing");
+      return;
+    }
     // Navigate to specimen details page or open a detailed modal
     router.push(`/AdminUI/AdminDashBoard/Features/AdminCollection/specimen/${specimen._id}`);
   };
 
   const handleEditSpecimen = (specimen: any) => {
+    console.log("Edit specimen:", specimen);
+    if (!specimen._id) {
+      alert("Error: Specimen ID is missing");
+      return;
+    }
     setSelectedSpecimen(specimen);
     setIsSpecimenModalOpen(true);
   };
@@ -175,9 +220,11 @@ export default function AdminCollectionPage() {
     return (
       specimen.code_name?.toLowerCase().includes(query) ||
       specimen.accession_number?.toLowerCase().includes(query) ||
-      specimen.project_id?.title?.toLowerCase().includes(query) ||
-      specimen.custom_fields?.locale?.toLowerCase().includes(query) ||
-      specimen.custom_fields?.source?.toLowerCase().includes(query)
+      specimen.accession_no?.toLowerCase().includes(query) ||
+      specimen.classification?.toLowerCase().includes(query) ||
+      specimen.source?.toLowerCase().includes(query) ||
+      specimen.locale?.toLowerCase().includes(query) ||
+      specimen.project_id?.title?.toLowerCase().includes(query)
     );
   });
 
