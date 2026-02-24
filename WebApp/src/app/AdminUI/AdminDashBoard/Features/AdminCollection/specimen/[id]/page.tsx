@@ -86,19 +86,39 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
         }
       };
 
-      // Helper function to convert image to base64
-      const getImageBase64 = async (url: string): Promise<string | null> => {
+      // Helper function to convert image to base64 with timeout
+      const getImageBase64 = async (url: string, timeoutMs: number = 8000): Promise<string | null> => {
         try {
-          const response = await fetch(url);
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+          
+          const response = await fetch(url, { 
+            signal: controller.signal,
+            mode: 'cors'
+          });
+          clearTimeout(timeoutId);
+          
+          if (!response.ok) {
+            console.error(`Failed to fetch image: ${response.status}`);
+            return null;
+          }
+          
           const blob = await response.blob();
           return new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onloadend = () => resolve(reader.result as string);
-            reader.onerror = reject;
+            reader.onerror = () => {
+              console.error("FileReader error");
+              resolve(null);
+            };
             reader.readAsDataURL(blob);
           });
-        } catch (error) {
-          console.error("Error loading image:", error);
+        } catch (error: any) {
+          if (error.name === 'AbortError') {
+            console.warn("Image fetch timeout - continuing without image");
+          } else {
+            console.error("Error loading image:", error.message);
+          }
           return null;
         }
       };
@@ -115,7 +135,8 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
       doc.line(margin, yPos, pageWidth - margin, yPos);
       yPos += 10;
 
-      // Add specimen image if available
+      // Add specimen image and/or QR code if available
+      let imageAdded = false;
       if (specimen.image_url) {
         const imageUrl = `${API_URL}${specimen.image_url}`;
         const imageData = await getImageBase64(imageUrl);
@@ -127,16 +148,23 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
             const imgX = pageWidth - margin - imgWidth;
             
             doc.addImage(imageData, 'JPEG', imgX, yPos, imgWidth, imgHeight);
-            
-            // Add QR code next to the image if available
-            if (specimen.qr_code) {
-              const qrSize = 30;
-              const qrX = imgX - qrSize - 5;
-              doc.addImage(specimen.qr_code, 'PNG', qrX, yPos, qrSize, qrSize);
-            }
+            imageAdded = true;
           } catch (error) {
             console.error("Error adding image to PDF:", error);
           }
+        }
+      }
+
+      // Add QR code (independent of photo)
+      if (specimen.qr_code) {
+        try {
+          const qrSize = 35;
+          const qrX = imageAdded 
+            ? pageWidth - margin - 65 - qrSize // Next to image
+            : pageWidth - margin - qrSize; // Standalone
+          doc.addImage(specimen.qr_code, 'PNG', qrX, yPos, qrSize, qrSize);
+        } catch (error) {
+          console.error("Error adding QR code to PDF:", error);
         }
       }
 
