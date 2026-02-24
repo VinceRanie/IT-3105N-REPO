@@ -254,7 +254,9 @@ exports.submitBlast = async (req, res) => {
       HITLIST_SIZE: 10 // Get top 10 results
     });
 
-    const submitRes = await axios.post('https://blast.ncbi.nlm.nih.gov/Blast.cgi', params);
+    const submitRes = await axios.post('https://blast.ncbi.nlm.nih.gov/Blast.cgi', params, {
+      timeout: 30000 // 30 second timeout for submission
+    });
     const ridMatch = submitRes.data.match(/RID = ([A-Z0-9]+)/);
     const rid = ridMatch ? ridMatch[1] : null;
 
@@ -294,7 +296,7 @@ exports.getBlastResults = async (req, res) => {
     const EMAIL = process.env.EMAIL_USER || '22102959@usc.edu.ph';
     const TOOL = 'biocella-backend';
 
-    // Check BLAST status
+    // Check BLAST status with timeout
     const statusCheck = await axios.get('https://blast.ncbi.nlm.nih.gov/Blast.cgi', {
       params: {
         CMD: 'Get',
@@ -302,7 +304,8 @@ exports.getBlastResults = async (req, res) => {
         RID: microbial.blast_rid,
         EMAIL,
         TOOL
-      }
+      },
+      timeout: 15000 // 15 second timeout
     });
 
     const status = statusCheck.data.match(/Status=([A-Z]+)/);
@@ -316,7 +319,7 @@ exports.getBlastResults = async (req, res) => {
     }
 
     if (status[1] === 'READY') {
-      // Get results
+      // Get results with timeout
       const resultRes = await axios.get('https://blast.ncbi.nlm.nih.gov/Blast.cgi', {
         params: {
           CMD: 'Get',
@@ -324,7 +327,8 @@ exports.getBlastResults = async (req, res) => {
           RID: microbial.blast_rid,
           EMAIL,
           TOOL
-        }
+        },
+        timeout: 20000 // 20 second timeout for results (can be larger)
       });
 
       // Parse and extract top 10 matches

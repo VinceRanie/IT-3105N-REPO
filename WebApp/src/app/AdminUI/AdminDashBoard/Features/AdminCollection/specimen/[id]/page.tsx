@@ -130,7 +130,18 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
 
   const checkBlastResults = async () => {
     try {
-      const response = await fetch(`${API_URL}/microbials/${resolvedParams.id}/blast/results`);
+      // Add timeout to prevent hanging
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+      
+      const response = await fetch(
+        `${API_URL}/microbials/${resolvedParams.id}/blast/results`,
+        { 
+          signal: controller.signal,
+          mode: 'cors'
+        }
+      );
+      clearTimeout(timeoutId);
       
       if (response.ok) {
         const data = await response.json();
@@ -142,15 +153,23 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
           alert("BLAST results are ready!");
           return true;
         } else if (data.status === 'pending') {
+          console.log("BLAST still pending...");
           return false;
         } else if (data.status === 'failed') {
           setBlastPolling(false);
           alert("BLAST search failed");
           return true;
         }
+      } else {
+        console.warn(`BLAST check returned status ${response.status}`);
       }
-    } catch (error) {
-      console.error("Error checking BLAST results:", error);
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        console.warn("BLAST results check timed out - will retry");
+      } else {
+        console.error("Error checking BLAST results:", error);
+      }
+      // Don't stop polling on network errors, just log and continue
     }
     return false;
   };
@@ -158,18 +177,21 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
   const startBlastPolling = () => {
     setBlastPolling(true);
     
+    let pollCount = 0;
+    const maxPolls = 30; // 30 attempts = 5 minutes
+    
     const pollInterval = setInterval(async () => {
+      pollCount++;
+      
       const isComplete = await checkBlastResults();
       if (isComplete) {
         clearInterval(pollInterval);
+      } else if (pollCount >= maxPolls) {
+        clearInterval(pollInterval);
+        setBlastPolling(false);
+        console.log("BLAST polling stopped after 5 minutes");
       }
     }, 10000); // Check every 10 seconds
-
-    // Stop polling after 5 minutes
-    setTimeout(() => {
-      clearInterval(pollInterval);
-      setBlastPolling(false);
-    }, 300000);
   };
 
   const generatePDF = async () => {
@@ -988,15 +1010,45 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
                     )}
 
                     {/* No BLAST Results Yet */}
-                    {specimen.blast_rid && (!specimen.blast_results || !specimen.blast_results.matches || specimen.blast_results.matches.length === 0) && !blastPolling && (
-                      <div className="text-center py-8">
-                        <p className="text-gray-500 mb-3">BLAST results not yet available</p>
-                        <button
-                          onClick={checkBlastResults}
-                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                        >
-                          Check Results Now
-                        </button>
+                    {specimen.blast_rid && (!specimen.blast_results || !specimen.blast_results.matches || specimen.blast_results.matches.length === 0) && (
+                      <div className="text-center py-8 bg-yellow-50 border border-yellow-200 rounded-lg">
+                        <div className="flex flex-col items-center gap-3">
+                          {blastPolling ? (
+                            <>
+                              <Loader2 className="w-8 h-8 text-orange-600 animate-spin" />
+                              <p className="text-gray-700 font-medium">Checking for BLAST results...</p>
+                              <p className="text-sm text-gray-600">
+                                RID: <span className="font-mono">{specimen.blast_rid}</span>
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                Results typically available in 30-60 seconds after submission
+                              </p>
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-gray-700 mb-1">BLAST results not yet available</p>
+                              <p className="text-xs text-gray-500 mb-3">
+                                RID: <span className="font-mono">{specimen.blast_rid}</span>
+                              </p>
+                              <button
+                                onClick={async () => {
+                                  setBlastPolling(true);
+                                  const isComplete = await checkBlastResults();
+                                  if (!isComplete) {
+                                    setTimeout(() => setBlastPolling(false), 2000);
+                                  }
+                                }}
+                                className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                              >
+                                <ExternalLink className="w-4 h-4" />
+                                Check Results Now
+                              </button>
+                              <p className="text-xs text-gray-500 mt-2">
+                                Click to manually check if results are ready
+                              </p>
+                            </>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
