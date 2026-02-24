@@ -3,8 +3,9 @@
 import { useState, useEffect, use } from "react";
 import { API_URL } from "@/config/api";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Edit, QrCode, Trash2, Plus } from "lucide-react";
+import { ArrowLeft, Edit, QrCode, Trash2, Plus, Download } from "lucide-react";
 import Image from "next/image";
+import jsPDF from "jspdf";
 
 interface SpecimenDetailProps {
   params: Promise<{
@@ -16,6 +17,7 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
   const resolvedParams = use(params);
   const [specimen, setSpecimen] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [generatingPDF, setGeneratingPDF] = useState(false);
   const [activeTab, setActiveTab] = useState("info");
   const router = useRouter();
 
@@ -66,6 +68,296 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
     }
   };
 
+  const generatePDF = async () => {
+    setGeneratingPDF(true);
+    try {
+      const doc = new jsPDF();
+      let yPos = 20;
+      const lineHeight = 7;
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const margin = 20;
+      const contentWidth = pageWidth - 2 * margin;
+
+      // Helper function to add new page if needed
+      const checkPageBreak = (additionalSpace = 10) => {
+        if (yPos > 270) {
+          doc.addPage();
+          yPos = 20;
+        }
+      };
+
+      // Helper function to convert image to base64
+      const getImageBase64 = async (url: string): Promise<string | null> => {
+        try {
+          const response = await fetch(url);
+          const blob = await response.blob();
+          return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+        } catch (error) {
+          console.error("Error loading image:", error);
+          return null;
+        }
+      };
+
+      // Title
+      doc.setFontSize(18);
+      doc.setFont("helvetica", "bold");
+      doc.text("Specimen Information Report", margin, yPos);
+      yPos += 10;
+
+      // Horizontal line
+      doc.setDrawColor(17, 63, 103);
+      doc.setLineWidth(0.5);
+      doc.line(margin, yPos, pageWidth - margin, yPos);
+      yPos += 10;
+
+      // Add specimen image if available
+      if (specimen.image_url) {
+        const imageUrl = `${API_URL}${specimen.image_url}`;
+        const imageData = await getImageBase64(imageUrl);
+        
+        if (imageData) {
+          try {
+            const imgWidth = 60;
+            const imgHeight = 60;
+            const imgX = pageWidth - margin - imgWidth;
+            
+            doc.addImage(imageData, 'JPEG', imgX, yPos, imgWidth, imgHeight);
+            
+            // Add QR code next to the image if available
+            if (specimen.qr_code) {
+              const qrSize = 30;
+              const qrX = imgX - qrSize - 5;
+              doc.addImage(specimen.qr_code, 'PNG', qrX, yPos, qrSize, qrSize);
+            }
+          } catch (error) {
+            console.error("Error adding image to PDF:", error);
+          }
+        }
+      }
+
+    // Basic Information
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text("Basic Information", margin, yPos);
+    yPos += lineHeight;
+
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    
+    const basicInfo = [
+      ["Code Name:", specimen.code_name],
+      ["Accession Number:", specimen.accession_no || specimen.accession_number || "N/A"],
+      ["Classification:", specimen.classification || "N/A"],
+      ["Source:", specimen.source || "N/A"],
+      ["Locale:", specimen.locale || "N/A"],
+      ["Project:", specimen.project_id?.title || "N/A"],
+      ["Project Fund:", specimen.project_fund || "N/A"],
+      ["Date Accessed:", specimen.date_accessed ? new Date(specimen.date_accessed).toLocaleDateString() : "N/A"],
+      ["Similarity:", specimen.similarity_percent ? `${specimen.similarity_percent}%` : "N/A"],
+    ];
+
+    basicInfo.forEach(([label, value]) => {
+      checkPageBreak();
+      doc.setFont("helvetica", "bold");
+      doc.text(label, margin, yPos);
+      doc.setFont("helvetica", "normal");
+      doc.text(String(value), margin + 50, yPos);
+      yPos += lineHeight;
+    });
+
+    // Description
+    if (specimen.description) {
+      yPos += 5;
+      checkPageBreak(20);
+      doc.setFontSize(14);
+      doc.setFont("helvetica", "bold");
+      doc.text("Description", margin, yPos);
+      yPos += lineHeight;
+      
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      const descLines = doc.splitTextToSize(specimen.description, contentWidth);
+      descLines.forEach((line: string) => {
+        checkPageBreak();
+        doc.text(line, margin, yPos);
+        yPos += lineHeight;
+      });
+    }
+
+    // Biochemical Tests
+    if (specimen.biochemical_tests || specimen.catalase || specimen.oxidase) {
+      yPos += 5;
+      checkPageBreak(20);
+      doc.setFontSize(14);
+      doc.setFont("helvetica", "bold");
+      doc.text("Biochemical Characteristics", margin, yPos);
+      yPos += lineHeight;
+      
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      
+      if (specimen.catalase) {
+        doc.text(`Catalase: ${specimen.catalase}`, margin, yPos);
+        yPos += lineHeight;
+      }
+      if (specimen.oxidase) {
+        doc.text(`Oxidase: ${specimen.oxidase}`, margin, yPos);
+        yPos += lineHeight;
+      }
+      if (specimen.hemolysis) {
+        doc.text(`Hemolysis: ${specimen.hemolysis}`, margin, yPos);
+        yPos += lineHeight;
+      }
+      if (specimen.growth_media) {
+        doc.text(`Growth Media: ${specimen.growth_media}`, margin, yPos);
+        yPos += lineHeight;
+      }
+
+      if (specimen.biochemical_tests) {
+        yPos += 3;
+        doc.setFont("helvetica", "bold");
+        doc.text("Test Results:", margin, yPos);
+        yPos += lineHeight;
+        doc.setFont("helvetica", "normal");
+
+        const tests = Object.entries(specimen.biochemical_tests)
+          .filter(([_, value]) => value && value !== '');
+        
+        let xPos = margin;
+        tests.forEach(([key, value]: [string, any], index) => {
+          if (index > 0 && index % 3 === 0) {
+            yPos += lineHeight;
+            xPos = margin;
+            checkPageBreak();
+          }
+          doc.text(`${key.toUpperCase()}: ${value}`, xPos, yPos);
+          xPos += 60;
+        });
+        yPos += lineHeight;
+      }
+
+      if (specimen.special_reqs) {
+        yPos += 3;
+        doc.text(`Special Requirements: ${specimen.special_reqs}`, margin, yPos);
+        yPos += lineHeight;
+      }
+    }
+
+    // Bioactivity
+    if (specimen.activity || specimen.result) {
+      yPos += 5;
+      checkPageBreak(15);
+      doc.setFontSize(14);
+      doc.setFont("helvetica", "bold");
+      doc.text("Bioactivity Data", margin, yPos);
+      yPos += lineHeight;
+      
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      
+      if (specimen.activity) {
+        doc.text(`Activity: ${specimen.activity}`, margin, yPos);
+        yPos += lineHeight;
+      }
+      if (specimen.result) {
+        const resultLines = doc.splitTextToSize(`Result: ${specimen.result}`, contentWidth);
+        resultLines.forEach((line: string) => {
+          checkPageBreak();
+          doc.text(line, margin, yPos);
+          yPos += lineHeight;
+        });
+      }
+    }
+
+    // Genome Data
+    if (specimen.fasta_file || specimen.fasta_sequence || specimen.blast_results) {
+      yPos += 5;
+      checkPageBreak(15);
+      doc.setFontSize(14);
+      doc.setFont("helvetica", "bold");
+      doc.text("Genome Sequence Data", margin, yPos);
+      yPos += lineHeight;
+      
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      
+      if (specimen.fasta_file) {
+        doc.text(`FASTA File: ${specimen.fasta_file}`, margin, yPos);
+        yPos += lineHeight;
+      }
+      if (specimen.blast_rid) {
+        doc.text(`BLAST RID: ${specimen.blast_rid}`, margin, yPos);
+        yPos += lineHeight;
+      }
+      if (specimen.fasta_sequence) {
+        yPos += 3;
+        doc.setFont("helvetica", "bold");
+        doc.text("FASTA Sequence:", margin, yPos);
+        yPos += lineHeight;
+        doc.setFont("courier", "normal");
+        doc.setFontSize(8);
+        const seqLines = specimen.fasta_sequence.match(/.{1,80}/g) || [];
+        seqLines.forEach((line: string) => {
+          checkPageBreak();
+          doc.text(line, margin, yPos);
+          yPos += 5;
+        });
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "normal");
+      }
+    }
+
+    // Custom Fields
+    if (specimen.custom_fields && Object.keys(specimen.custom_fields).length > 0) {
+      yPos += 5;
+      checkPageBreak(15);
+      doc.setFontSize(14);
+      doc.setFont("helvetica", "bold");
+      doc.text("Additional Information", margin, yPos);
+      yPos += lineHeight;
+      
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      
+      Object.entries(specimen.custom_fields).forEach(([key, value]) => {
+        checkPageBreak();
+        doc.setFont("helvetica", "bold");
+        doc.text(`${key.replace(/_/g, ' ')}:`, margin, yPos);
+        doc.setFont("helvetica", "normal");
+        doc.text(String(value), margin + 50, yPos);
+        yPos += lineHeight;
+      });
+    }
+
+    // Footer
+    const pageCount = doc.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(128);
+      doc.text(
+        `Generated on ${new Date().toLocaleString()} | Page ${i} of ${pageCount}`,
+        pageWidth / 2,
+        doc.internal.pageSize.getHeight() - 10,
+        { align: "center" }
+      );
+    }
+
+      // Save PDF
+      doc.save(`Specimen_${specimen.code_name}_${new Date().toISOString().split('T')[0]}.pdf`);
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      alert("Error generating PDF. Please try again.");
+    } finally {
+      setGeneratingPDF(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -112,6 +404,23 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
           </div>
           
           <div className="flex gap-2">
+            <button
+              onClick={generatePDF}
+              disabled={generatingPDF}
+              className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {generatingPDF ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  Download PDF
+                </>
+              )}
+            </button>
             <button
               onClick={() => router.push(`/AdminUI/AdminDashBoard/Features/AdminCollection?edit=${resolvedParams.id}`)}
               className="flex items-center gap-2 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600"
