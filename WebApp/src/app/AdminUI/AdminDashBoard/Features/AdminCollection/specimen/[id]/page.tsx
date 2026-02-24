@@ -1,37 +1,38 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, use } from "react";
 import { API_URL } from "@/config/api";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Edit, QrCode, Trash2, Plus } from "lucide-react";
 import Image from "next/image";
 
 interface SpecimenDetailProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
+  const resolvedParams = use(params);
   const [specimen, setSpecimen] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("info");
   const router = useRouter();
 
   useEffect(() => {
-    if (!params.id || params.id === 'undefined') {
-      console.error("Invalid specimen ID:", params.id);
+    if (!resolvedParams.id || resolvedParams.id === 'undefined') {
+      console.error("Invalid specimen ID:", resolvedParams.id);
       setLoading(false);
       return;
     }
     fetchSpecimenDetails();
-  }, [params.id]);
+  }, [resolvedParams.id]);
 
   const fetchSpecimenDetails = async () => {
     try {
       setLoading(true);
-      console.log("Fetching specimen with ID:", params.id);
-      const response = await fetch(`${API_URL}/microbials/${params.id}`);
+      console.log("Fetching specimen with ID:", resolvedParams.id);
+      const response = await fetch(`${API_URL}/microbials/${resolvedParams.id}`);
       if (response.ok) {
         const data = await response.json();
         setSpecimen(data);
@@ -49,7 +50,7 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
     if (!confirm("Are you sure you want to delete this specimen?")) return;
     
     try {
-      const response = await fetch(`${API_URL}/microbials/${params.id}`, {
+      const response = await fetch(`${API_URL}/microbials/${resolvedParams.id}`, {
         method: "DELETE",
       });
 
