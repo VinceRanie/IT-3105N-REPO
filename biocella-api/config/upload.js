@@ -2,16 +2,26 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-// Create uploads directory if it doesn't exist
-const uploadDir = path.join(__dirname, '../uploads/specimens');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
+// Create uploads directories if they don't exist
+const uploadDirs = {
+  specimens: path.join(__dirname, '../uploads/specimens'),
+  fasta: path.join(__dirname, '../uploads/fasta')
+};
 
-// Configure storage
-const storage = multer.diskStorage({
+Object.values(uploadDirs).forEach(dir => {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+});
+
+// Configure storage for specimens (images)
+const specimenStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, uploadDir);
+    if (file.fieldname === 'fasta_file') {
+      cb(null, uploadDirs.fasta);
+    } else {
+      cb(null, uploadDirs.specimens);
+    }
   },
   filename: (req, file, cb) => {
     // Generate unique filename: timestamp-random-originalname
@@ -22,23 +32,35 @@ const storage = multer.diskStorage({
   }
 });
 
-// File filter - only accept images
+// File filter - accept images and FASTA files
 const fileFilter = (req, file, cb) => {
-  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+  const imageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+  const textTypes = ['text/plain', 'application/octet-stream']; // FASTA files
   
-  if (allowedTypes.includes(file.mimetype)) {
-    cb(null, true);
+  if (file.fieldname === 'image') {
+    if (imageTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid image file type. Only JPEG, PNG, GIF, and WebP are allowed.'), false);
+    }
+  } else if (file.fieldname === 'fasta_file') {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (textTypes.includes(file.mimetype) || ext === '.fasta' || ext === '.fa' || ext === '.txt') {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid FASTA file type. Only .fasta, .fa, or .txt files are allowed.'), false);
+    }
   } else {
-    cb(new Error('Invalid file type. Only JPEG, PNG, GIF, and WebP images are allowed.'), false);
+    cb(new Error('Unexpected field name'), false);
   }
 };
 
 // Configure multer
 const upload = multer({
-  storage: storage,
+  storage: specimenStorage,
   fileFilter: fileFilter,
   limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB max file size
+    fileSize: 10 * 1024 * 1024 // 10MB max file size (increased for FASTA files)
   }
 });
 
