@@ -516,17 +516,26 @@ function parseBlastResults(data) {
       return { topHit: null, matches: [], totalHits: 0, error: 'No data received' };
     }
 
-    if (!data.BlastOutput2) {
-      console.error('Missing BlastOutput2 in response. Data keys:', Object.keys(data));
+    // Handle different NCBI response formats
+    // Some responses have BlastJSON wrapper, others have BlastOutput2 directly
+    let blastData = data;
+    
+    if (data.BlastJSON) {
+      console.log('Detected BlastJSON wrapper, extracting inner data');
+      blastData = data.BlastJSON;
+    }
+
+    if (!blastData.BlastOutput2) {
+      console.error('Missing BlastOutput2 in response. Data keys:', Object.keys(blastData));
       return { topHit: null, matches: [], totalHits: 0, error: 'Invalid BLAST response format' };
     }
 
-    if (!Array.isArray(data.BlastOutput2) || data.BlastOutput2.length === 0) {
+    if (!Array.isArray(blastData.BlastOutput2) || blastData.BlastOutput2.length === 0) {
       console.error('BlastOutput2 is not an array or is empty');
       return { topHit: null, matches: [], totalHits: 0, error: 'Empty BLAST response' };
     }
 
-    const report = data.BlastOutput2[0].report;
+    const report = blastData.BlastOutput2[0].report;
     if (!report) {
       console.error('Missing report in BlastOutput2[0]');
       return { topHit: null, matches: [], totalHits: 0, error: 'Missing report data' };
