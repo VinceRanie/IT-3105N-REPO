@@ -22,6 +22,7 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
   const [expandedBlastResults, setExpandedBlastResults] = useState<Set<number>>(new Set());
   const [blastLoading, setBlastLoading] = useState(false);
   const [blastPolling, setBlastPolling] = useState(false);
+  const [blastExpired, setBlastExpired] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -102,6 +103,7 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
     }
 
     setBlastLoading(true);
+    setBlastExpired(false); // Reset expired status
     try {
       const response = await fetch(`${API_URL}/microbials/${resolvedParams.id}/blast`, {
         method: 'POST',
@@ -111,7 +113,7 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
         const data = await response.json();
         alert(`BLAST submitted successfully! RID: ${data.rid}\n\nResults will be available in ${data.estimatedTime}`);
         
-        // Refresh specimen to get the RID
+        // Refresh specimen to get the new RID
         await fetchSpecimenDetails();
         
         // Start polling for results
@@ -154,6 +156,7 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
           // Refresh specimen to show results
           await fetchSpecimenDetails();
           setBlastPolling(false);
+          setBlastExpired(false);
           alert("BLAST results are ready!");
           return true;
         } else if (data.status === 'pending') {
@@ -162,6 +165,11 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
         } else if (data.status === 'failed') {
           setBlastPolling(false);
           alert("BLAST search failed on NCBI server");
+          return true;
+        } else if (data.status === 'expired') {
+          setBlastPolling(false);
+          setBlastExpired(true);
+          console.log("BLAST RID has expired:", data.message);
           return true;
         } else if (data.status === 'error') {
           setBlastPolling(false);
@@ -1042,7 +1050,9 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
 
                     {/* No BLAST Results Yet */}
                     {specimen.blast_rid && (!specimen.blast_results || !specimen.blast_results.matches || specimen.blast_results.matches.length === 0) && (
-                      <div className="text-center py-8 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <div className={`text-center py-8 border rounded-lg ${
+                        blastExpired ? 'bg-red-50 border-red-200' : 'bg-yellow-50 border-yellow-200'
+                      }`}>
                         <div className="flex flex-col items-center gap-3">
                           {blastPolling ? (
                             <>
@@ -1053,6 +1063,41 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
                               </p>
                               <p className="text-xs text-gray-500">
                                 Results typically available in 30-60 seconds after submission
+                              </p>
+                            </>
+                          ) : blastExpired ? (
+                            <>
+                              <div className="text-red-600 mb-2">
+                                <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                              </div>
+                              <p className="text-gray-800 font-semibold mb-1">BLAST Request Expired</p>
+                              <p className="text-sm text-gray-600 mb-2">
+                                RID: <span className="font-mono">{specimen.blast_rid}</span>
+                              </p>
+                              <p className="text-xs text-gray-600 mb-4 max-w-md">
+                                NCBI BLAST results expire after 24-36 hours. This request is no longer available on NCBI servers.
+                              </p>
+                              <button
+                                onClick={submitBlast}
+                                disabled={blastLoading}
+                                className="px-5 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {blastLoading ? (
+                                  <>
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    Re-submitting...
+                                  </>
+                                ) : (
+                                  <>
+                                    <ExternalLink className="w-4 h-4" />
+                                    Re-run BLAST Analysis
+                                  </>
+                                )}
+                              </button>
+                              <p className="text-xs text-gray-500 mt-2">
+                                This will submit a new BLAST request with the same FASTA sequence
                               </p>
                             </>
                           ) : (

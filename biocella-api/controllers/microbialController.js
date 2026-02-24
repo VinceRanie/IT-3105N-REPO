@@ -319,12 +319,33 @@ exports.getBlastResults = async (req, res) => {
 
     const status = statusCheck.data.match(/Status=([A-Z]+)/);
     
-    if (!status || status[1] === 'WAITING') {
+    // Check if RID is expired or not found (NCBI returns UNKNOWN or empty status)
+    if (!status) {
+      console.log('No status found in NCBI response - RID likely expired:', microbial.blast_rid);
+      // Check for common expired/not found messages
+      if (statusCheck.data.includes('expired') || statusCheck.data.includes('not found') || statusCheck.data.includes('UNKNOWN')) {
+        return res.json({ 
+          status: 'expired', 
+          message: 'BLAST request has expired (RIDs are valid for 24-36 hours). Please re-submit the BLAST search.' 
+        });
+      }
+      return res.json({ status: 'pending', message: 'Unable to determine BLAST status. Please try again.' });
+    }
+    
+    if (status[1] === 'WAITING') {
       return res.json({ status: 'pending', message: 'BLAST search is still running' });
     }
 
     if (status[1] === 'FAILED') {
       return res.json({ status: 'failed', message: 'BLAST search failed' });
+    }
+
+    if (status[1] === 'UNKNOWN') {
+      console.log('BLAST RID status is UNKNOWN - likely expired:', microbial.blast_rid);
+      return res.json({ 
+        status: 'expired', 
+        message: 'BLAST request not found or has expired. Please re-submit the BLAST search.' 
+      });
     }
 
     if (status[1] === 'READY') {
