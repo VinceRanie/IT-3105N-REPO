@@ -16,7 +16,7 @@ interface Collection {
   accession_number?: string;
   accession_no?: string;
   similarity_percent?: string;
-  project_id: {
+  project_id: string | {
     _id: string;
     title: string;
     code: string;
@@ -150,7 +150,7 @@ export default function CollectionTable({ specimens, onEdit, onDelete, onView }:
                         {specimen.accession_number || specimen.accession_no || "N/A"}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-800">
-                        {specimen.project_id?.title || "N/A"}
+                        {typeof specimen.project_id === 'object' ? specimen.project_id?.title : "N/A"}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-800">
                         {specimen.locale || "N/A"}
@@ -159,7 +159,7 @@ export default function CollectionTable({ specimens, onEdit, onDelete, onView }:
                         {specimen.source || "N/A"}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-800">
-                        {specimen.classification || specimen.project_id?.classification || "N/A"}
+                        {specimen.classification || (typeof specimen.project_id === 'object' ? specimen.project_id?.classification : "N/A")}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-800">
                         <div className="flex gap-2">
