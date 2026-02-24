@@ -538,14 +538,27 @@ function parseBlastResults(data) {
       return { topHit: null, matches: [], totalHits: 0, error: 'Invalid BLAST response format' };
     }
 
-    if (!Array.isArray(blastData.BlastOutput2) || blastData.BlastOutput2.length === 0) {
-      console.error('BlastOutput2 is not an array or is empty');
-      return { topHit: null, matches: [], totalHits: 0, error: 'Empty BLAST response' };
+    // Handle both array and object formats
+    // Format 1: { BlastOutput2: [{ report: {...} }] }
+    // Format 2: { BlastOutput2: { report: {...} } }
+    let report;
+    if (Array.isArray(blastData.BlastOutput2)) {
+      if (blastData.BlastOutput2.length === 0) {
+        console.error('BlastOutput2 array is empty');
+        return { topHit: null, matches: [], totalHits: 0, error: 'Empty BLAST response' };
+      }
+      console.log('BlastOutput2 is an array, using first element');
+      report = blastData.BlastOutput2[0].report;
+    } else if (typeof blastData.BlastOutput2 === 'object') {
+      console.log('BlastOutput2 is an object, using directly');
+      report = blastData.BlastOutput2.report;
+    } else {
+      console.error('BlastOutput2 has unexpected type:', typeof blastData.BlastOutput2);
+      return { topHit: null, matches: [], totalHits: 0, error: 'Invalid BlastOutput2 format' };
     }
 
-    const report = blastData.BlastOutput2[0].report;
     if (!report) {
-      console.error('Missing report in BlastOutput2[0]');
+      console.error('Missing report in BlastOutput2');
       return { topHit: null, matches: [], totalHits: 0, error: 'Missing report data' };
     }
 
