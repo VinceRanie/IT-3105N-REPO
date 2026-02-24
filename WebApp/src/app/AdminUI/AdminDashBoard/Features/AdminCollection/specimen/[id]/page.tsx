@@ -68,6 +68,18 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
     }
   };
 
+  const downloadQRCode = () => {
+    if (!specimen.qr_code) return;
+    
+    // Create a temporary link element
+    const link = document.createElement('a');
+    link.href = specimen.qr_code;
+    link.download = `QR_${specimen.code_name}_${new Date().toISOString().split('T')[0]}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const generatePDF = async () => {
     setGeneratingPDF(true);
     try {
@@ -522,6 +534,15 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
                   <div className="text-gray-400">QR code not generated</div>
                 )}
               </div>
+              {specimen.qr_code && (
+                <button
+                  onClick={downloadQRCode}
+                  className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2 bg-[#113F67] text-white rounded-lg hover:bg-[#0d2f4d] transition-colors"
+                >
+                  <Download className="w-4 h-4" />
+                  Download QR Code
+                </button>
+              )}
               <p className="text-xs text-center text-gray-500 mt-2">
                 Scan to view public specimen details
               </p>
