@@ -202,15 +202,15 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
                   <h2 className="text-lg font-semibold mb-4">Basic Information</h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <InfoItem label="Code Name" value={specimen.code_name} />
-                    <InfoItem label="Accession Number" value={specimen.accession_number || "N/A"} />
+                    <InfoItem label="Accession Number" value={specimen.accession_no || specimen.accession_number || "N/A"} />
                     <InfoItem label="Project" value={specimen.project_id?.title || "N/A"} />
                     <InfoItem label="Project Code" value={specimen.project_id?.code || "N/A"} />
-                    <InfoItem label="Classification" value={specimen.project_id?.classification || "N/A"} />
-                    <InfoItem label="Locale" value={specimen.custom_fields?.locale || "N/A"} />
-                    <InfoItem label="Source" value={specimen.custom_fields?.source || "N/A"} />
-                    <InfoItem label="Storage Type" value={specimen.custom_fields?.storage_type || "N/A"} />
-                    <InfoItem label="Shelf" value={specimen.custom_fields?.shelf || "N/A"} />
-                    <InfoItem label="Funded By" value={specimen.custom_fields?.funded_by || "N/A"} />
+                    <InfoItem label="Classification" value={specimen.classification || specimen.project_id?.classification || "N/A"} />
+                    <InfoItem label="Locale" value={specimen.locale || "N/A"} />
+                    <InfoItem label="Source" value={specimen.source || "N/A"} />
+                    <InfoItem label="Project Fund" value={specimen.project_fund || "N/A"} />
+                    <InfoItem label="Date Accessed" value={specimen.date_accessed ? new Date(specimen.date_accessed).toLocaleDateString() : "N/A"} />
+                    <InfoItem label="Similarity" value={specimen.similarity_percent ? `${specimen.similarity_percent}%` : "N/A"} />
                   </div>
                 </div>
 
@@ -240,27 +240,64 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
 
             {activeTab === "bioactivity" && (
               <div className="bg-white shadow rounded-xl p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold">Bioactivity Data</h2>
-                  <button className="flex items-center gap-2 px-3 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600">
-                    <Plus className="w-4 h-4" />
-                    Add Data
-                  </button>
-                </div>
-                <p className="text-gray-500 text-sm">No bioactivity data available yet.</p>
+                <h2 className="text-lg font-semibold mb-4">Bioactivity Data</h2>
+                {specimen.activity || specimen.result ? (
+                  <div className="space-y-4">
+                    {specimen.activity && <InfoItem label="Activity" value={specimen.activity} />}
+                    {specimen.result && <InfoItem label="Result" value={specimen.result} />}
+                  </div>
+                ) : (
+                  <p className="text-gray-500 text-sm">No bioactivity data available yet.</p>
+                )}
               </div>
             )}
 
             {activeTab === "biochemical" && (
               <div className="bg-white shadow rounded-xl p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold">Biochemical Characteristics</h2>
-                  <button className="flex items-center gap-2 px-3 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600">
-                    <Plus className="w-4 h-4" />
-                    Add Data
-                  </button>
-                </div>
-                <p className="text-gray-500 text-sm">No biochemical data available yet.</p>
+                <h2 className="text-lg font-semibold mb-4">Biochemical Characteristics</h2>
+                {specimen.biochemical_tests || specimen.catalase || specimen.oxidase || specimen.hemolysis ? (
+                  <>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+                      {specimen.catalase && <InfoItem label="Catalase" value={specimen.catalase} badge />}
+                      {specimen.oxidase && <InfoItem label="Oxidase" value={specimen.oxidase} badge />}
+                      {specimen.hemolysis && <InfoItem label="Hemolysis" value={specimen.hemolysis} badge />}
+                    </div>
+                    
+                    {specimen.biochemical_tests && (
+                      <>
+                        <h3 className="text-md font-medium mb-3 mt-4">Test Results</h3>
+                        <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                          {Object.entries(specimen.biochemical_tests)
+                            .filter(([_, value]) => value && value !== '')
+                            .map(([key, value]: [string, any]) => (
+                              <div key={key} className="text-center p-2 border rounded">
+                                <div className="text-xs font-medium text-gray-500 uppercase mb-1">{key}</div>
+                                <div className={`text-lg font-bold ${
+                                  value === '+' ? 'text-green-600' : 
+                                  value === '-' ? 'text-red-600' : 
+                                  'text-gray-800'
+                                }`}>{value}</div>
+                              </div>
+                            ))
+                          }
+                        </div>
+                      </>
+                    )}
+                    
+                    {specimen.growth_media && (
+                      <div className="mt-6">
+                        <InfoItem label="Growth Media" value={specimen.growth_media} />
+                      </div>
+                    )}
+                    {specimen.special_reqs && (
+                      <div className="mt-4">
+                        <InfoItem label="Special Requirements" value={specimen.special_reqs} />
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-gray-500 text-sm">No biochemical data available yet.</p>
+                )}
               </div>
             )}
 
@@ -279,14 +316,35 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
 
             {activeTab === "genome" && (
               <div className="bg-white shadow rounded-xl p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold">Genome Sequence Data</h2>
-                  <button className="flex items-center gap-2 px-3 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600">
-                    <Plus className="w-4 h-4" />
-                    Add Data
-                  </button>
-                </div>
-                <p className="text-gray-500 text-sm">No genome sequence data available yet.</p>
+                <h2 className="text-lg font-semibold mb-4">Genome Sequence Data</h2>
+                {specimen.fasta_sequence || specimen.fasta_file || specimen.blast_results ? (
+                  <div className="space-y-6">
+                    {specimen.fasta_file && (
+                      <InfoItem label="FASTA File" value={specimen.fasta_file} mono />
+                    )}
+                    {specimen.fasta_sequence && (
+                      <div>
+                        <span className="text-xs font-medium text-gray-500 uppercase">FASTA Sequence</span>
+                        <pre className="mt-2 p-4 bg-gray-50 rounded text-xs font-mono overflow-x-auto max-h-64 overflow-y-auto">
+                          {specimen.fasta_sequence}
+                        </pre>
+                      </div>
+                    )}
+                    {specimen.blast_rid && (
+                      <InfoItem label="BLAST RID" value={specimen.blast_rid} mono />
+                    )}
+                    {specimen.blast_results && (
+                      <div>
+                        <span className="text-xs font-medium text-gray-500 uppercase">BLAST Results</span>
+                        <pre className="mt-2 p-4 bg-gray-50 rounded text-xs overflow-x-auto max-h-96 overflow-y-auto">
+                          {JSON.stringify(specimen.blast_results, null, 2)}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-gray-500 text-sm">No genome sequence data available yet.</p>
+                )}
               </div>
             )}
           </div>
