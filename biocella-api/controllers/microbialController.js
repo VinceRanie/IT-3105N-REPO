@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
+const AdmZip = require('adm-zip');
 
 // CREATE
 exports.createMicrobial = async (req, res) => {
@@ -353,8 +354,10 @@ exports.getBlastResults = async (req, res) => {
 
     if (status[1] === 'READY') {
       let resultRes;
+      let jsonData;
+      
       try {
-        // Get results with timeout - try JSON2 first
+        // Get results with timeout - NCBI may return ZIP or JSON
         resultRes = await axios.get('https://blast.ncbi.nlm.nih.gov/Blast.cgi', {
           params: {
             CMD: 'Get',
@@ -364,9 +367,9 @@ exports.getBlastResults = async (req, res) => {
             TOOL
           },
           timeout: 25000, // 25 second timeout for results (larger files)
-          responseType: 'json', // Expect JSON
+          responseType: 'arraybuffer', // Get binary data to handle both ZIP and JSON
           headers: {
-            'Accept': 'application/json'
+            'Accept': 'application/json, application/zip'
           }
         });
       } catch (axiosErr) {
@@ -377,40 +380,88 @@ exports.getBlastResults = async (req, res) => {
         });
       }
 
-      console.log('BLAST results received, content type:', resultRes.headers['content-type']);
+      const contentType = resultRes.headers['content-type'] || '';
+      console.log('BLAST results received, content type:', contentType);
       console.log('Response data type:', typeof resultRes.data);
       
-      // Check if we got valid JSON object
-      if (typeof resultRes.data === 'string') {
-        console.error('BLAST results returned as string instead of JSON');
-        console.log('First 500 chars of response:', resultRes.data.substring(0, 500));
+      // Handle ZIP file response (NCBI sometimes returns compressed JSON)
+      if (contentType.includes('application/zip') || contentType.includes('application/x-zip')) {
+        console.log('Detected ZIP file response, extracting JSON...');
+        try {
+          const zip = new AdmZip(Buffer.from(resultRes.data));
+          const zipEntries = zip.getEntries();
+          
+          console.log('ZIP contains', zipEntries.length, 'files');
+          
+          // Find the JSON file in the ZIP
+          const jsonEntry = zipEntries.find(entry => entry.entryName.endsWith('.json'));
+          
+          if (!jsonEntry) {
+            console.error('No JSON file found in ZIP archive');
+            return res.json({ 
+              status: 'error', 
+              message: 'NCBI returned compressed data but no JSON found inside.' 
+            });
+          }
+          
+          console.log('Extracting JSON file:', jsonEntry.entryName);
+          const jsonString = jsonEntry.getData().toString('utf8');
+          jsonData = JSON.parse(jsonString);
+          console.log('Successfully extracted and parsed JSON from ZIP');
+          
+        } catch (zipErr) {
+          console.error('Error unzipping BLAST results:', zipErr);
+          return res.json({ 
+            status: 'error', 
+            message: 'Failed to extract results from NCBI compressed file. Please try again.' 
+          });
+        }
+      } 
+      // Handle direct JSON response
+      else if (contentType.includes('application/json')) {
+        console.log('Detected direct JSON response');
+        try {
+          const jsonString = Buffer.from(resultRes.data).toString('utf8');
+          jsonData = JSON.parse(jsonString);
+        } catch (parseErr) {
+          console.error('Error parsing JSON response:', parseErr);
+          return res.json({ 
+            status: 'error', 
+            message: 'Failed to parse JSON response from NCBI.' 
+          });
+        }
+      }
+      // Handle string/HTML responses (errors or still processing)
+      else {
+        const responseString = Buffer.from(resultRes.data).toString('utf8');
+        console.error('Unexpected content type:', contentType);
+        console.log('First 500 chars of response:', responseString.substring(0, 500));
         
-        // Check if it's still processing (sometimes NCBI returns HTML when results aren't fully ready)
-        if (resultRes.data.includes('WAITING') || resultRes.data.includes('still being processed')) {
+        // Check if it's still processing
+        if (responseString.includes('WAITING') || responseString.includes('still being processed')) {
           return res.json({ 
             status: 'pending', 
             message: 'BLAST results are still being processed. Please wait a moment.' 
           });
         }
         
-        // Check if there's an error message in the HTML
-        if (resultRes.data.includes('error') || resultRes.data.includes('Error')) {
+        // Check for error messages
+        if (responseString.includes('error') || responseString.includes('Error')) {
           return res.json({ 
             status: 'error', 
             message: 'NCBI returned an error. The results may have expired or are unavailable.' 
           });
         }
         
-        // Generic string response - might be due to format issue
         return res.json({ 
           status: 'error', 
           message: 'Invalid response format from NCBI. Please try checking results again or re-submit BLAST.' 
         });
       }
 
-      // Validate it's actually an object
-      if (!resultRes.data || typeof resultRes.data !== 'object') {
-        console.error('BLAST results is not a valid object:', resultRes.data);
+      // Validate we have valid JSON data
+      if (!jsonData || typeof jsonData !== 'object') {
+        console.error('BLAST results is not a valid object:', jsonData);
         return res.json({ 
           status: 'error', 
           message: 'Received invalid data structure from NCBI. Please try again.' 
@@ -418,7 +469,7 @@ exports.getBlastResults = async (req, res) => {
       }
 
       // Parse and extract top 10 matches
-      const results = parseBlastResults(resultRes.data);
+      const results = parseBlastResults(jsonData);
       
       // Check if parsing succeeded
       if (results.error) {
