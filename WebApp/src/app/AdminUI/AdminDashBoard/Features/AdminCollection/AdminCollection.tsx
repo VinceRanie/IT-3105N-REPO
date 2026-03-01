@@ -1,18 +1,67 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { API_URL } from "@/config/api";
+import { Eye, Edit, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 
-interface collections {
-  id: number;
-  code: string;
-  name: string;
-  Project: string;
-  Locale: string;
+interface Collection {
+  _id: string;
+  code_name: string;
+  classification: string;
   source: string;
-  classifications: string;
+  date_accessed: string;
+  locale?: string;
+  project_fund?: string;
+  accession_number?: string;
+  accession_no?: string;
+  similarity_percent?: string;
+  project_id: string | {
+    _id: string;
+    title: string;
+    code: string;
+    classification: string;
+  };
+  description?: string;
+  fasta_file?: string;
+  fasta_sequence?: string;
+  blast_rid?: string;
+  blast_rid_expired_at?: string;
+  blast_results?: any;
+  biochemical_tests?: {
+    onpg?: string;
+    glu?: string;
+    adh?: string;
+    man?: string;
+    ldc?: string;
+    ino?: string;
+    odc?: string;
+    sor?: string;
+    cit?: string;
+    rha?: string;
+    h2s?: string;
+    sac?: string;
+    ure?: string;
+    mel?: string;
+    tda?: string;
+    amy?: string;
+    ind?: string;
+    ara?: string;
+    vp?: string;
+    no2?: string;
+    gel?: string;
+  };
+  catalase?: string;
+  hemolysis?: string;
+  oxidase?: string;
+  growth_media?: string;
+  special_reqs?: string;
+  activity?: string;
+  result?: string;
+  custom_fields?: Record<string, string>;
 }
 
-const sampleCollections: collections[] = [
+const sampleCollections_backup = [
   {
     id: 1,
     code: "CBN1",
@@ -31,255 +80,23 @@ const sampleCollections: collections[] = [
     source: "Water",
     classifications: "Bacteria",
   },
-  {
-    id: 3,
-    code: "CBN2",
-    name: "Escherichia coli strain X10",
-    Project: "NRCP water Project",
-    Locale: "Mactan Channel, Cebu",
-    source: "Water",
-    classifications: "Bacteria",
-  },
-  {
-    id: 4,
-    code: "CBN2",
-    name: "Escherichia coli strain X10",
-    Project: "NRCP water Project",
-    Locale: "Mactan Channel, Cebu",
-    source: "Water",
-    classifications: "Bacteria",
-  },
-  {
-    id: 5,
-    code: "CBN2",
-    name: "Escherichia coli strain X10",
-    Project: "NRCP water Project",
-    Locale: "Mactan Channel, Cebu",
-    source: "Water",
-    classifications: "Bacteria",
-  },
-  {
-    id: 6,
-    code: "CBN2",
-    name: "Escherichia coli strain X10",
-    Project: "NRCP water Project",
-    Locale: "Mactan Channel, Cebu",
-    source: "Water",
-    classifications: "Bacteria",
-  },
-  {
-    id: 7,
-    code: "CBN2",
-    name: "Escherichia coli strain X10",
-    Project: "NRCP water Project",
-    Locale: "Mactan Channel, Cebu",
-    source: "Water",
-    classifications: "Bacteria",
-  },
-  {
-    id: 8,
-    code: "CBN2",
-    name: "Escherichia coli strain X10",
-    Project: "NRCP water Project",
-    Locale: "Mactan Channel, Cebu",
-    source: "Water",
-    classifications: "Bacteria",
-  },
-  {
-    id: 9,
-    code: "CBN2",
-    name: "Escherichia coli strain X10",
-    Project: "NRCP water Project",
-    Locale: "Mactan Channel, Cebu",
-    source: "Water",
-    classifications: "Bacteria",
-  },
-  {
-    id: 10,
-    code: "CBN2",
-    name: "Escherichia coli strain X10",
-    Project: "NRCP water Project",
-    Locale: "Mactan Channel, Cebu",
-    source: "Water",
-    classifications: "Bacteria",
-  },
-  {
-    id: 11,
-    code: "CBN2",
-    name: "Escherichia coli strain X10",
-    Project: "NRCP water Project",
-    Locale: "Mactan Channel, Cebu",
-    source: "Water",
-    classifications: "Bacteria",
-  },
-  {
-    id: 12,
-    code: "CBN2",
-    name: "Escherichia coli strain X10",
-    Project: "NRCP water Project",
-    Locale: "Mactan Channel, Cebu",
-    source: "Water",
-    classifications: "Bacteria",
-  },
-  {
-    id: 13,
-    code: "CBN2",
-    name: "Escherichia coli strain X10",
-    Project: "NRCP water Project",
-    Locale: "Mactan Channel, Cebu",
-    source: "Water",
-    classifications: "Bacteria",
-  },
-  {
-    id: 14,
-    code: "CBN2",
-    name: "Escherichia coli strain X10",
-    Project: "NRCP water Project",
-    Locale: "Mactan Channel, Cebu",
-    source: "Water",
-    classifications: "Bacteria",
-  },
-  {
-    id: 15,
-    code: "CBN2",
-    name: "Escherichia coli strain X10",
-    Project: "NRCP water Project",
-    Locale: "Mactan Channel, Cebu",
-    source: "Water",
-    classifications: "Bacteria",
-  },
-  {
-    id: 16,
-    code: "CBN2",
-    name: "Escherichia coli strain X10",
-    Project: "NRCP water Project",
-    Locale: "Mactan Channel, Cebu",
-    source: "Water",
-    classifications: "Bacteria",
-  },
-  {
-    id: 17,
-    code: "CBN2",
-    name: "Escherichia coli strain X10",
-    Project: "NRCP water Project",
-    Locale: "Mactan Channel, Cebu",
-    source: "Water",
-    classifications: "Bacteria",
-  },
-  {
-    id: 18,
-    code: "CBN2",
-    name: "Escherichia coli strain X10",
-    Project: "NRCP water Project",
-    Locale: "Mactan Channel, Cebu",
-    source: "Water",
-    classifications: "Bacteria",
-  },
-  {
-    id: 19,
-    code: "CBN2",
-    name: "Escherichia coli strain X10",
-    Project: "NRCP water Project",
-    Locale: "Mactan Channel, Cebu",
-    source: "Water",
-    classifications: "Bacteria",
-  },
-  {
-    id: 20,
-    code: "CBN2",
-    name: "Escherichia coli strain X10",
-    Project: "NRCP water Project",
-    Locale: "Mactan Channel, Cebu",
-    source: "Water",
-    classifications: "Bacteria",
-  },
-  {
-    id: 21,
-    code: "CBN2",
-    name: "Escherichia coli strain X10",
-    Project: "NRCP water Project",
-    Locale: "Mactan Channel, Cebu",
-    source: "Water",
-    classifications: "Bacteria",
-  },
-  {
-    id: 22,
-    code: "CBN2",
-    name: "Escherichia coli strain X10",
-    Project: "NRCP water Project",
-    Locale: "Mactan Channel, Cebu",
-    source: "Water",
-    classifications: "Bacteria",
-  },
-  {
-    id: 23,
-    code: "CBN2",
-    name: "Escherichia coli strain X10",
-    Project: "NRCP water Project",
-    Locale: "Mactan Channel, Cebu",
-    source: "Water",
-    classifications: "Bacteria",
-  },
-  {
-    id: 24,
-    code: "CBN2",
-    name: "Escherichia coli strain X10",
-    Project: "NRCP water Project",
-    Locale: "Mactan Channel, Cebu",
-    source: "Water",
-    classifications: "Bacteria",
-  },
-  {
-    id: 25,
-    code: "CBN2",
-    name: "Escherichia coli strain X10",
-    Project: "NRCP water Project",
-    Locale: "Mactan Channel, Cebu",
-    source: "Water",
-    classifications: "Bacteria",
-  },
-  {
-    id: 26,
-    code: "CBN2",
-    name: "Escherichia coli strain X10",
-    Project: "NRCP water Project",
-    Locale: "Mactan Channel, Cebu",
-    source: "Water",
-    classifications: "Bacteria",
-  },
-  {
-    id: 27,
-    code: "CBN2",
-    name: "Escherichia coli strain X10",
-    Project: "NRCP water Project",
-    Locale: "Mactan Channel, Cebu",
-    source: "Water",
-    classifications: "Bacteria",
-  },
-  {
-    id: 28,
-    code: "CBN2",
-    name: "Escherichia coli strain X10",
-    Project: "NRCP water Project",
-    Locale: "Mactan Channel, Cebu",
-    source: "Water",
-    classifications: "Bacteria",
-  },
-
-  
 ];
 
-export default function UserTable() {
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+export default function CollectionTable({ specimens, onEdit, onDelete, onView }: { 
+  specimens: Collection[], 
+  onEdit: (specimen: Collection) => void,
+  onDelete: (id: string) => void,
+  onView: (specimen: Collection) => void 
+}) {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const handleRowClick = (id: number) => {
+  const handleRowClick = (id: string) => {
     setSelectedId((prev) => (prev === id ? null : id));
   };
 
   return (
-    <div className="w-full h-210 flex flex-col px-4 sm:px-6 lg:px-8 py-6">
+    <div className="w-full flex flex-col px-4 sm:px-6 lg:px-8 py-6">
       <div className="bg-white rounded-lg shadow-lg border border-gray-200 flex flex-col flex-1 overflow-hidden">
-        {/* Scroll only when needed */}
         <div className="flex-1 overflow-y-auto">
           <table className="table-auto w-full">
             <thead className="bg-[#113F67] sticky top-0 z-10">
@@ -291,7 +108,7 @@ export default function UserTable() {
                   Code
                 </th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">
-                  Name
+                  Accession No.
                 </th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">
                   Project
@@ -305,65 +122,164 @@ export default function UserTable() {
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">
                   Classification
                 </th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {sampleCollections.map((collection, index) => (
-                <React.Fragment key={collection.id}>
-                  <tr
-                    className="bg-white hover:bg-blue-50 transition-colors duration-150 cursor-pointer"
-                    onClick={() => handleRowClick(collection.id)}
-                  >
-                    <td className="px-4 py-3 text-sm font-medium text-gray-800">
-                      {index + 1}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-800">
-                      {collection.code}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-800">
-                      {collection.name}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-800">
-                      {collection.Project}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-800">
-                      {collection.Locale}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-800">
-                      {collection.source}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-800">
-                      {collection.classifications}
-                    </td>
-                  </tr>
-
-                  {selectedId === collection.id && (
-                    <tr className="bg-gray-50">
-                      <td colSpan={7}>
-                        <div className="flex justify-end gap-3 p-3">
-                          <button className="bg-green-500 text-white px-3 py-1 rounded-md shadow hover:bg-green-600 cursor-pointer">
-                            Student
+              {specimens.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
+                    No specimens found. Add your first specimen to get started.
+                  </td>
+                </tr>
+              ) : (
+                specimens.map((specimen, index) => (
+                  <React.Fragment key={specimen._id}>
+                    <tr
+                      className="bg-white hover:bg-blue-50 transition-colors duration-150 cursor-pointer"
+                      onClick={() => handleRowClick(specimen._id)}
+                    >
+                      <td className="px-4 py-3 text-sm font-medium text-gray-800">
+                        {index + 1}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-800">
+                        {specimen.code_name}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-800">
+                        {specimen.accession_number || specimen.accession_no || "N/A"}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-800">
+                        {typeof specimen.project_id === 'object' ? specimen.project_id?.title : "N/A"}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-800">
+                        {specimen.locale || "N/A"}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-800">
+                        {specimen.source || "N/A"}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-800">
+                        {specimen.classification || (typeof specimen.project_id === 'object' ? specimen.project_id?.classification : "N/A")}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-800">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              console.log("View button clicked, specimen:", specimen);
+                              console.log("Specimen _id:", specimen._id);
+                              onView(specimen);
+                            }}
+                            className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                            title="View Details"
+                          >
+                            <Eye className="w-4 h-4" />
                           </button>
-                          <button className="bg-blue-500 text-white px-3 py-1 rounded-md shadow hover:bg-blue-600 cursor-pointer">
-                            Faculty
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              console.log("Edit button clicked, specimen:", specimen);
+                              console.log("Specimen _id:", specimen._id);
+                              onEdit(specimen);
+                            }}
+                            className="p-1 text-yellow-600 hover:bg-yellow-50 rounded"
+                            title="Edit"
+                          >
+                            <Edit className="w-4 h-4" />
                           </button>
-                          <button className="bg-yellow-500 text-white px-3 py-1 rounded-md shadow hover:bg-yellow-600 cursor-pointer">
-                            Research Asst.
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (confirm("Are you sure you want to delete this specimen?")) {
+                                onDelete(specimen._id);
+                              }
+                            }}
+                            className="p-1 text-red-600 hover:bg-red-50 rounded"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                       </td>
                     </tr>
-                  )}
-                </React.Fragment>
-              ))}
+
+                    {selectedId === specimen._id && (
+                      <tr className="bg-gray-50">
+                        <td colSpan={8}>
+                          <div className="p-4">
+                            <h4 className="font-semibold text-gray-700 mb-2">Description:</h4>
+                            <p className="text-sm text-gray-600">
+                              {specimen.description || "No description available"}
+                            </p>
+                            <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                              {specimen.project_fund && (
+                                <div>
+                                  <span className="font-medium">Project Fund:</span>{" "}
+                                  {specimen.project_fund}
+                                </div>
+                              )}
+                              {specimen.date_accessed && (
+                                <div>
+                                  <span className="font-medium">Date Accessed:</span>{" "}
+                                  {new Date(specimen.date_accessed).toLocaleDateString()}
+                                </div>
+                              )}
+                              {specimen.accession_no && (
+                                <div>
+                                  <span className="font-medium">Accession No:</span>{" "}
+                                  {specimen.accession_no}
+                                </div>
+                              )}
+                              {specimen.similarity_percent && (
+                                <div>
+                                  <span className="font-medium">Similarity:</span>{" "}
+                                  {specimen.similarity_percent}%
+                                </div>
+                              )}
+                              {specimen.catalase && (
+                                <div>
+                                  <span className="font-medium">Catalase:</span>{" "}
+                                  {specimen.catalase}
+                                </div>
+                              )}
+                              {specimen.oxidase && (
+                                <div>
+                                  <span className="font-medium">Oxidase:</span>{" "}
+                                  {specimen.oxidase}
+                                </div>
+                              )}
+                              {specimen.growth_media && (
+                                <div>
+                                  <span className="font-medium">Growth Media:</span>{" "}
+                                  {specimen.growth_media}
+                                </div>
+                              )}
+                              {specimen.custom_fields && Object.keys(specimen.custom_fields).length > 0 && (
+                                <>
+                                  {Object.entries(specimen.custom_fields).map(([key, value]) => (
+                                    <div key={key}>
+                                      <span className="font-medium capitalize">{key.replace(/_/g, ' ')}:</span>{" "}
+                                      {value}
+                                    </div>
+                                  ))}
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))
+              )}
             </tbody>
           </table>
         </div>
 
-        {/* Footer */}
         <div className="bg-gray-50 px-4 py-3 border-t border-gray-200">
           <p className="text-sm text-gray-600">
-            Showing {sampleCollections.length} collections
+            Showing {specimens.length} specimen{specimens.length !== 1 ? "s" : ""}
           </p>
         </div>
       </div>
