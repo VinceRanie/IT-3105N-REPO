@@ -79,6 +79,9 @@ exports.login = async (req, res) => {
       return res.status(HttpStatus.OK).json({
         message: "Login was successful!",
         token,
+        role: user.role,
+        userId: user.user_id,
+        email: user.email,
         statusCode: HttpStatus.OK,
       });
     } else {

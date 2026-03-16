@@ -5,6 +5,9 @@ import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 
+// Configure API endpoint - change this to your backend URL
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+
 export default function LoginForm() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
@@ -24,7 +27,8 @@ export default function LoginForm() {
     setMessage(null); 
 
     try {
-      const response = await fetch("/API/auth/temp", {
+      // Call the real backend auth endpoint
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -36,14 +40,32 @@ export default function LoginForm() {
 
       if (response.ok) {
         setMessage({ text: data.message || 'Login successful!', type: 'success' });
-        router.push('/AdminUI/AdminDashBoard');
+        
+        // Store JWT token in localStorage for authenticated requests
+        if (data.token) {
+          localStorage.setItem('authToken', data.token);
+          localStorage.setItem('userEmail', formData.email);
+        }
+
+        // Redirect based on user role
+        const userRole = data.role || 'student'; // Default to student if role not provided
+        
+        if (userRole === 'admin') {
+          router.push('/AdminUI/AdminDashBoard');
+        } else if (userRole === 'ra' || userRole === 'RA') {
+          router.push('/UsersUI/UsersDashBoard'); // OR create separate RA dashboard
+        } else {
+          // student or default
+          router.push('/UsersUI/UsersDashBoard');
+        }
+        
         console.log('Login successful:', data);
       } else {
         setMessage({ text: data.message || 'Invalid credentials. Please try again.', type: 'error' });
       }
     } catch (error) {
       console.error('Network or unexpected error during login:', error);
-      setMessage({ text: 'An unexpected error occurred. Please try again.', type: 'error' });
+      setMessage({ text: 'Failed to connect to server. Please check your connection and try again.', type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -144,7 +166,7 @@ export default function LoginForm() {
               <button
                 type="button"
                 className="text-sm text-[#113F67] hover:text-[#0a2a4a] font-medium transition-colors cursor-pointer hover:underline"
-                onClick={() => console.log('Forgot password clicked')}
+                onClick={() => router.push('/auth/forgot-password')}
               >
                 Forgot password?
               </button>
@@ -160,7 +182,6 @@ export default function LoginForm() {
             {/* Submit Button */}
             <button
               type="submit"
-              onClick={()=>router.push("/AdminUI/AdminDashBoard")}
               className="w-full bg-[#113F67] text-white py-2 px-4 rounded-md hover:bg-[#0a2a4a] transition-all duration-200 shadow-md hover:shadow-lg cursor-pointer"
               disabled={loading} // Disable button while loading
             >
