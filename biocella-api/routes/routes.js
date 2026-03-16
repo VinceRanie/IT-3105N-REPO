@@ -4,6 +4,9 @@ const blastController = require('../controllers/blastController');
 
 
 // Sub-route groups
+// Authentication Routes
+router.use('/auth', require('./authRoutes'));
+
 // router.use('/users', require('./userRoutes'));
 router.use('/microbials', require('./microbialRoutes'));
 router.use('/projects', require('./projectRoutes'));

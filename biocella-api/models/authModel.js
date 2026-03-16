@@ -1,0 +1,93 @@
+const db = require("../config/mysql.js");
+const bcrypt = require("bcryptjs");
+
+// CREATE - Register new user
+exports.createUser = async (email, resetToken) => {
+  const [result] = await db.execute(
+    "INSERT INTO user (email, reset_token, first_name, last_name, role) VALUES (?, ?, ?, ?, ?)",
+    [email, resetToken, "", "", "student"]
+  );
+  return result.insertId;
+};
+
+// READ - Get user by email
+exports.getUserByEmail = async (email) => {
+  const [rows] = await db.execute(
+    "SELECT user_id, email, password, failed_login_attempts, lockout_until, role FROM user WHERE email = ?",
+    [email]
+  );
+  return rows[0] || null;
+};
+
+// READ - Get user by reset token
+exports.getUserByResetToken = async (token) => {
+  const [rows] = await db.execute(
+    "SELECT user_id, email, reset_token FROM user WHERE reset_token = ?",
+    [token]
+  );
+  return rows[0] || null;
+};
+
+// READ - Check if user exists
+exports.userExists = async (email) => {
+  const [rows] = await db.execute(
+    "SELECT user_id FROM user WHERE email = ?",
+    [email]
+  );
+  return rows.length > 0;
+};
+
+// UPDATE - Reset failed login attempts after successful login
+exports.resetFailedLoginAttempts = async (userId) => {
+  await db.execute(
+    "UPDATE user SET failed_login_attempts = 0, lockout_until = NULL WHERE user_id = ?",
+    [userId]
+  );
+};
+
+// UPDATE - Increment failed login attempts and set lockout
+exports.incrementFailedLoginAttempts = async (userId, newAttempts, lockoutTime = null) => {
+  await db.execute(
+    "UPDATE user SET failed_login_attempts = ?, lockout_until = ? WHERE user_id = ?",
+    [newAttempts, lockoutTime, userId]
+  );
+};
+
+// UPDATE - Set password
+exports.setPassword = async (userId, hashedPassword) => {
+  await db.execute(
+    "UPDATE user SET password = ?, reset_token = NULL WHERE user_id = ?",
+    [hashedPassword, userId]
+  );
+};
+
+// UPDATE - Finalize user setup
+exports.finalizeUserSetup = async (email, firstName, lastName, department, course, hashedPassword) => {
+  await db.execute(
+    `UPDATE user 
+     SET first_name = ?, last_name = ?, department = ?, course = ?, password = ?, is_setup_complete = 1, reset_token = NULL 
+     WHERE email = ?`,
+    [firstName, lastName, department, course, hashedPassword, email]
+  );
+};
+
+// UTILITY - Hash password
+exports.hashPassword = async (password) => {
+  return await bcrypt.hash(password, 10);
+};
+
+// UTILITY - Compare password
+exports.comparePassword = async (plainPassword, hashedPassword) => {
+  return await bcrypt.compare(plainPassword, hashedPassword);
+};
+
+// UTILITY - Validate password strength
+exports.validatePasswordStrength = (password) => {
+  const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{6,}$/;
+  return passwordRegex.test(password);
+};
+
+// UTILITY - Validate email domain
+exports.validateEmailDomain = (email) => {
+  return email.endsWith("usc.edu.ph");
+};
