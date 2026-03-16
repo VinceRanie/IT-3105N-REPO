@@ -1,13 +1,8 @@
 const authModel = require("../models/authModel");
 const jwt = require("jsonwebtoken");
 const { v4: uuidv4 } = require("uuid");
-
-// For email functionality, install nodemailer:
-// npm install nodemailer googleapis
-// Then uncomment the email setup below
-
-// const nodemailer = require("nodemailer");
-// const { google } = require("googleapis");
+const nodemailer = require("nodemailer");
+const { google } = require("googleapis");
 
 const HttpStatus = {
   OK: 200,
@@ -21,11 +16,55 @@ const HttpStatus = {
 const JWT_SECRET = process.env.JWT_TOKEN || "your-secret-key";
 const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_BASE_URL || "http://localhost:3000";
 
-// TODO: Implement email transporter setup (similar to frontend)
-// const createTransporter = async () => {
-//   // Setup Google OAuth2 for email sending
-//   // See frontend code for reference
-// };
+// Email transporter setup with Google OAuth2
+const createTransporter = async () => {
+  try {
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.EMAIL_CLIENT_ID,
+      process.env.EMAIL_CLIENT_SECRET,
+      "https://developers.google.com/oauthplayground"
+    );
+
+    oauth2Client.setCredentials({
+      refresh_token: process.env.EMAIL_CLIENT_REFRESH_TOKEN,
+    });
+
+    const accessToken = await new Promise<string>((resolve, reject) => {
+      oauth2Client.getAccessToken((err, token) => {
+        if (err) {
+          console.error("Failed to retrieve access token", err);
+          reject(new Error("Failed to retrieve access token: " + err.message));
+        }
+        if (token) {
+          resolve(token);
+        } else {
+          reject(
+            new Error(
+              "Access token was null or undefined, but no explicit error received."
+            )
+          );
+        }
+      });
+    });
+
+    return nodemailer.createTransport({
+      host: "smtp.gmail.com",
+      port: 465,
+      secure: true,
+      auth: {
+        type: "OAuth2",
+        user: process.env.EMAIL_USER,
+        clientId: process.env.EMAIL_CLIENT_ID,
+        clientSecret: process.env.EMAIL_CLIENT_SECRET,
+        refreshToken: process.env.EMAIL_CLIENT_REFRESH_TOKEN,
+        accessToken,
+      },
+    });
+  } catch (error) {
+    console.error("Error creating email transporter:", error);
+    throw error;
+  }
+};
 
 // LOGIN
 exports.login = async (req, res) => {
@@ -147,26 +186,46 @@ exports.register = async (req, res) => {
     const userId = await authModel.createUser(email, resetToken);
 
     // Send email with verification link
-    // TODO: Implement email sending
-    // const transporter = await createTransporter();
-    // await transporter.sendMail({
-    //   from: `"BIOCELLA App" <${process.env.EMAIL_USER}>`,
-    //   to: email,
-    //   subject: "Set Your Password to Complete Registration.",
-    //   html: `<p>Hi,</p>
-    //     <p>Thank you for registering for our application!</p>
-    //     <p>Please click the link below to set your secure password:</p>
-    //     <p><a href="${APP_BASE_URL}/auth/reset-password?token=${resetToken}">Set Your Password Now</a></p>
-    //     <p>If you did not register for this service, please ignore this email.</p>
-    //     <p>Sincerely,</p>
-    //     <p>BIOCELLA</p>`,
-    // });
+    try {
+      const transporter = await createTransporter();
+      await transporter.sendMail({
+        from: `"BIOCELLA App" <${process.env.EMAIL_USER}>`,
+        to: email,
+        subject: "Set Your Password to Complete Registration",
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #113F67;">Welcome to BIOCELLA!</h2>
+            <p>Hi,</p>
+            <p>Thank you for registering for our application!</p>
+            <p>Please click the link below to set your secure password and complete your registration:</p>
+            <p>
+              <a href="${APP_BASE_URL}/signup/finalize?token=${resetToken}" 
+                 style="display: inline-block; padding: 10px 20px; background-color: #113F67; color: white; text-decoration: none; border-radius: 5px;">
+                Set Your Password Now
+              </a>
+            </p>
+            <p style="color: #666; font-size: 12px;">
+              Or copy and paste this link in your browser:<br>
+              ${APP_BASE_URL}/signup/finalize?token=${resetToken}
+            </p>
+            <p>This link will expire in 24 hours.</p>
+            <p>If you did not register for this service, please ignore this email.</p>
+            <p>Sincerely,<br>BIOCELLA Team</p>
+          </div>
+        `,
+      });
+
+      console.log(`Registration email sent to ${email}`);
+    } catch (emailError) {
+      console.error("Email sending error:", emailError);
+      // Don't fail the registration if email fails, but log the error
+      // In production, you might want to retry or queue the email
+    }
 
     return res.status(HttpStatus.CREATED).json({
-      message: "User registered successfully. A password setup link should be sent to your email.",
+      message: "User registered successfully. A password setup link has been sent to your email.",
       userId,
       email,
-      resetToken, // TODO: Remove in production, send via email only
       statusCode: HttpStatus.CREATED,
     });
   } catch (error) {
