@@ -2,7 +2,6 @@ const authModel = require("../models/authModel");
 const jwt = require("jsonwebtoken");
 const { v4: uuidv4 } = require("uuid");
 const nodemailer = require("nodemailer");
-const { google } = require("googleapis");
 
 const HttpStatus = {
   OK: 200,
@@ -13,58 +12,17 @@ const HttpStatus = {
   INTERNAL_SERVER_ERROR: 500,
 };
 
-const JWT_SECRET = process.env.JWT_TOKEN || "your-secret-key";
+const JWT_SECRET = process.env.JWT_TOKEN || "your-secret-key-change-in-production";
 const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_BASE_URL || "http://localhost:3000";
 
-// Email transporter setup with Google OAuth2
-const createTransporter = async () => {
-  try {
-    const oauth2Client = new google.auth.OAuth2(
-      process.env.EMAIL_CLIENT_ID,
-      process.env.EMAIL_CLIENT_SECRET,
-      "https://developers.google.com/oauthplayground"
-    );
-
-    oauth2Client.setCredentials({
-      refresh_token: process.env.EMAIL_CLIENT_REFRESH_TOKEN,
-    });
-
-    const accessToken = await new Promise<string>((resolve, reject) => {
-      oauth2Client.getAccessToken((err, token) => {
-        if (err) {
-          console.error("Failed to retrieve access token", err);
-          reject(new Error("Failed to retrieve access token: " + err.message));
-        }
-        if (token) {
-          resolve(token);
-        } else {
-          reject(
-            new Error(
-              "Access token was null or undefined, but no explicit error received."
-            )
-          );
-        }
-      });
-    });
-
-    return nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 465,
-      secure: true,
-      auth: {
-        type: "OAuth2",
-        user: process.env.EMAIL_USER,
-        clientId: process.env.EMAIL_CLIENT_ID,
-        clientSecret: process.env.EMAIL_CLIENT_SECRET,
-        refreshToken: process.env.EMAIL_CLIENT_REFRESH_TOKEN,
-        accessToken,
-      },
-    });
-  } catch (error) {
-    console.error("Error creating email transporter:", error);
-    throw error;
+// Email transporter (same as appointment controller)
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
   }
-};
+});
 
 // LOGIN
 exports.login = async (req, res) => {
@@ -187,9 +145,8 @@ exports.register = async (req, res) => {
 
     // Send email with verification link
     try {
-      const transporter = await createTransporter();
       await transporter.sendMail({
-        from: `"BIOCELLA App" <${process.env.EMAIL_USER}>`,
+        from: process.env.EMAIL_USER,
         to: email,
         subject: "Set Your Password to Complete Registration",
         html: `
