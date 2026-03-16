@@ -306,6 +306,50 @@ exports.getUserProfile = async (req, res) => {
   }
 };
 
+// GET USER BY TOKEN (for finalize setup form)
+exports.getUserByToken = async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        message: "Token is required.",
+        statusCode: HttpStatus.BAD_REQUEST,
+      });
+    }
+
+    const user = await authModel.getUserByResetToken(token);
+
+    if (!user) {
+      return res.status(HttpStatus.UNAUTHORIZED).json({
+        message: "Invalid or expired token.",
+        statusCode: HttpStatus.UNAUTHORIZED,
+      });
+    }
+
+    return res.status(HttpStatus.OK).json({
+      message: "User data retrieved successfully.",
+      user: {
+        user_id: user.user_id,
+        email: user.email,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        department: user.department,
+        course: user.course,
+        role: user.role,
+      },
+      statusCode: HttpStatus.OK,
+    });
+  } catch (error) {
+    console.error("Get User By Token Error:", error);
+    return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+      message: "An unexpected error occurred.",
+      error: error.message || error,
+      statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+    });
+  }
+};
+
 // LOGOUT
 exports.logout = async (req, res) => {
   try {

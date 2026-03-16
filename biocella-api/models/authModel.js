@@ -22,7 +22,7 @@ exports.getUserByEmail = async (email) => {
 // READ - Get user by reset token
 exports.getUserByResetToken = async (token) => {
   const [rows] = await db.execute(
-    "SELECT user_id, email, reset_token FROM user WHERE reset_token = ?",
+    "SELECT user_id, email, reset_token, first_name, last_name, department, course, role FROM user WHERE reset_token = ?",
     [token]
   );
   return rows[0] || null;
