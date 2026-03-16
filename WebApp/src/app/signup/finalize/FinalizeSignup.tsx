@@ -31,6 +31,8 @@ export default function FinalizeSignup() {
   });
 
   const [formData, setFormData] = useState({
+    firstName: "",
+    lastName: "",
     department: "",
     course: "",
     password: "",
@@ -71,6 +73,8 @@ export default function FinalizeSignup() {
           });
           setFormData((prev) => ({
             ...prev,
+            firstName: data.user?.first_name || "",
+            lastName: data.user?.last_name || "",
             department: data.user?.department || "",
             course: data.user?.course || "",
           }));
@@ -111,8 +115,8 @@ export default function FinalizeSignup() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: userData.email,
-          first_name: userData.firstName,
-          last_name: userData.lastName,
+          first_name: formData.firstName,
+          last_name: formData.lastName,
           department: formData.department,
           course: formData.course,
           password: formData.password,
@@ -175,23 +179,25 @@ export default function FinalizeSignup() {
           )}
 
           <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Read-only fields */}
+            {/* Editable name fields */}
             <div>
               <label className="text-sm font-medium text-gray-700">First Name</label>
               <input 
                 type="text" 
-                value={userData.firstName || ''} 
-                readOnly 
-                className="w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-100 text-gray-600"
+                value={formData.firstName || ''} 
+                onChange={(e) => handleChange('firstName', e.target.value)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
               />
             </div>
             <div>
               <label className="text-sm font-medium text-gray-700">Last Name</label>
               <input 
                 type="text" 
-                value={userData.lastName || ''} 
-                readOnly 
-                className="w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-100 text-gray-600"
+                value={formData.lastName || ''} 
+                onChange={(e) => handleChange('lastName', e.target.value)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
               />
             </div>
             <div className="md:col-span-2">
