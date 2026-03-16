@@ -7,6 +7,9 @@ import Link from "next/link";
 // import { useRouter } from "next/router";
 import { useRouter } from "next/navigation";
 
+// Configure API endpoint
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+
 export default function SignupForm() {
   const router = useRouter();
   const [formData, setFormData] = useState({
@@ -27,7 +30,7 @@ export default function SignupForm() {
     console.log("Signup attempt:", formData);
 
     try {
-      const response = await fetch("/API/auth/register", {
+      const response = await fetch(`${API_BASE_URL}/auth/register`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -38,17 +41,17 @@ export default function SignupForm() {
       const data = await response.json();
 
       if (response.ok) {
-        setMessage({ text: data.message || 'Registration successful! Check your email for password.', type: 'success' });
+        setMessage({ text: data.message || 'Registration successful! A password setup link was sent to your email.', type: 'success' });
         // Optionally redirect after a short delay
         setTimeout(() => {
           router.push('/Login');
-        }, 5000); // Redirect to login after 3 seconds
+        }, 3000); // Redirect to login after 3 seconds
       } else {
         setMessage({ text: data.message || 'Registration failed. Please try again.', type: 'error' });
       }
     } catch (error) {
       console.error('Network or unexpected error during signup:', error);
-      setMessage({ text: 'An unexpected error occurred. Please try again.', type: 'error' });
+      setMessage({ text: 'Failed to connect to server. Please check your connection and try again.', type: 'error' });
     } finally {
       setLoading(false);
     }

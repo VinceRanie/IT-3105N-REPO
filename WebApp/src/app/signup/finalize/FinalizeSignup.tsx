@@ -2,6 +2,10 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
+
+// Configure API endpoint
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 
 export default function FinalizeSignup({
   userData = {
@@ -14,6 +18,7 @@ export default function FinalizeSignup({
     role: "student",
   },
 }) {
+  const router = useRouter();
   const [formData, setFormData] = useState({
     department: userData.department,
     course: userData.course,
@@ -36,11 +41,13 @@ export default function FinalizeSignup({
     }
 
     try {
-      const res = await fetch("/API/auth/finalize-setup", {
+      const res = await fetch(`${API_BASE_URL}/auth/finalize-setup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: userData.email,
+          first_name: userData.firstName,
+          last_name: userData.lastName,
           department: formData.department,
           course: formData.course,
           password: formData.password,
@@ -53,7 +60,9 @@ export default function FinalizeSignup({
 
       if (res.ok) {
         // Redirect to login or dashboard
-        window.location.href = "/login";
+        setTimeout(() => {
+          router.push('/Login');
+        }, 2000);
       }
     } catch (error) {
       console.error("Finalize signup error:", error);
