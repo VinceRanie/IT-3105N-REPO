@@ -40,10 +40,16 @@ export default function SpecimenPublicView({ params, searchParams }: SpecimenPub
       const userData = getUserData();
       const role = userData?.role || localStorage.getItem('userRole');
       
+      // If admin or RA, redirect to admin edit page
+      if (role === 'admin' || role === 'RA' || role === 'ra') {
+        setRedirecting(true);
+        router.push(`/AdminUI/AdminDashBoard/Features/AdminCollection/specimen/${params.id}`);
+        return;
+      }
+      
+      // For students, show the specimen view
       setAuthenticated(true);
       setUserRole(role || null);
-      
-      // Fetch specimen details after auth check
       fetchSpecimenDetails();
     };
     
