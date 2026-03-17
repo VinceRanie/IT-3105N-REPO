@@ -3,8 +3,9 @@
 import { useState, useEffect } from "react";
 import { API_URL } from "@/config/api";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Edit, QrCode, Printer } from "lucide-react";
+import { ArrowLeft, Edit, QrCode, Printer, Lock } from "lucide-react";
 import Image from "next/image";
+import { isAuthenticated, getUserData } from "@/app/utils/authUtil";
 
 interface SpecimenPublicViewProps {
   params: {
@@ -18,15 +19,36 @@ interface SpecimenPublicViewProps {
 export default function SpecimenPublicView({ params, searchParams }: SpecimenPublicViewProps) {
   const [specimen, setSpecimen] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [authenticated, setAuthenticated] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [redirecting, setRedirecting] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
-    fetchSpecimenDetails();
-    // Get user role from session/localStorage (adjust based on your auth implementation)
-    const role = localStorage.getItem('userRole'); // or from your auth context
-    setUserRole(role);
-  }, [params.id]);
+    // Check authentication on mount
+    const checkAuth = async () => {
+      const isAuth = isAuthenticated();
+      
+      if (!isAuth) {
+        // Redirect to login if not authenticated
+        setRedirecting(true);
+        router.push('/Login');
+        return;
+      }
+      
+      // Get user data and role
+      const userData = getUserData();
+      const role = userData?.role || localStorage.getItem('userRole');
+      
+      setAuthenticated(true);
+      setUserRole(role || null);
+      
+      // Fetch specimen details after auth check
+      fetchSpecimenDetails();
+    };
+    
+    checkAuth();
+  }, [params.id, router]);
 
   const fetchSpecimenDetails = async () => {
     try {
@@ -52,6 +74,23 @@ export default function SpecimenPublicView({ params, searchParams }: SpecimenPub
     return userRole === 'admin' || userRole === 'RA' || userRole === 'ra' || userRole === 'research_assistant';
   };
 
+  const isStudent = () => {
+    return userRole === 'student';
+  };
+
+  // Show redirecting message
+  if (redirecting) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#113F67] mx-auto"></div>
+          <p className="mt-4 text-gray-600">Redirecting to login...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading while fetching specimen data
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
@@ -97,7 +136,27 @@ export default function SpecimenPublicView({ params, searchParams }: SpecimenPub
             </div>
           </div>
           
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            {/* Role Badge */}
+            <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+              canEdit() 
+                ? 'bg-blue-100 text-blue-800' 
+                : 'bg-gray-100 text-gray-800'
+            }`}>
+              {canEdit() ? (
+                <span className="flex items-center gap-1">
+                  <Edit className="w-3 h-3" />
+                  {userRole === 'admin' ? 'Admin' : 'RA'} Access
+                </span>
+              ) : (
+                <span className="flex items-center gap-1">
+                  <Lock className="w-3 h-3" />
+                  Read-Only (Student)
+                </span>
+              )}
+            </div>
+
+            {/* Action Buttons */}
             <button
               onClick={handlePrintQR}
               className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
@@ -114,12 +173,28 @@ export default function SpecimenPublicView({ params, searchParams }: SpecimenPub
                 Edit
               </button>
             )}
+            {isStudent() && (
+              <div className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-medium">
+                View Only
+              </div>
+            )}
           </div>
         </div>
       </div>
 
       {/* Content */}
       <div className="max-w-7xl mx-auto p-6">
+        {/* Student Read-Only Notice */}
+        {isStudent() && (
+          <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
+            <Lock className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-blue-900">Read-Only Access</p>
+              <p className="text-sm text-blue-800">You can view specimen information but cannot edit. Contact an admin or RA to make changes.</p>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column - Images & QR */}
           <div className="lg:col-span-1 space-y-6">
