@@ -1,10 +1,14 @@
-import UsersUI from "./page";
+import Navbar from "./Components/Nav";
 
-export default function UserDashBoard(){
-    return (
-        <div>
-        <UsersUI/>
-        <p>test</p>
-        </div>
-)
+export default function UserDashBoard({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <Navbar />
+      <main className="p-4">{children}</main>
+    </div>
+  );
 }
