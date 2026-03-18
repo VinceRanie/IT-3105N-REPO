@@ -74,7 +74,7 @@ export default function UserAppointmentDashboard() {
 
   const handleBook = async () => {
     try {
-      const res = await fetch(\/appointments/create, {
+      const res = await fetch(`${API_URL}/appointments/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -130,7 +130,11 @@ export default function UserAppointmentDashboard() {
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
-            className={px-6 py-3 font-medium transition-colors \}
+            className={`px-6 py-3 font-medium transition-colors ${
+              activeTab === tab.key
+                ? 'border-b-2 border-[#113F67] text-[#113F67]'
+                : 'text-gray-600 hover:text-gray-800'
+            }`}
           >
             {tab.label}
           </button>
@@ -155,7 +159,7 @@ export default function UserAppointmentDashboard() {
                     <p className="text-gray-600">Department: {app.department}</p>
                     <p className="text-gray-600 mt-2">Purpose: {app.purpose}</p>
                   </div>
-                  <span className={px-3 py-1 rounded-full text-sm font-medium \}>
+                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(app.status)}`}>
                     {app.status.toUpperCase()}
                   </span>
                 </div>
