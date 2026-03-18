@@ -3,8 +3,9 @@
 import { useState, useEffect } from "react";
 import { API_URL } from "@/config/api";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Edit, QrCode, Printer, Lock } from "lucide-react";
+import { ArrowLeft, QrCode, Lock, Download } from "lucide-react";
 import Image from "next/image";
+import jsPDF from "jspdf";
 import { isAuthenticated, getUserData } from "@/app/utils/authUtil";
 
 interface SpecimenPublicViewProps {
@@ -19,37 +20,30 @@ interface SpecimenPublicViewProps {
 export default function SpecimenPublicView({ params, searchParams }: SpecimenPublicViewProps) {
   const [specimen, setSpecimen] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [authenticated, setAuthenticated] = useState(false);
-  const [userRole, setUserRole] = useState<string | null>(null);
   const [redirecting, setRedirecting] = useState(false);
+  const [activeTab, setActiveTab] = useState("info");
+  const [generatingPDF, setGeneratingPDF] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
-    // Check authentication on mount
     const checkAuth = async () => {
       const isAuth = isAuthenticated();
       
       if (!isAuth) {
-        // Redirect to login if not authenticated
         setRedirecting(true);
         router.push('/Login');
         return;
       }
       
-      // Get user data and role
       const userData = getUserData();
       const role = userData?.role || localStorage.getItem('userRole');
       
-      // If admin or RA, redirect to admin edit page
       if (role === 'admin' || role === 'RA' || role === 'ra') {
         setRedirecting(true);
         router.push(`/AdminUI/AdminDashBoard/Features/AdminCollection/specimen/${params.id}`);
         return;
       }
       
-      // For students, show the specimen view
-      setAuthenticated(true);
-      setUserRole(role || null);
       fetchSpecimenDetails();
     };
     
@@ -71,20 +65,279 @@ export default function SpecimenPublicView({ params, searchParams }: SpecimenPub
     }
   };
 
-  const handlePrintQR = () => {
-    window.print();
+  const downloadPDF = async () => {
+    if (!specimen) return;
+    
+    setGeneratingPDF(true);
+    try {
+      const doc = new jsPDF();
+      let yPos = 20;
+      const lineHeight = 7;
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const margin = 20;
+      const contentWidth = pageWidth - 2 * margin;
+
+      const checkPageBreak = (additionalSpace = 10) => {
+        if (yPos > 270) {
+          doc.addPage();
+          yPos = 20;
+        }
+      };
+
+      const getImageBase64 = async (url: string, timeoutMs: number = 8000): Promise<string | null> => {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+          
+          const response = await fetch(url, { 
+            signal: controller.signal,
+            mode: 'cors'
+          });
+          clearTimeout(timeoutId);
+          
+          if (!response.ok) return null;
+          
+          const blob = await response.blob();
+          return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = () => resolve(null);
+            reader.readAsDataURL(blob);
+          });
+        } catch (error) {
+          return null;
+        }
+      };
+
+      // Title
+      doc.setFontSize(18);
+      doc.setFont("helvetica", "bold");
+      doc.text("Specimen Information Report", margin, yPos);
+      yPos += 10;
+
+      doc.setDrawColor(17, 63, 103);
+      doc.setLineWidth(0.5);
+      doc.line(margin, yPos, pageWidth - margin, yPos);
+      yPos += 10;
+
+      // Add specimen image if available
+      let imageHeight = 0;
+      if (specimen.image_url) {
+        const imageUrl = `${API_URL}${specimen.image_url}`;
+        const imageData = await getImageBase64(imageUrl);
+        
+        if (imageData) {
+          try {
+            const imgWidth = 50;
+            const imgHeight = 50;
+            
+            doc.addImage(imageData, 'JPEG', margin, yPos, imgWidth, imgHeight);
+            imageHeight = imgHeight + 5;
+          } catch (error) {
+            console.error("Error adding image to PDF:", error);
+          }
+        }
+      }
+
+      // Basic Information
+      const infoStartX = specimen.image_url ? margin + 55 : margin;
+      const infoStartY = yPos;
+      
+      doc.setFontSize(14);
+      doc.setFont("helvetica", "bold");
+      doc.text("Basic Information", infoStartX, yPos);
+      yPos += lineHeight;
+
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      
+      const basicInfo = [
+        ["Code Name:", specimen.code_name],
+        ["Accession Number:", specimen.accession_no || specimen.accession_number || "N/A"],
+        ["Classification:", specimen.classification || "N/A"],
+        ["Source:", specimen.source || "N/A"],
+        ["Locale:", specimen.locale || "N/A"],
+        ["Project:", specimen.project_id?.title || "N/A"],
+        ["Date Accessed:", specimen.date_accessed ? new Date(specimen.date_accessed).toLocaleDateString() : "N/A"],
+      ];
+
+      basicInfo.forEach(([label, value]) => {
+        checkPageBreak();
+        doc.setFont("helvetica", "bold");
+        doc.text(label, infoStartX, yPos);
+        doc.setFont("helvetica", "normal");
+        const valueText = doc.splitTextToSize(String(value), contentWidth - 50);
+        doc.text(valueText, infoStartX + 45, yPos);
+        yPos += lineHeight;
+      });
+
+      if (imageHeight > 0) {
+        const textHeight = (basicInfo.length + 1) * lineHeight;
+        if (imageHeight > textHeight) {
+          yPos = infoStartY + imageHeight;
+        }
+      }
+
+      // Description
+      if (specimen.description) {
+        yPos += 5;
+        checkPageBreak(20);
+        doc.setFontSize(14);
+        doc.setFont("helvetica", "bold");
+        doc.text("Description", margin, yPos);
+        yPos += lineHeight;
+        
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "normal");
+        const descLines = doc.splitTextToSize(specimen.description, contentWidth);
+        descLines.forEach((line: string) => {
+          checkPageBreak();
+          doc.text(line, margin, yPos);
+          yPos += lineHeight;
+        });
+      }
+
+      // Biochemical Tests
+      if (specimen.biochemical_tests || specimen.catalase || specimen.oxidase) {
+        yPos += 5;
+        checkPageBreak(20);
+        doc.setFontSize(14);
+        doc.setFont("helvetica", "bold");
+        doc.text("Biochemical Characteristics", margin, yPos);
+        yPos += lineHeight;
+        
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "normal");
+        
+        if (specimen.catalase) {
+          doc.text(`Catalase: ${specimen.catalase}`, margin, yPos);
+          yPos += lineHeight;
+        }
+        if (specimen.oxidase) {
+          doc.text(`Oxidase: ${specimen.oxidase}`, margin, yPos);
+          yPos += lineHeight;
+        }
+        if (specimen.hemolysis) {
+          doc.text(`Hemolysis: ${specimen.hemolysis}`, margin, yPos);
+          yPos += lineHeight;
+        }
+        if (specimen.growth_media) {
+          doc.text(`Growth Media: ${specimen.growth_media}`, margin, yPos);
+          yPos += lineHeight;
+        }
+
+        if (specimen.biochemical_tests) {
+          yPos += 3;
+          doc.setFont("helvetica", "bold");
+          doc.text("Test Results:", margin, yPos);
+          yPos += lineHeight;
+          doc.setFont("helvetica", "normal");
+
+          const tests = Object.entries(specimen.biochemical_tests).filter(([_, value]) => value && value !== '');
+          let xPos = margin;
+          
+          tests.forEach(([key, value]: [string, any], index) => {
+            if (index > 0 && index % 3 === 0) {
+              yPos += lineHeight;
+              xPos = margin;
+              checkPageBreak();
+            }
+            doc.text(`${key.toUpperCase()}: ${value}`, xPos, yPos);
+            xPos += 60;
+          });
+          yPos += lineHeight;
+        }
+      }
+
+      // Genome Data
+      if (specimen.fasta_file || specimen.fasta_sequence) {
+        yPos += 5;
+        checkPageBreak(15);
+        doc.setFontSize(14);
+        doc.setFont("helvetica", "bold");
+        doc.text("Genome Sequence Data", margin, yPos);
+        yPos += lineHeight;
+        
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "normal");
+        
+        if (specimen.fasta_file) {
+          doc.text(`FASTA File: ${specimen.fasta_file}`, margin, yPos);
+          yPos += lineHeight;
+        }
+        if (specimen.fasta_sequence) {
+          yPos += 3;
+          doc.setFont("helvetica", "bold");
+          doc.text("FASTA Sequence:", margin, yPos);
+          yPos += lineHeight;
+          doc.setFont("courier", "normal");
+          doc.setFontSize(8);
+          const seqLines = specimen.fasta_sequence.match(/.{1,80}/g) || [];
+          seqLines.forEach((line: string) => {
+            checkPageBreak();
+            doc.text(line, margin, yPos);
+            yPos += 5;
+          });
+          doc.setFontSize(10);
+          doc.setFont("helvetica", "normal");
+        }
+      }
+
+      // Custom Fields
+      if (specimen.custom_fields && Object.keys(specimen.custom_fields).length > 0) {
+        yPos += 5;
+        checkPageBreak(20);
+        doc.setFontSize(14);
+        doc.setFont("helvetica", "bold");
+        doc.text("Additional Information", margin, yPos);
+        yPos += lineHeight;
+
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "normal");
+        
+        Object.entries(specimen.custom_fields).forEach(([key, value]: [string, any]) => {
+          if (value) {
+            checkPageBreak();
+            doc.setFont("helvetica", "bold");
+            doc.text(`${key.replace(/_/g, " ")}:`, margin, yPos);
+            doc.setFont("helvetica", "normal");
+            const valueText = doc.splitTextToSize(String(value), contentWidth - 50);
+            doc.text(valueText, margin + 45, yPos);
+            yPos += lineHeight;
+          }
+        });
+      }
+
+      // Footer
+      yPos += 10;
+      checkPageBreak();
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(128);
+      doc.text(`Generated: ${new Date().toLocaleString()}`, margin, yPos);
+      doc.text("BIOCELLA - Specimen Information System (Read-Only Access)", margin, yPos + 5);
+
+      // Save PDF
+      doc.save(`Specimen_${specimen.code_name}_${new Date().toISOString().split('T')[0]}.pdf`);
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      alert("Failed to generate PDF");
+    } finally {
+      setGeneratingPDF(false);
+    }
   };
 
-  const canEdit = () => {
-    // Allow editing for Admin and RA (Research Assistant) roles
-    return userRole === 'admin' || userRole === 'RA' || userRole === 'ra' || userRole === 'research_assistant';
+  const downloadQRCode = () => {
+    if (!specimen.qr_code) return;
+    
+    const link = document.createElement('a');
+    link.href = specimen.qr_code;
+    link.download = `QR_${specimen.code_name}_${new Date().toISOString().split('T')[0]}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
-  const isStudent = () => {
-    return userRole === 'student';
-  };
-
-  // Show redirecting message
   if (redirecting) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
@@ -96,7 +349,6 @@ export default function SpecimenPublicView({ params, searchParams }: SpecimenPub
     );
   }
 
-  // Show loading while fetching specimen data
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
@@ -126,8 +378,8 @@ export default function SpecimenPublicView({ params, searchParams }: SpecimenPub
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header - Hide on print */}
-      <div className="bg-white shadow-md p-4 print:hidden">
+      {/* Header */}
+      <div className="bg-white shadow-md p-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
@@ -138,72 +390,33 @@ export default function SpecimenPublicView({ params, searchParams }: SpecimenPub
             </button>
             <div>
               <h1 className="text-2xl font-bold text-[#113F67]">BIOCELLA</h1>
-              <p className="text-sm text-gray-600">Specimen Information Sheet</p>
+              <p className="text-sm text-gray-600">Specimen Information - Read-Only View</p>
             </div>
           </div>
           
           <div className="flex gap-2 items-center">
-            {/* Role Badge */}
-            <div className={`px-3 py-1 rounded-full text-sm font-medium ${
-              canEdit() 
-                ? 'bg-blue-100 text-blue-800' 
-                : 'bg-gray-100 text-gray-800'
-            }`}>
-              {canEdit() ? (
-                <span className="flex items-center gap-1">
-                  <Edit className="w-3 h-3" />
-                  {userRole === 'admin' ? 'Admin' : 'RA'} Access
-                </span>
-              ) : (
-                <span className="flex items-center gap-1">
-                  <Lock className="w-3 h-3" />
-                  Read-Only (Student)
-                </span>
-              )}
+            <div className="px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-800 flex items-center gap-1">
+              <Lock className="w-3 h-3" />
+              Read-Only Access
             </div>
-
-            {/* Action Buttons */}
             <button
-              onClick={handlePrintQR}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+              onClick={downloadPDF}
+              disabled={generatingPDF}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50"
             >
-              <Printer className="w-4 h-4" />
-              Print
+              <Download className="w-4 h-4" />
+              {generatingPDF ? "Generating..." : "Download PDF"}
             </button>
-            {canEdit() && (
-              <button
-                onClick={() => router.push(`/AdminUI/AdminDashBoard/Features/AdminCollection?edit=${params.id}`)}
-                className="flex items-center gap-2 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600"
-              >
-                <Edit className="w-4 h-4" />
-                Edit
-              </button>
-            )}
-            {isStudent() && (
-              <div className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-medium">
-                View Only
-              </div>
-            )}
           </div>
         </div>
       </div>
 
       {/* Content */}
       <div className="max-w-7xl mx-auto p-6">
-        {/* Student Read-Only Notice */}
-        {isStudent() && (
-          <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
-            <Lock className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm font-semibold text-blue-900">Read-Only Access</p>
-              <p className="text-sm text-blue-800">You can view specimen information but cannot edit. Contact an admin or RA to make changes.</p>
-            </div>
-          </div>
-        )}
-
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column - Images & QR */}
           <div className="lg:col-span-1 space-y-6">
+            {/* Image */}
             <div className="bg-white shadow rounded-xl p-4">
               <h2 className="text-lg font-semibold mb-3">Specimen Image</h2>
               <div className="relative w-full h-64 bg-gray-100 rounded-lg overflow-hidden">
@@ -222,7 +435,8 @@ export default function SpecimenPublicView({ params, searchParams }: SpecimenPub
               </div>
             </div>
 
-            <div className="bg-white shadow rounded-xl p-4 print:break-inside-avoid">
+            {/* QR Code */}
+            <div className="bg-white shadow rounded-xl p-4">
               <h2 className="text-lg font-semibold flex items-center gap-2 mb-3">
                 <QrCode className="h-5 w-5" />
                 QR Code
@@ -240,81 +454,145 @@ export default function SpecimenPublicView({ params, searchParams }: SpecimenPub
                   <div className="text-gray-400">QR code not generated</div>
                 )}
               </div>
-              <p className="text-xs text-center text-gray-500 mt-2">
-                Scan to view specimen details
-              </p>
+              <button
+                onClick={downloadQRCode}
+                className="w-full mt-3 px-3 py-2 text-sm bg-green-500 text-white rounded hover:bg-green-600"
+              >
+                Download QR Code
+              </button>
             </div>
           </div>
 
-          {/* Right Column - Details */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Basic Information */}
-            <div className="bg-white shadow rounded-xl p-6">
-              <h2 className="text-lg font-semibold mb-4">Basic Information</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <InfoItem label="Code Name" value={specimen.code_name} />
-                <InfoItem label="Accession Number" value={specimen.accession_number || "N/A"} />
-                <InfoItem label="Project" value={specimen.project_id?.title || "N/A"} />
-                <InfoItem label="Project Code" value={specimen.project_id?.code || "N/A"} />
-                <InfoItem label="Classification" value={specimen.project_id?.classification || "N/A"} badge />
-                <InfoItem label="Locale" value={specimen.custom_fields?.locale || "N/A"} />
-                <InfoItem label="Source" value={specimen.custom_fields?.source || "N/A"} />
-                <InfoItem label="Storage Type" value={specimen.custom_fields?.storage_type || "N/A"} />
-                <InfoItem label="Shelf" value={specimen.custom_fields?.shelf || "N/A"} />
-                <InfoItem label="Funded By" value={specimen.custom_fields?.funded_by || "N/A"} />
+          {/* Right Column - Details with Tabs */}
+          <div className="lg:col-span-2">
+            {/* Tabs */}
+            <div className="bg-white shadow rounded-xl overflow-hidden">
+              <div className="flex flex-wrap border-b border-gray-200">
+                {[
+                  { key: "info", label: "Basic Info" },
+                  { key: "biochemical", label: "Biochemical" },
+                  { key: "genome", label: "Genome Data" },
+                ].map((tab) => (
+                  <button
+                    key={tab.key}
+                    onClick={() => setActiveTab(tab.key)}
+                    className={`px-6 py-3 font-medium transition-colors ${
+                      activeTab === tab.key
+                        ? 'border-b-2 border-[#113F67] text-[#113F67]'
+                        : 'text-gray-600 hover:text-gray-800'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Tab Content */}
+              <div className="p-6">
+                {activeTab === "info" && (
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-md font-semibold mb-4">Basic Information</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <InfoItem label="Code Name" value={specimen.code_name} />
+                        <InfoItem label="Accession Number" value={specimen.accession_number || specimen.accession_no || "N/A"} />
+                        <InfoItem label="Classification" value={specimen.classification || "N/A"} badge />
+                        <InfoItem label="Source" value={specimen.source || "N/A"} />
+                        <InfoItem label="Locale" value={specimen.locale || "N/A"} />
+                        <InfoItem label="Project" value={specimen.project_id?.title || "N/A"} />
+                        <InfoItem label="Date Accessed" value={specimen.date_accessed ? new Date(specimen.date_accessed).toLocaleDateString() : "N/A"} />
+                        <InfoItem label="Similarity" value={specimen.similarity_percent ? `${specimen.similarity_percent}%` : "N/A"} />
+                      </div>
+                    </div>
+
+                    {specimen.description && (
+                      <div className="border-t pt-6">
+                        <h3 className="text-md font-semibold mb-3">Description</h3>
+                        <p className="text-sm text-gray-700 leading-relaxed">
+                          {specimen.description}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {activeTab === "biochemical" && (
+                  <div className="space-y-4">
+                    {specimen.biochemical_tests || specimen.catalase || specimen.oxidase ? (
+                      <>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                          {specimen.catalase && <InfoItem label="Catalase" value={specimen.catalase} badge />}
+                          {specimen.oxidase && <InfoItem label="Oxidase" value={specimen.oxidase} badge />}
+                          {specimen.hemolysis && <InfoItem label="Hemolysis" value={specimen.hemolysis} badge />}
+                        </div>
+                        
+                        {specimen.biochemical_tests && (
+                          <>
+                            <h3 className="text-md font-medium mt-6 pt-4 border-t">Test Results</h3>
+                            <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                              {Object.entries(specimen.biochemical_tests)
+                                .filter(([_, value]) => value && value !== '')
+                                .map(([key, value]: [string, any]) => (
+                                  <div key={key} className="text-center p-2 border rounded">
+                                    <div className="text-xs font-medium text-gray-500 uppercase mb-1">{key}</div>
+                                    <div className={`text-lg font-bold ${
+                                      value === '+' ? 'text-green-600' : value === '-' ? 'text-red-600' : 'text-gray-800'
+                                    }`}>
+                                      {value}
+                                    </div>
+                                  </div>
+                                ))}
+                            </div>
+                          </>
+                        )}
+
+                        {specimen.growth_media && (
+                          <div className="mt-6 pt-4 border-t">
+                            <InfoItem label="Growth Media" value={specimen.growth_media} />
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-gray-500 text-sm">No biochemical data available</p>
+                    )}
+                  </div>
+                )}
+
+                {activeTab === "genome" && (
+                  <div className="space-y-4">
+                    {specimen.fasta_file || specimen.fasta_sequence ? (
+                      <>
+                        {specimen.fasta_file && (
+                          <div>
+                            <span className="text-xs font-medium text-gray-500 uppercase">FASTA File</span>
+                            <p className="mt-1 text-sm text-gray-800 font-mono">{specimen.fasta_file}</p>
+                          </div>
+                        )}
+
+                        {specimen.fasta_sequence && (
+                          <div>
+                            <span className="text-xs font-medium text-gray-500 uppercase">FASTA Sequence</span>
+                            <pre className="mt-2 p-4 bg-gray-50 rounded text-xs font-mono overflow-x-auto max-h-64 overflow-y-auto border border-gray-200">
+                              {specimen.fasta_sequence}
+                            </pre>
+                          </div>
+                        )}
+                        
+                        <div className="bg-blue-50 border border-blue-200 rounded p-3 text-sm text-blue-800">
+                          <p className="font-medium">📖 Read-Only Access</p>
+                          <p className="text-xs mt-1">BLAST sequence lookup is not available for students. Contact an admin or RA for advanced analysis.</p>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-gray-500 text-sm">No genome data available</p>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
-
-            {/* Description */}
-            {specimen.description && (
-              <div className="bg-white shadow rounded-xl p-6">
-                <h2 className="text-lg font-semibold mb-3">Description</h2>
-                <p className="text-sm text-gray-700 leading-relaxed">
-                  {specimen.description}
-                </p>
-              </div>
-            )}
-
-            {/* Additional Information */}
-            {specimen.custom_fields && Object.keys(specimen.custom_fields).length > 0 && (
-              <div className="bg-white shadow rounded-xl p-6 print:break-inside-avoid">
-                <h2 className="text-lg font-semibold mb-4">Additional Information</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {Object.entries(specimen.custom_fields).map(([key, value]: [string, any]) => {
-                    if (!value) return null;
-                    return <InfoItem key={key} label={key.replace(/_/g, " ")} value={value} />;
-                  })}
-                </div>
-              </div>
-            )}
           </div>
-        </div>
-
-        {/* Footer - Only visible on print */}
-        <div className="hidden print:block mt-8 pt-4 border-t text-center text-sm text-gray-600">
-          <p>BIOCELLA - Specimen Information System</p>
-          <p>Generated: {new Date().toLocaleDateString()}</p>
         </div>
       </div>
-
-      {/* Print Styles */}
-      <style jsx global>{`
-        @media print {
-          body {
-            print-color-adjust: exact;
-            -webkit-print-color-adjust: exact;
-          }
-          .print\\:hidden {
-            display: none !important;
-          }
-          .print\\:block {
-            display: block !important;
-          }
-          .print\\:break-inside-avoid {
-            break-inside: avoid;
-          }
-        }
-      `}</style>
     </div>
   );
 }
