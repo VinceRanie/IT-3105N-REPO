@@ -60,7 +60,7 @@ export default function UserAppointmentDashboard() {
     try {
       // Assuming GET /appointments returns all, and we should just show them 
       // since the backend might filter by token later, or we can just show all for demo
-      const res = await fetch(\/appointments);
+      const res = await fetch(`${API_URL}/appointments`);
       const data = await res.json();
       if (data.data) {
         setAppointments(data.data);
