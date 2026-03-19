@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { format } from 'date-fns';
+import jsQR from 'jsqr';
 
 interface Appointment {
   appointment_id: number;
@@ -288,7 +289,11 @@ export default function AdminAppointmentDashboard() {
   const startCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+        video: { 
+          facingMode: 'environment',
+          width: { ideal: 1280 }, 
+          height: { ideal: 720 } 
+        }
       });
       setCameraStream(stream);
       setCameraActive(true);
@@ -296,20 +301,90 @@ export default function AdminAppointmentDashboard() {
       // Set video stream to video element
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play();
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current?.play().catch(err => console.error('Play error:', err));
+        };
       }
+
+      // Start scanning for QR codes
+      scanQRCode();
     } catch (err: any) {
       alert(`Unable to access camera: ${err.message}`);
       console.error('Camera access error:', err);
+      setCameraActive(false);
     }
+  };
+
+  const scanQRCode = () => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    
+    if (!video || !canvas || !cameraActive) {
+      return;
+    }
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let lastDetectedCode = '';
+    let detectionTimeout: NodeJS.Timeout | null = null;
+
+    const scanFrame = () => {
+      if (!cameraActive || !video || video.videoWidth === 0) {
+        setTimeout(scanFrame, 100);
+        return;
+      }
+
+      // Set canvas size to match video
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+
+      // Draw video frame to canvas
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // Get image data
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      
+      // Scan for QR code
+      const code = jsQR(imageData.data, imageData.width, imageData.height, {
+        inversionAttempts: 'dontInvert'
+      });
+
+      if (code) {
+        console.log('✅ QR Code detected:', code.data);
+        
+        // Only update if it's a different code or after timeout
+        if (code.data !== lastDetectedCode) {
+          lastDetectedCode = code.data;
+          setQrInput(code.data);
+          
+          // Auto-verify after a short delay
+          if (detectionTimeout) clearTimeout(detectionTimeout);
+          detectionTimeout = setTimeout(() => {
+            setQrInput(code.data);
+            // You can auto-verify here if desired
+          }, 500);
+        }
+      }
+
+      if (cameraActive) {
+        requestAnimationFrame(scanFrame);
+      }
+    };
+
+    scanFrame();
   };
 
   const stopCamera = () => {
     if (cameraStream) {
-      cameraStream.getTracks().forEach(track => track.stop());
+      cameraStream.getTracks().forEach(track => {
+        track.stop();
+        console.log('🛑 Camera track stopped');
+      });
       setCameraStream(null);
     }
     setCameraActive(false);
+    console.log('📷 Camera stopped');
   };
 
   const getStatusBadge = (status: string) => {
@@ -535,12 +610,15 @@ export default function AdminAppointmentDashboard() {
                       <span>👁️</span>
                       <span>Point camera at QR code. It will scan automatically.</span>
                     </div>
-                    <video
-                      ref={videoRef}
-                      className="w-full rounded-lg bg-black"
-                      playsInline
-                      style={{ maxHeight: '300px', objectFit: 'cover' }}
-                    />
+                    <div className="relative bg-black rounded-lg overflow-hidden" style={{ width: '100%', paddingBottom: '75%' }}>
+                      <video
+                        ref={videoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        className="absolute top-0 left-0 w-full h-full object-cover"
+                      />
+                    </div>
                     <canvas
                       ref={canvasRef}
                       style={{ display: 'none' }}
