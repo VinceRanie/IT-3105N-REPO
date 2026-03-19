@@ -302,7 +302,7 @@ export default function AdminAppointmentDashboard() {
             </button>
           </div>
           <button
-            onClick={() => fetchAppointments()}
+            onClick={() => refreshAppointmentCounts()}
             className="mt-3 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors text-sm"
           >
             Retry
