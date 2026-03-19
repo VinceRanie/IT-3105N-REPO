@@ -58,17 +58,65 @@ export default function AdminAppointmentDashboard() {
     }
   }, [activeTab, allAppointments]);
 
+  // Retry helper with exponential backoff
+  const fetchWithRetry = async (
+    url: string,
+    options: any = {},
+    maxRetries: number = 3,
+    initialDelay: number = 1000
+  ): Promise<Response> => {
+    let lastError: Error | null = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`🔄 Fetch attempt ${attempt}/${maxRetries} for ${url}`);
+        const response = await fetch(url, options);
+        
+        if (response.ok) {
+          console.log(`✅ Fetch successful on attempt ${attempt}`);
+          return response;
+        }
+        
+        // If response not ok, wait and retry
+        if (attempt < maxRetries) {
+          const delay = initialDelay * Math.pow(2, attempt - 1);
+          console.log(`⏳ Response not ok (status: ${response.status}), retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        
+        return response;
+      } catch (error: any) {
+        lastError = error;
+        
+        if (attempt < maxRetries) {
+          const delay = initialDelay * Math.pow(2, attempt - 1);
+          console.log(`⚠️ Fetch attempt ${attempt} failed: ${error.message}, retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+      }
+    }
+    
+    // All retries failed
+    if (lastError) {
+      throw lastError;
+    }
+    
+    throw new Error('All fetch attempts failed');
+  };
+
   const fetchAllAppointmentsAndCount = async () => {
     setLoading(true);
     setError(null);
     try {
-      console.log(`📋 Fetching all appointments for counting`);
-      const response = await fetch(`/API/appointments`, {
+      console.log(`📋 Fetching all appointments for counting (with retry logic)`);
+      const response = await fetchWithRetry(`/API/appointments`, {
         headers: {
           'Cache-Control': 'no-cache',
           'Pragma': 'no-cache'
         }
-      });
+      }, 3, 800); // 3 retries with 800ms initial delay (exponential: 800ms, 1600ms, 3200ms)
       
       if (!response.ok) {
         const error = await response.json();
@@ -114,12 +162,12 @@ export default function AdminAppointmentDashboard() {
   const refreshAppointmentCounts = async () => {
     // Refresh the counts after an action (approve, deny, etc.)
     try {
-      const response = await fetch(`/API/appointments`, {
+      const response = await fetchWithRetry(`/API/appointments`, {
         headers: {
           'Cache-Control': 'no-cache',
           'Pragma': 'no-cache'
         }
-      });
+      }, 3, 800);
       
       if (response.ok) {
         const data = await response.json();
@@ -290,30 +338,48 @@ export default function AdminAppointmentDashboard() {
 
       {/* Error Alert */}
       {error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-          <div className="flex items-start gap-3">
-            <div className="text-red-600 font-semibold">ERROR:</div>
-            <div className="text-red-800 flex-1">{error}</div>
+        <div className="mb-6 p-4 bg-amber-50 border-2 border-amber-300 rounded-lg">
+          <div className="flex items-start gap-3 mb-3">
+            <div className="text-amber-700 font-bold text-lg">⚠️ CONNECTION WARNING</div>
             <button
               onClick={() => setError(null)}
-              className="text-red-600 hover:text-red-800 font-semibold"
+              className="text-amber-600 hover:text-amber-800 font-semibold ml-auto"
             >
               ✕
             </button>
           </div>
-          <button
-            onClick={() => refreshAppointmentCounts()}
-            className="mt-3 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors text-sm"
-          >
-            Retry
-          </button>
+          <div className="text-amber-800 mb-3">
+            <p className="font-semibold mb-1">Backend API is currently unavailable or unstable</p>
+            <p className="text-sm text-amber-700">
+              The system attempted 3 automatic retries. Please click "Retry Now" to try again.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => refreshAppointmentCounts()}
+              disabled={loading}
+              className="px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
+            >
+              {loading ? '⏳ Retrying...' : '🔄 Retry Now'}
+            </button>
+            <button
+              onClick={() => setError(null)}
+              className="px-4 py-2 bg-gray-400 text-white rounded-md hover:bg-gray-500 transition-colors text-sm"
+            >
+              Dismiss
+            </button>
+          </div>
         </div>
       )}
 
       {/* Appointments List */}
       {loading ? (
         <div className="text-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <div className="inline-flex flex-col items-center gap-4">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            <div className="text-gray-600 font-medium">Loading appointments...</div>
+            <div className="text-sm text-gray-500">If connection is unstable, it may retry automatically</div>
+          </div>
         </div>
       ) : appointments.length === 0 ? (
         <div className="text-center py-12 bg-gray-50 rounded-lg">
