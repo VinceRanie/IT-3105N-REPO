@@ -252,44 +252,83 @@ exports.submitBlast = async (req, res) => {
 
     console.log('📝 Preparing NCBI BLAST submission for:', microbial.code_name);
     console.log('📊 FASTA length:', microbial.fasta_sequence.length);
+    
+    // Validate FASTA sequence
+    if (!microbial.fasta_sequence.includes('>') || microbial.fasta_sequence.length < 20) {
+      console.error('❌ Invalid FASTA sequence format');
+      return res.status(400).json({ error: 'Invalid FASTA sequence format or too short' });
+    }
 
-    // Submit to NCBI BLAST
-    const params = new URLSearchParams({
-      CMD: 'Put',
-      PROGRAM: 'blastn',
-      DATABASE: 'nt',
-      QUERY: microbial.fasta_sequence,
-      EMAIL,
-      TOOL,
-      HITLIST_SIZE: 10 // Get top 10 results
-    });
+    // Submit to NCBI BLAST using form-url-encoded format
+    const params = new URLSearchParams();
+    params.append('CMD', 'Put');
+    params.append('PROGRAM', 'blastn');
+    params.append('DATABASE', 'nt');
+    params.append('QUERY', microbial.fasta_sequence);
+    params.append('EMAIL', EMAIL);
+    params.append('TOOL', TOOL);
+    params.append('HITLIST_SIZE', '10');
+    params.append('EXPECT', '10');
+    params.append('FORMAT_TYPE', 'JSON2');
 
     let submitRes;
     try {
       console.log('🌐 Contacting NCBI BLAST servers...');
-      submitRes = await axios.post('https://blast.ncbi.nlm.nih.gov/Blast.cgi', params, {
-        timeout: 30000 // 30 second timeout for submission
+      console.log('📬 Sending request with headers: Content-Type: application/x-www-form-urlencoded');
+      
+      submitRes = await axios.post('https://blast.ncbi.nlm.nih.gov/Blast.cgi', params.toString(), {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': 'biocella-backend/1.0'
+        },
+        timeout: 30000, // 30 second timeout for submission
+        maxRedirects: 5
       });
       console.log('✅ NCBI response received');
+      console.log('📊 Response status:', submitRes.status);
+      console.log('📊 Response headers:', submitRes.headers['content-type']);
     } catch (axiosErr) {
       console.error('❌ NCBI BLAST connection error:', {
         message: axiosErr.message,
         code: axiosErr.code,
-        status: axiosErr.response?.status
+        status: axiosErr.response?.status,
+        responseData: axiosErr.response?.data?.substring?.(0, 200)
       });
       return res.status(503).json({ 
         error: 'Unable to reach NCBI BLAST servers', 
-        details: 'Please try again later. NCBI BLAST services may be temporarily unavailable.'
+        details: 'Please try again later. NCBI BLAST services may be temporarily unavailable.',
+        ncbiStatus: axiosErr.response?.status
       });
     }
 
-    const ridMatch = submitRes.data.match(/RID = ([A-Z0-9]+)/);
-    const rid = ridMatch ? ridMatch[1] : null;
+    // Try multiple regex patterns to extract RID
+    let rid = null;
+    let ridMatch = submitRes.data.match(/RID\s*=\s*([A-Z0-9]+)/);
+    if (!ridMatch) ridMatch = submitRes.data.match(/RID=([A-Z0-9]+)/);
+    if (!ridMatch) ridMatch = submitRes.data.match(/"RID":"?([A-Z0-9]+)"?/);
+    
+    rid = ridMatch ? ridMatch[1] : null;
 
     if (!rid) {
       console.error('❌ Failed to extract RID from BLAST response');
-      console.error('Response sample:', submitRes.data.substring(0, 500));
-      return res.status(500).json({ error: 'Failed to get RID from BLAST. Invalid response format.' });
+      console.error('📄 Full response length:', submitRes.data.length);
+      console.error('📄 Response sample (first 1000 chars):', submitRes.data.substring(0, 1000));
+      
+      // Check if response contains error messages
+      if (submitRes.data.includes('error') || submitRes.data.includes('Error')) {
+        const errorMatch = submitRes.data.match(/error[^<]*/i);
+        console.error('📄 Detected error in response:', errorMatch?.[0]);
+        return res.status(500).json({ 
+          error: 'NCBI BLAST returned an error',
+          details: 'The BLAST service rejected the request. Please check your sequence and try again.',
+          ncbiError: errorMatch?.[0]?.substring(0, 200)
+        });
+      }
+      
+      return res.status(500).json({ 
+        error: 'Failed to get RID from BLAST. Invalid response format.',
+        details: 'Response did not contain a valid RID. The request may have been malformed.'
+      });
     }
 
     console.log('✅ RID received:', rid);
@@ -361,33 +400,37 @@ exports.getBlastResults = async (req, res) => {
     let statusCheck;
     try {
       console.log('🌐 Contacting NCBI for status...');
-      // Check BLAST status with timeout
-      statusCheck = await axios.get('https://blast.ncbi.nlm.nih.gov/Blast.cgi', {
-        params: {
-          CMD: 'Get',
-          FORMAT_OBJECT: 'SearchInfo',
-          RID: microbial.blast_rid,
-          EMAIL,
-          TOOL
-        },
-        timeout: 20000 // 20 second timeout
-      });
-      
-      console.log('✅ BLAST status response received for RID:', microbial.blast_rid);
-    } catch (axiosErr) {
-      console.error('❌ NCBI status check timeout or error:', {
-        message: axiosErr.message,
-        code: axiosErr.code,
-        status: axiosErr.response?.status
-      });
-      return res.json({ 
-        status: 'pending', 
-        message: 'NCBI server is slow or unreachable. Please try again in a moment.' 
-      });
-    }
+    const statusCheck = await axios.get('https://blast.ncbi.nlm.nih.gov/Blast.cgi', {
+      params: {
+        CMD: 'Get',
+        FORMAT_OBJECT: 'SearchInfo',
+        RID: microbial.blast_rid,
+        EMAIL,
+        TOOL
+      },
+      timeout: 20000 // 20 second timeout
+    });
+    
+    console.log('✅ BLAST status response received for RID:', microbial.blast_rid);
+    console.log('📊 Response length:', statusCheck.data.length);
+  } catch (axiosErr) {
+    console.error('❌ NCBI status check timeout or error:', {
+      message: axiosErr.message,
+      code: axiosErr.code,
+      status: axiosErr.response?.status
+    });
+    return res.json({ 
+      status: 'pending', 
+      message: 'NCBI server is slow or unreachable. Please try again in a moment.' 
+    });
+  }
 
-    const status = statusCheck.data.match(/Status=([A-Z]+)/);
-    console.log('📊 Parsed BLAST status:', status ? status[1] : 'NO_STATUS_FOUND');
+  // Try multiple patterns to extract status
+  let status = statusCheck.data.match(/Status\s*=\s*([A-Z]+)/);
+  if (!status) status = statusCheck.data.match(/Status=([A-Z]+)/);
+  if (!status) status = statusCheck.data.match(/"status":"?([A-Z]+)"?/i);
+  
+  console.log('📊 Parsed BLAST status:', status ? status[1] : 'NO_STATUS_FOUND');
     
     // Check if RID is expired or not found (NCBI returns UNKNOWN or empty status)
     if (!status) {
