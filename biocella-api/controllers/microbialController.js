@@ -234,15 +234,24 @@ exports.deleteMicrobial = async (req, res) => {
 // Submit FASTA sequence to NCBI BLAST
 exports.submitBlast = async (req, res) => {
   try {
+    console.log('📤 BLAST submission request for specimen:', req.params.id);
+    
     const microbial = await MicrobialInfo.findById(req.params.id);
-    if (!microbial) return res.status(404).json({ error: 'Specimen not found' });
+    if (!microbial) {
+      console.error('❌ Specimen not found:', req.params.id);
+      return res.status(404).json({ error: 'Specimen not found' });
+    }
     
     if (!microbial.fasta_sequence) {
+      console.error('❌ No FASTA sequence for specimen:', microbial.code_name);
       return res.status(400).json({ error: 'No FASTA sequence available for this specimen' });
     }
 
     const EMAIL = process.env.EMAIL_USER || '22102959@usc.edu.ph';
     const TOOL = 'biocella-backend';
+
+    console.log('📝 Preparing NCBI BLAST submission for:', microbial.code_name);
+    console.log('📊 FASTA length:', microbial.fasta_sequence.length);
 
     // Submit to NCBI BLAST
     const params = new URLSearchParams({
@@ -255,26 +264,56 @@ exports.submitBlast = async (req, res) => {
       HITLIST_SIZE: 10 // Get top 10 results
     });
 
-    const submitRes = await axios.post('https://blast.ncbi.nlm.nih.gov/Blast.cgi', params, {
-      timeout: 30000 // 30 second timeout for submission
-    });
+    let submitRes;
+    try {
+      console.log('🌐 Contacting NCBI BLAST servers...');
+      submitRes = await axios.post('https://blast.ncbi.nlm.nih.gov/Blast.cgi', params, {
+        timeout: 30000 // 30 second timeout for submission
+      });
+      console.log('✅ NCBI response received');
+    } catch (axiosErr) {
+      console.error('❌ NCBI BLAST connection error:', {
+        message: axiosErr.message,
+        code: axiosErr.code,
+        status: axiosErr.response?.status
+      });
+      return res.status(503).json({ 
+        error: 'Unable to reach NCBI BLAST servers', 
+        details: 'Please try again later. NCBI BLAST services may be temporarily unavailable.'
+      });
+    }
+
     const ridMatch = submitRes.data.match(/RID = ([A-Z0-9]+)/);
     const rid = ridMatch ? ridMatch[1] : null;
 
     if (!rid) {
-      return res.status(500).json({ error: 'Failed to get RID from BLAST' });
+      console.error('❌ Failed to extract RID from BLAST response');
+      console.error('Response sample:', submitRes.data.substring(0, 500));
+      return res.status(500).json({ error: 'Failed to get RID from BLAST. Invalid response format.' });
     }
+
+    console.log('✅ RID received:', rid);
 
     // Save RID to specimen for tracking
     // NCBI BLAST RIDs expire after 24-36 hours, we'll use 36 hours to be safe
     const expirationTime = new Date();
     expirationTime.setHours(expirationTime.getHours() + 36);
     
-    microbial.blast_rid = rid;
-    microbial.blast_rid_expired_at = expirationTime;
-    await microbial.save();
+    try {
+      microbial.blast_rid = rid;
+      microbial.blast_rid_expired_at = expirationTime;
+      await microbial.save();
+      console.log('✅ RID saved to database for specimen:', microbial.code_name);
+    } catch (saveErr) {
+      console.error('❌ Failed to save RID to database:', saveErr.message);
+      return res.status(500).json({ 
+        error: 'BLAST submitted to NCBI but failed to save tracking information',
+        rid: rid,
+        details: 'RID: ' + rid + ' (save to database failed)'
+      });
+    }
 
-    console.log('BLAST submitted for specimen:', microbial.code_name, 'RID:', rid, 'Expires at:', expirationTime);
+    console.log('✅ BLAST submitted for specimen:', microbial.code_name, 'RID:', rid, 'Expires at:', expirationTime);
     
     res.json({ 
       message: 'BLAST submitted successfully',
@@ -285,26 +324,43 @@ exports.submitBlast = async (req, res) => {
     });
 
   } catch (err) {
-    console.error('BLAST submission error:', err);
-    res.status(500).json({ error: 'BLAST submission failed', details: err.message });
+    console.error('❌ BLAST submission error:', {
+      message: err.message,
+      stack: err.stack,
+      code: err.code
+    });
+    res.status(500).json({ 
+      error: 'BLAST submission failed',
+      details: err.message,
+      code: err.code
+    });
   }
 };
 
 // Get BLAST results for a specimen
 exports.getBlastResults = async (req, res) => {
   try {
+    console.log('🔍 BLAST results check for specimen:', req.params.id);
+    
     const microbial = await MicrobialInfo.findById(req.params.id);
-    if (!microbial) return res.status(404).json({ error: 'Specimen not found' });
+    if (!microbial) {
+      console.error('❌ Specimen not found:', req.params.id);
+      return res.status(404).json({ error: 'Specimen not found' });
+    }
     
     if (!microbial.blast_rid) {
+      console.warn('⚠️ No BLAST submission found for specimen:', microbial.code_name);
       return res.status(400).json({ error: 'No BLAST submission found for this specimen' });
     }
+
+    console.log('📋 Checking RID:', microbial.blast_rid, 'for specimen:', microbial.code_name);
 
     const EMAIL = process.env.EMAIL_USER || '22102959@usc.edu.ph';
     const TOOL = 'biocella-backend';
 
     let statusCheck;
     try {
+      console.log('🌐 Contacting NCBI for status...');
       // Check BLAST status with timeout
       statusCheck = await axios.get('https://blast.ncbi.nlm.nih.gov/Blast.cgi', {
         params: {
@@ -317,9 +373,13 @@ exports.getBlastResults = async (req, res) => {
         timeout: 20000 // 20 second timeout
       });
       
-      console.log('BLAST status response received for RID:', microbial.blast_rid);
+      console.log('✅ BLAST status response received for RID:', microbial.blast_rid);
     } catch (axiosErr) {
-      console.error('NCBI status check timeout or error:', axiosErr.message);
+      console.error('❌ NCBI status check timeout or error:', {
+        message: axiosErr.message,
+        code: axiosErr.code,
+        status: axiosErr.response?.status
+      });
       return res.json({ 
         status: 'pending', 
         message: 'NCBI server is slow or unreachable. Please try again in a moment.' 
@@ -327,18 +387,18 @@ exports.getBlastResults = async (req, res) => {
     }
 
     const status = statusCheck.data.match(/Status=([A-Z]+)/);
-    console.log('Parsed BLAST status:', status ? status[1] : 'NO_STATUS_FOUND');
+    console.log('📊 Parsed BLAST status:', status ? status[1] : 'NO_STATUS_FOUND');
     
     // Check if RID is expired or not found (NCBI returns UNKNOWN or empty status)
     if (!status) {
-      console.log('No status found in NCBI response - RID likely expired:', microbial.blast_rid);
+      console.log('⚠️ No status found in NCBI response - RID likely expired:', microbial.blast_rid);
       // Check for common expired/not found messages
       if (statusCheck.data.includes('expired') || statusCheck.data.includes('not found') || statusCheck.data.includes('UNKNOWN')) {
         // Mark as expired now if not already set
         if (!microbial.blast_rid_expired_at || microbial.blast_rid_expired_at > new Date()) {
           microbial.blast_rid_expired_at = new Date();
           await microbial.save();
-          console.log('Updated expired_at timestamp for expired RID:', microbial.blast_rid);
+          console.log('📝 Updated expired_at timestamp for expired RID:', microbial.blast_rid);
         }
         return res.json({ 
           status: 'expired', 
@@ -353,7 +413,7 @@ exports.getBlastResults = async (req, res) => {
       if (!microbial.blast_rid_expired_at || microbial.blast_rid_expired_at > new Date()) {
         microbial.blast_rid_expired_at = new Date();
         await microbial.save();
-        console.log('Updated expired_at timestamp for UNKNOWN RID:', microbial.blast_rid);
+        console.log('📝 Updated expired_at timestamp for UNKNOWN RID:', microbial.blast_rid);
       }
       return res.json({ 
         status: 'expired', 
@@ -532,8 +592,18 @@ exports.getBlastResults = async (req, res) => {
     res.json({ status: 'unknown', message: 'Unable to determine BLAST status' });
 
   } catch (err) {
-    console.error('BLAST results error:', err);
-    res.status(500).json({ error: 'Failed to retrieve BLAST results', details: err.message });
+    console.error('❌ BLAST results error:', {
+      message: err.message,
+      stack: err.stack,
+      code: err.code,
+      specimen: req.params.id
+    });
+    res.status(500).json({ 
+      error: 'Failed to retrieve BLAST results', 
+      details: err.message,
+      code: err.code,
+      timestamp: new Date().toISOString()
+    });
   }
 };
 
