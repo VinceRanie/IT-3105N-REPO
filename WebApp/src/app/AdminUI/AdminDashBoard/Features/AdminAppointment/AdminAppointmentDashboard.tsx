@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { format } from 'date-fns';
 
 interface Appointment {
@@ -36,7 +36,10 @@ export default function AdminAppointmentDashboard() {
   const [modalType, setModalType] = useState<'approve' | 'deny' | 'scan'>('approve');
   const [remarks, setRemarks] = useState('');
   const [qrInput, setQrInput] = useState('');
-
+  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const tabs: { key: TabType; label: string; color: string }[] = [
     { key: 'pending', label: 'Pending', color: 'yellow' },
     { key: 'ongoing', label: 'Ongoing', color: 'blue' },
@@ -270,10 +273,43 @@ export default function AdminAppointmentDashboard() {
   };
 
   const closeModal = () => {
+    // Stop camera when closing modal
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+      setCameraStream(null);
+    }
+    setCameraActive(false);
     setShowModal(false);
     setSelectedAppointment(null);
     setRemarks('');
     setQrInput('');
+  };
+
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+      });
+      setCameraStream(stream);
+      setCameraActive(true);
+
+      // Set video stream to video element
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+      }
+    } catch (err: any) {
+      alert(`Unable to access camera: ${err.message}`);
+      console.error('Camera access error:', err);
+    }
+  };
+
+  const stopCamera = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+      setCameraStream(null);
+    }
+    setCameraActive(false);
   };
 
   const getStatusBadge = (status: string) => {
@@ -296,20 +332,17 @@ export default function AdminAppointmentDashboard() {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-800">Appointment Management</h1>
-        <div className="flex gap-3">
-          <button
-            onClick={() => refreshAppointmentCounts()}
-            className="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition-colors text-sm"
-          >
-            🔄 Refresh
-          </button>
-          <button
-            onClick={() => setShowModal(true)}
-            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
-          >
-            Scan QR Code
-          </button>
-        </div>
+        <button
+          onClick={() => {
+            setCameraActive(false)
+            setShowModal(true)
+            setModalType('scan')
+            setQrInput('')
+          }}
+          className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors font-semibold"
+        >
+          📷 Scan QR Code
+        </button>
       </div>
 
       {/* Tabs */}
@@ -478,24 +511,66 @@ export default function AdminAppointmentDashboard() {
             </h2>
 
             {modalType === 'scan' ? (
-              <div>
+              <div className="space-y-4">
+                {!cameraActive ? (
+                  <div className="space-y-3">
+                    <button
+                      onClick={startCamera}
+                      className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white px-4 py-3 rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all font-semibold flex items-center justify-center gap-2"
+                    >
+                      📷 Start Camera Scanner
+                    </button>
+                    <div className="relative">
+                      <div className="absolute inset-0 flex items-center">
+                        <div className="w-full border-t border-gray-300"></div>
+                      </div>
+                      <div className="relative flex justify-center text-sm">
+                        <span className="px-2 bg-white text-gray-500">Or enter manually</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="text-sm text-amber-700 bg-amber-50 p-3 rounded-lg flex items-start gap-2">
+                      <span>👁️</span>
+                      <span>Point camera at QR code. It will scan automatically.</span>
+                    </div>
+                    <video
+                      ref={videoRef}
+                      className="w-full rounded-lg bg-black"
+                      playsInline
+                      style={{ maxHeight: '300px', objectFit: 'cover' }}
+                    />
+                    <canvas
+                      ref={canvasRef}
+                      style={{ display: 'none' }}
+                    />
+                    <button
+                      onClick={stopCamera}
+                      className="w-full bg-gray-400 text-white px-4 py-2 rounded-lg hover:bg-gray-500 transition-colors font-semibold"
+                    >
+                      ✕ Stop Camera
+                    </button>
+                  </div>
+                )}
                 <input
                   type="text"
                   value={qrInput}
                   onChange={(e) => setQrInput(e.target.value)}
-                  placeholder="Enter QR code or scan"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-md mb-4"
+                  placeholder="Paste QR code content or result here"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
                 />
                 <div className="flex gap-2">
                   <button
                     onClick={handleScanQR}
-                    className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+                    disabled={!qrInput || cameraActive}
+                    className="flex-1 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-semibold"
                   >
-                    Verify
+                    ✓ Verify
                   </button>
                   <button
                     onClick={closeModal}
-                    className="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400"
+                    className="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400 transition-colors font-semibold"
                   >
                     Cancel
                   </button>
