@@ -11,7 +11,9 @@ export async function GET(
     const validStatuses = ['pending', 'approved', 'denied', 'ongoing', 'visited'];
     
     console.log(`[API Route] Fetching appointments with status: ${status}`);
-    console.log(`[API Route] API_BASE_URL: ${API_BASE_URL}`);
+    console.log(`[API Route] Environment: ${process.env.NODE_ENV}`);
+    console.log(`[API Route] API_BASE_URL from env: ${process.env.NEXT_PUBLIC_API_URL || 'NOT SET'}`);
+    console.log(`[API Route] Using API_BASE_URL: ${API_BASE_URL}`);
     
     // Validate status
     if (!validStatuses.includes(status.toLowerCase())) {
@@ -22,16 +24,40 @@ export async function GET(
       );
     }
     
-    console.log(`[API Route] Full URL: ${API_BASE_URL}/appointments/status/${status}`);
+    const fullUrl = `${API_BASE_URL}/appointments/status/${status}`;
+    console.log(`[API Route] Attempting fetch to: ${fullUrl}`);
     
-    const response = await fetch(`${API_BASE_URL}/appointments/status/${status}`, {
-      cache: 'no-store',
-      headers: {
-        'Content-Type': 'application/json',
-      }
-    });
-    
-    console.log(`[API Route] Response status: ${response.status}`);
+    let response;
+    try {
+      response = await fetch(fullUrl, {
+        cache: 'no-store',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      console.log(`[API Route] Response status: ${response.status}`);
+    } catch (fetchError: any) {
+      console.error(`[API Route] Fetch failed with error:`, {
+        message: fetchError.message,
+        code: fetchError.code,
+        errorno: fetchError.errorno,
+        syscall: fetchError.syscall,
+        hostname: fetchError.hostname,
+        url: fullUrl,
+        backend_url: API_BASE_URL
+      });
+      
+      return NextResponse.json(
+        { 
+          error: 'Failed to reach backend API server',
+          backendUrl: API_BASE_URL,
+          fetchError: fetchError.message,
+          details: 'Please ensure the backend API server is running and accessible',
+          timestamp: new Date().toISOString()
+        },
+        { status: 503 }
+      );
+    }
     
     if (!response.ok) {
       const errorText = await response.text();
