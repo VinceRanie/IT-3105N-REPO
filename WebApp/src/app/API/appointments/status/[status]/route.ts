@@ -28,8 +28,7 @@ export async function GET(
       cache: 'no-store',
       headers: {
         'Content-Type': 'application/json',
-      },
-      timeout: 10000
+      }
     });
     
     console.log(`[API Route] Response status: ${response.status}`);
