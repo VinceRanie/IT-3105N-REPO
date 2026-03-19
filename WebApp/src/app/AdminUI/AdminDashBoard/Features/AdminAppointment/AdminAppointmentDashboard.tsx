@@ -48,6 +48,65 @@ export default function AdminAppointmentDashboard() {
     { key: 'denied', label: 'Denied', color: 'red' },
   ];
 
+  // Handle camera stream when it becomes available
+  useEffect(() => {
+    if (!cameraStream || !cameraActive) {
+      return;
+    }
+
+    console.log('🎬 useEffect: cameraStream available and cameraActive is true');
+    console.log('📹 videoRef.current:', videoRef.current);
+
+    if (!videoRef.current) {
+      console.error('❌ Video element still not available in effect');
+      return;
+    }
+
+    console.log('🎥 Attaching stream to video element...');
+    videoRef.current.srcObject = cameraStream;
+
+    // Wait for video to be ready
+    const checkVideoReady = setInterval(() => {
+      if (videoRef.current && videoRef.current.readyState >= 2) {
+        clearInterval(checkVideoReady);
+        console.log('✅ Video ready state:', videoRef.current.readyState);
+
+        const playPromise = videoRef.current!.play();
+
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              console.log('▶️ Video playing successfully');
+              setTimeout(() => {
+                console.log('🔍 Starting QR code scanner...');
+                scanQRCode();
+              }, 300);
+            })
+            .catch(err => {
+              console.error('❌ Play error:', err);
+              alert('Error playing video: ' + err.message);
+              stopCamera();
+            });
+        }
+      }
+    }, 100);
+
+    const timeout = setTimeout(() => {
+      clearInterval(checkVideoReady);
+      if (!videoRef.current || videoRef.current.readyState < 2) {
+        console.error('❌ Video did not reach ready state');
+        alert('Camera stream timeout');
+        stopCamera();
+      }
+    }, 5000);
+
+    return () => {
+      clearInterval(checkVideoReady);
+      clearTimeout(timeout);
+    };
+  }, [cameraStream, cameraActive]);
+
+  // Fetch appointments on initial load
   useEffect(() => {
     // On initial load, fetch all appointments to get status counts
     fetchAllAppointmentsAndCount();
@@ -300,74 +359,10 @@ export default function AdminAppointmentDashboard() {
       
       console.log('✅ Camera stream obtained:', stream.getTracks());
       
-      // Store the stream in state
+      // Set both state at once to trigger re-render and then the effect
       setCameraStream(stream);
-
-      // Wait a bit for the DOM to update
-      console.log('⏳ Waiting for DOM to update...');
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      // Now set the video source
-      console.log('🔍 Checking videoRef:', videoRef);
-      console.log('🔍 videoRef.current:', videoRef.current);
-      
-      if (!videoRef.current) {
-        console.error('❌ videoRef.current is null! Waiting and retrying...');
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        if (!videoRef.current) {
-          console.error('❌ videoRef.current still null after retry!');
-          alert('Video element not loaded. Please try again.');
-          stream.getTracks().forEach(track => track.stop());
-          return;
-        }
-      }
-
-      console.log('🎥 Setting stream to video element...');
-      videoRef.current.srcObject = stream;
-      console.log('📡 Stream set to video element');
-      
-      // Use a more reliable method to wait for video to be ready
-      const checkVideoReady = setInterval(() => {
-        console.log('📊 Checking video ready state:', videoRef.current?.readyState);
-        
-        if (videoRef.current && videoRef.current.readyState >= 2) { // HAVE_CURRENT_DATA = 2
-          clearInterval(checkVideoReady);
-          console.log('✅ Video ready state:', videoRef.current.readyState);
-          
-          // Now attempt to play
-          const playPromise = videoRef.current!.play();
-          
-          if (playPromise !== undefined) {
-            playPromise
-              .then(() => {
-                console.log('▶️ Video playing successfully');
-                setCameraActive(true);
-                
-                // Give video a moment to stabilize
-                setTimeout(() => {
-                  console.log('🔍 Starting QR code scanner...');
-                  scanQRCode();
-                }, 300);
-              })
-              .catch(err => {
-                console.error('❌ Play error:', err);
-                alert('Error playing video: ' + err.message);
-                stopCamera();
-              });
-          }
-        }
-      }, 100);
-      
-      // Timeout after 5 seconds
-      setTimeout(() => {
-        clearInterval(checkVideoReady);
-        if (!videoRef.current || videoRef.current.readyState < 2) {
-          console.error('❌ Video did not reach ready state within 5 seconds');
-          alert('Camera stream loading timeout');
-          stopCamera();
-        }
-      }, 5000);
+      setCameraActive(true);
+      console.log('🚀 Camera state set, waiting for useEffect to attach stream...');
     } catch (err: any) {
       const errorMsg = err.message || JSON.stringify(err);
       console.error('❌ Camera access error:', err);
