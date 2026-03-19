@@ -37,6 +37,7 @@ export default function AdminAppointmentDashboard() {
   const [modalType, setModalType] = useState<'approve' | 'deny' | 'scan'>('approve');
   const [remarks, setRemarks] = useState('');
   const [qrInput, setQrInput] = useState('');
+  const [lastVerifiedQR, setLastVerifiedQR] = useState('');
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -111,6 +112,32 @@ export default function AdminAppointmentDashboard() {
     // On initial load, fetch all appointments to get status counts
     fetchAllAppointmentsAndCount();
   }, []);
+
+  // Auto-verify when a valid appointment QR URL is detected
+  useEffect(() => {
+    if (modalType !== 'scan' || !cameraActive || !qrInput || qrInput === lastVerifiedQR) {
+      return;
+    }
+
+    // Check if it's a valid appointment verification URL
+    if (qrInput.includes('/verify-appointment?')) {
+      try {
+        const url = new URL(qrInput);
+        const token = url.searchParams.get('token');
+        const appointmentId = url.searchParams.get('id');
+
+        if (token && appointmentId) {
+          console.log('🎯 Valid appointment QR detected, auto-verifying...');
+          setLastVerifiedQR(qrInput);
+          
+          // Auto-verify
+          autoVerifyQR(token, appointmentId);
+        }
+      } catch (e) {
+        console.log('Not a valid URL');
+      }
+    }
+  }, [qrInput, modalType, cameraActive]);
 
   useEffect(() => {
     // When tab changes, update the displayed appointments for that tab
@@ -304,10 +331,33 @@ export default function AdminAppointmentDashboard() {
 
   const handleScanQR = async () => {
     try {
+      let token = qrInput;
+      let appointmentId = '';
+
+      // If the QR code contains a URL, extract token and id
+      if (qrInput.includes('?')) {
+        try {
+          const url = new URL(qrInput);
+          token = url.searchParams.get('token') || qrInput;
+          appointmentId = url.searchParams.get('id') || '';
+          console.log('📋 Extracted from URL - token:', token, 'appointmentId:', appointmentId);
+        } catch (e) {
+          console.log('ℹ️ QR input is not a URL, using as-is');
+        }
+      }
+
+      if (!token) {
+        alert('Invalid QR code - no token found');
+        return;
+      }
+
       const response = await fetch('/API/appointments/verify-qr', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ qrCode: qrInput }),
+        body: JSON.stringify({ 
+          qrCode: token,
+          appointmentId: appointmentId || undefined
+        }),
       });
 
       const data = await response.json();
@@ -322,6 +372,34 @@ export default function AdminAppointmentDashboard() {
     } catch (error) {
       console.error('Error scanning QR:', error);
       alert('Failed to verify QR code');
+    }
+  };
+
+  const autoVerifyQR = async (token: string, appointmentId: string) => {
+    try {
+      const response = await fetch('/API/appointments/verify-qr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          qrCode: token,
+          appointmentId: appointmentId
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        console.log('✅ Auto-verified! Student:', data.appointment.student_id);
+        alert(`✅ Appointment verified! Student: ${data.appointment.student_id}`);
+        stopCamera();
+        refreshAppointmentCounts();
+        closeModal();
+      } else {
+        console.warn('⚠️ Verification failed:', data.message);
+        alert('❌ ' + (data.message || 'QR verification failed'));
+      }
+    } catch (error) {
+      console.error('❌ Auto-verify error:', error);
     }
   };
 
@@ -343,6 +421,7 @@ export default function AdminAppointmentDashboard() {
     setSelectedAppointment(null);
     setRemarks('');
     setQrInput('');
+    setLastVerifiedQR('');
   };
 
   const startCamera = async () => {
