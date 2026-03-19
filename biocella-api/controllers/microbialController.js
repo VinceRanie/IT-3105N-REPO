@@ -691,19 +691,56 @@ function detectSequenceType(sequence) {
   
   if (seqContent.length === 0) return null;
   
-  // Count different character types
+  // Count character types
   const proteinOnly = /[EFIPQZ]/gi; // Amino acids only in proteins
   const nucleotidesOnly = /[U]/gi;  // U is only in RNA
   
   const proteinCount = (seqContent.match(proteinOnly) || []).length;
+  const nucleotidesCount = (seqContent.match(/[ATGCN]/gi) || []).length;
+  const totalValidChars = (seqContent.match(/[ATGCNRYSWKMBDHVEFIPQZ\-\*U]/gi) || []).length;
   
   // If we find protein-only amino acids, it's a protein sequence
-  if (proteinCount > seqContent.length * 0.01) { // More than 1% protein-specific
+  if (proteinCount > totalValidChars * 0.05) { // More than 5% protein-specific
     return 'protein';
   }
   
-  // Otherwise assume nucleotide (default for BLAST)
+  // Otherwise assume nucleotide
   return 'nucleotide';
+}
+
+// Helper function to select appropriate BLAST program based on sequence types and options
+function selectBlastProgram(queryType, options = {}) {
+  const searchProteinDb = options.searchProteinDb !== false; // Default true
+  const searchNucleotideDb = options.searchNucleotideDb !== false; // Default true
+  
+  // BLAST programs priority (by clarity and speed):
+  // Protein query + Protein DB = BLASTP
+  // Nucleotide query + Nucleotide DB = BLASTN
+  // Nucleotide query + Protein DB = BLASTX (translate nucleotide to protein)
+  // Protein query + Nucleotide DB = TBLASTN (search against translated nucleotide)
+  // Nucleotide query + Nucleotide DB (translated) = TBLASTX (both translated)
+  
+  if (queryType === 'protein') {
+    if (searchProteinDb) {
+      return { program: 'blastp', database: 'nr', description: 'Protein query vs protein database' };
+    } else if (searchNucleotideDb) {
+      return { program: 'tblastn', database: 'nt', description: 'Protein query vs translated nucleotide database' };
+    }
+  } else {
+    // nucleotide query
+    if (searchProteinDb && searchNucleotideDb) {
+      return { program: 'blastx', database: 'nr', description: 'Translated nucleotide query vs protein database' };
+    } else if (searchProteinDb) {
+      return { program: 'blastx', database: 'nr', description: 'Translated nucleotide query vs protein database' };
+    } else if (searchNucleotideDb) {
+      return { program: 'blastn', database: 'nt', description: 'Nucleotide query vs nucleotide database' };
+    }
+  }
+  
+  // Fallback
+  return { program: queryType === 'protein' ? 'blastp' : 'blastn', 
+           database: queryType === 'protein' ? 'nr' : 'nt',
+           description: queryType === 'protein' ? 'Protein BLAST' : 'Nucleotide BLAST' };
 }
 
 // Helper function to validate and clean FASTA sequences for BLAST compatibility
@@ -715,7 +752,9 @@ function validateAndCleanFasta(fastaSequence) {
     isValid: false,
     cleaned: fastaSequence,
     seqType: null,
-    blastProgram: 'blastn',
+    blastProgram: null,
+    blastDatabase: null,
+    blastDescription: null,
     warnings: [],
     errors: [],
     changes: []
@@ -731,9 +770,17 @@ function validateAndCleanFasta(fastaSequence) {
   // Detect sequence type BEFORE cleaning
   const detectedType = detectSequenceType(cleaned);
   result.seqType = detectedType;
-  result.blastProgram = detectedType === 'protein' ? 'blastp' : 'blastn';
   
-  console.log(`🧬 Detected sequence type: ${result.seqType.toUpperCase()}, using ${result.blastProgram.toUpperCase()}`);
+  // Select appropriate BLAST program
+  const blastConfig = selectBlastProgram(detectedType);
+  result.blastProgram = blastConfig.program;
+  result.blastDatabase = blastConfig.database;
+  result.blastDescription = blastConfig.description;
+  
+  console.log(`🧬 Detected sequence type: ${result.seqType.toUpperCase()}`);
+  console.log(`🔬 Selected BLAST program: ${result.blastProgram.toUpperCase()}`);
+  console.log(`📊 Database: ${result.blastDatabase}`);
+  console.log(`📝 ${result.blastDescription}`);
   
   // Check for FASTA header
   if (!cleaned.includes('>')) {
@@ -778,18 +825,23 @@ function validateAndCleanFasta(fastaSequence) {
         inSequence = true;
       }
       
-      // Clean sequence based on type
+      // Clean sequence based on type and allow mixed characters
       let cleanedSeq = line.toUpperCase();
-      let validPattern;
       
-      if (result.seqType === 'protein') {
+      // Try to detect if this line is protein or nucleotide
+      const proteinChars = (cleanedSeq.match(/[EFIPQZ]/gi) || []).length;
+      const isProteinLine = proteinChars > cleanedSeq.length * 0.05;
+      
+      let validPattern;
+      if (result.seqType === 'protein' || isProteinLine) {
         // Protein: Allow standard amino acids
-        validPattern = /[ACDEFGHIKLMNPQRSTVWY\*\-]/gi;
+        validPattern = /[ACDEFGHIKLMNPQRSTVWYX\*\-]/gi;
       } else {
         // Nucleotide: Allow IUPAC codes
-        validPattern = /[ATGCNRYSWKMBDHV\-U]/gi;
+        validPattern = /[ATGCNRYSWKMBDHVU\-]/gi;
       }
       
+      // Extract valid characters
       const matches = cleanedSeq.match(validPattern) || [];
       const invalidChars = cleanedSeq.match(new RegExp(`[^${validPattern.source}]`, 'gi')) || [];
       
@@ -832,9 +884,9 @@ function validateAndCleanFasta(fastaSequence) {
   console.log('✅ FASTA validation complete:');
   console.log(`  - Sequence type: ${result.seqType.toUpperCase()}`);
   console.log(`  - BLAST program: ${result.blastProgram.toUpperCase()}`);
+  console.log(`  - Database: ${result.blastDatabase.toUpperCase()} (${result.blastDatabase === 'nr' ? 'Non-redundant protein' : 'Nucleotide collection'})`);
   console.log('  - Original length:', fastaSequence.length);
   console.log('  - Cleaned sequence length:', sequenceOnly.length);
-  console.log('  - Valid characters:', sequenceOnly.length);
   console.log('  - Warnings:', result.warnings.length);
   console.log('  - Errors:', result.errors.length);
   console.log('  - Changes made:', result.changes.length);
