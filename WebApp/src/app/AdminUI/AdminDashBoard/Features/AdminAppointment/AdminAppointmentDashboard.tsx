@@ -303,51 +303,71 @@ export default function AdminAppointmentDashboard() {
       // Store the stream in state
       setCameraStream(stream);
 
+      // Wait a bit for the DOM to update
+      console.log('⏳ Waiting for DOM to update...');
+      await new Promise(resolve => setTimeout(resolve, 100));
+
       // Now set the video source
-      if (videoRef.current) {
-        console.log('🎥 Setting stream to video element...');
-        videoRef.current.srcObject = stream;
+      console.log('🔍 Checking videoRef:', videoRef);
+      console.log('🔍 videoRef.current:', videoRef.current);
+      
+      if (!videoRef.current) {
+        console.error('❌ videoRef.current is null! Waiting and retrying...');
+        await new Promise(resolve => setTimeout(resolve, 500));
         
-        // Use a more reliable method to wait for video to be ready
-        const checkVideoReady = setInterval(() => {
-          if (videoRef.current && videoRef.current.readyState >= 2) { // HAVE_CURRENT_DATA = 2
-            clearInterval(checkVideoReady);
-            console.log('✅ Video ready state:', videoRef.current.readyState);
-            
-            // Now attempt to play
-            const playPromise = videoRef.current!.play();
-            
-            if (playPromise !== undefined) {
-              playPromise
-                .then(() => {
-                  console.log('▶️ Video playing successfully');
-                  setCameraActive(true);
-                  
-                  // Give video a moment to stabilize
-                  setTimeout(() => {
-                    console.log('🔍 Starting QR code scanner...');
-                    scanQRCode();
-                  }, 300);
-                })
-                .catch(err => {
-                  console.error('❌ Play error:', err);
-                  alert('Error playing video: ' + err.message);
-                  stopCamera();
-                });
-            }
-          }
-        }, 100);
-        
-        // Timeout after 5 seconds
-        setTimeout(() => {
-          clearInterval(checkVideoReady);
-          if (!videoRef.current || videoRef.current.readyState < 2) {
-            console.error('❌ Video did not reach ready state within 5 seconds');
-            alert('Camera stream loading timeout');
-            stopCamera();
-          }
-        }, 5000);
+        if (!videoRef.current) {
+          console.error('❌ videoRef.current still null after retry!');
+          alert('Video element not loaded. Please try again.');
+          stream.getTracks().forEach(track => track.stop());
+          return;
+        }
       }
+
+      console.log('🎥 Setting stream to video element...');
+      videoRef.current.srcObject = stream;
+      console.log('📡 Stream set to video element');
+      
+      // Use a more reliable method to wait for video to be ready
+      const checkVideoReady = setInterval(() => {
+        console.log('📊 Checking video ready state:', videoRef.current?.readyState);
+        
+        if (videoRef.current && videoRef.current.readyState >= 2) { // HAVE_CURRENT_DATA = 2
+          clearInterval(checkVideoReady);
+          console.log('✅ Video ready state:', videoRef.current.readyState);
+          
+          // Now attempt to play
+          const playPromise = videoRef.current!.play();
+          
+          if (playPromise !== undefined) {
+            playPromise
+              .then(() => {
+                console.log('▶️ Video playing successfully');
+                setCameraActive(true);
+                
+                // Give video a moment to stabilize
+                setTimeout(() => {
+                  console.log('🔍 Starting QR code scanner...');
+                  scanQRCode();
+                }, 300);
+              })
+              .catch(err => {
+                console.error('❌ Play error:', err);
+                alert('Error playing video: ' + err.message);
+                stopCamera();
+              });
+          }
+        }
+      }, 100);
+      
+      // Timeout after 5 seconds
+      setTimeout(() => {
+        clearInterval(checkVideoReady);
+        if (!videoRef.current || videoRef.current.readyState < 2) {
+          console.error('❌ Video did not reach ready state within 5 seconds');
+          alert('Camera stream loading timeout');
+          stopCamera();
+        }
+      }, 5000);
     } catch (err: any) {
       const errorMsg = err.message || JSON.stringify(err);
       console.error('❌ Camera access error:', err);
