@@ -400,37 +400,37 @@ exports.getBlastResults = async (req, res) => {
     let statusCheck;
     try {
       console.log('🌐 Contacting NCBI for status...');
-    const statusCheck = await axios.get('https://blast.ncbi.nlm.nih.gov/Blast.cgi', {
-      params: {
-        CMD: 'Get',
-        FORMAT_OBJECT: 'SearchInfo',
-        RID: microbial.blast_rid,
-        EMAIL,
-        TOOL
-      },
-      timeout: 20000 // 20 second timeout
-    });
-    
-    console.log('✅ BLAST status response received for RID:', microbial.blast_rid);
-    console.log('📊 Response length:', statusCheck.data.length);
-  } catch (axiosErr) {
-    console.error('❌ NCBI status check timeout or error:', {
-      message: axiosErr.message,
-      code: axiosErr.code,
-      status: axiosErr.response?.status
-    });
-    return res.json({ 
-      status: 'pending', 
-      message: 'NCBI server is slow or unreachable. Please try again in a moment.' 
-    });
-  }
+      statusCheck = await axios.get('https://blast.ncbi.nlm.nih.gov/Blast.cgi', {
+        params: {
+          CMD: 'Get',
+          FORMAT_OBJECT: 'SearchInfo',
+          RID: microbial.blast_rid,
+          EMAIL,
+          TOOL
+        },
+        timeout: 20000 // 20 second timeout
+      });
+      
+      console.log('✅ BLAST status response received for RID:', microbial.blast_rid);
+      console.log('📊 Response length:', statusCheck.data.length);
+    } catch (axiosErr) {
+      console.error('❌ NCBI status check timeout or error:', {
+        message: axiosErr.message,
+        code: axiosErr.code,
+        status: axiosErr.response?.status
+      });
+      return res.json({ 
+        status: 'pending', 
+        message: 'NCBI server is slow or unreachable. Please try again in a moment.' 
+      });
+    }
 
-  // Try multiple patterns to extract status
-  let status = statusCheck.data.match(/Status\s*=\s*([A-Z]+)/);
-  if (!status) status = statusCheck.data.match(/Status=([A-Z]+)/);
-  if (!status) status = statusCheck.data.match(/"status":"?([A-Z]+)"?/i);
-  
-  console.log('📊 Parsed BLAST status:', status ? status[1] : 'NO_STATUS_FOUND');
+    // Try multiple patterns to extract status
+    let status = statusCheck.data.match(/Status\s*=\s*([A-Z]+)/);
+    if (!status) status = statusCheck.data.match(/Status=([A-Z]+)/);
+    if (!status) status = statusCheck.data.match(/"status":"?([A-Z]+)"?/i);
+    
+    console.log('📊 Parsed BLAST status:', status ? status[1] : 'NO_STATUS_FOUND');
     
     // Check if RID is expired or not found (NCBI returns UNKNOWN or empty status)
     if (!status) {
