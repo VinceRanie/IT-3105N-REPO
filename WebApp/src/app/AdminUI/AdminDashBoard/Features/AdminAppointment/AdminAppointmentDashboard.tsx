@@ -299,33 +299,54 @@ export default function AdminAppointmentDashboard() {
       });
       
       console.log('✅ Camera stream obtained:', stream.getTracks());
+      
+      // Store the stream in state
       setCameraStream(stream);
-      setCameraActive(true);
 
-      // Set video stream to video element
+      // Now set the video source
       if (videoRef.current) {
         console.log('🎥 Setting stream to video element...');
         videoRef.current.srcObject = stream;
         
-        // Wait for the video to be ready before starting scan
-        const playPromise = videoRef.current.play();
+        // Use a more reliable method to wait for video to be ready
+        const checkVideoReady = setInterval(() => {
+          if (videoRef.current && videoRef.current.readyState >= 2) { // HAVE_CURRENT_DATA = 2
+            clearInterval(checkVideoReady);
+            console.log('✅ Video ready state:', videoRef.current.readyState);
+            
+            // Now attempt to play
+            const playPromise = videoRef.current!.play();
+            
+            if (playPromise !== undefined) {
+              playPromise
+                .then(() => {
+                  console.log('▶️ Video playing successfully');
+                  setCameraActive(true);
+                  
+                  // Give video a moment to stabilize
+                  setTimeout(() => {
+                    console.log('🔍 Starting QR code scanner...');
+                    scanQRCode();
+                  }, 300);
+                })
+                .catch(err => {
+                  console.error('❌ Play error:', err);
+                  alert('Error playing video: ' + err.message);
+                  stopCamera();
+                });
+            }
+          }
+        }, 100);
         
-        if (playPromise !== undefined) {
-          playPromise
-            .then(() => {
-              console.log('▶️ Video playing successfully');
-              // Wait a moment for video to stabilize before scanning
-              setTimeout(() => {
-                console.log('🔍 Starting QR code scanner...');
-                scanQRCode();
-              }, 500);
-            })
-            .catch(err => {
-              console.error('❌ Play error:', err);
-              alert('Error playing video stream: ' + err.message);
-              stopCamera();
-            });
-        }
+        // Timeout after 5 seconds
+        setTimeout(() => {
+          clearInterval(checkVideoReady);
+          if (videoRef.current?.readyState < 2) {
+            console.error('❌ Video did not reach ready state within 5 seconds');
+            alert('Camera stream loading timeout');
+            stopCamera();
+          }
+        }, 5000);
       }
     } catch (err: any) {
       const errorMsg = err.message || JSON.stringify(err);
@@ -339,8 +360,13 @@ export default function AdminAppointmentDashboard() {
     const video = videoRef.current;
     const canvas = canvasRef.current;
     
-    if (!video || !canvas) {
-      console.error('❌ Video or canvas ref not available');
+    if (!video) {
+      console.error('❌ Video ref not available');
+      return;
+    }
+
+    if (!canvas) {
+      console.error('❌ Canvas ref not available');
       return;
     }
 
@@ -350,33 +376,43 @@ export default function AdminAppointmentDashboard() {
       return;
     }
 
+    console.log('🎬 Video element state:', {
+      readyState: video.readyState,
+      videoWidth: video.videoWidth,
+      videoHeight: video.videoHeight,
+      paused: video.paused,
+      muted: video.muted
+    });
+
     let lastDetectedCode = '';
     let frameCount = 0;
-    let detectionTimeout: NodeJS.Timeout | null = null;
 
     const scanFrame = () => {
-      // Check if camera is still active
-      if (!cameraActive) {
-        console.log('🛑 Scanning stopped - camera not active');
-        return;
-      }
-
+      // Use a ref-based check instead of state
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      
       if (!video || !canvas) {
-        setTimeout(scanFrame, 100);
+        console.warn('⚠️ Video or canvas lost');
         return;
       }
 
       // Wait for video to have dimensions
       if (video.videoWidth === 0 || video.videoHeight === 0) {
         frameCount++;
-        if (frameCount % 10 === 0) {
-          console.log(`⏳ Waiting for video dimensions... (${frameCount})`);
+        if (frameCount % 20 === 0) {
+          console.log(`⏳ Waiting for video dimensions... (attempt ${frameCount})`);
         }
         setTimeout(scanFrame, 50);
         return;
       }
 
       frameCount++;
+      
+      // Log once per second
+      if (frameCount % 30 === 0) {
+        console.log(`📹 Scanning... frame ${frameCount}, video: ${video.videoWidth}x${video.videoHeight}`);
+      }
 
       try {
         // Set canvas size to match video
@@ -407,17 +443,21 @@ export default function AdminAppointmentDashboard() {
           if (code.data !== lastDetectedCode) {
             lastDetectedCode = code.data;
             setQrInput(code.data);
-            console.log('📝 QR input field updated with:', code.data);
+            console.log('📝 Updated QR input: ' + code.data);
           }
         }
 
         // Continue scanning
         if (cameraActive) {
           requestAnimationFrame(scanFrame);
+        } else {
+          console.log('🛑 Camera no longer active, stopping scan');
         }
       } catch (error) {
         console.error('❌ Scan error:', error);
-        setTimeout(scanFrame, 100);
+        if (cameraActive) {
+          setTimeout(scanFrame, 100);
+        }
       }
     };
 
@@ -670,8 +710,12 @@ export default function AdminAppointmentDashboard() {
                           width: '100%',
                           height: '100%',
                           objectFit: 'cover',
-                          display: 'block'
+                          display: 'block',
+                          backgroundColor: '#000'
                         }}
+                        onPlay={() => console.log('🎬 Video onPlay event fired')}
+                        onLoadedMetadata={() => console.log('📊 Video onLoadedMetadata fired')}
+                        onCanPlay={() => console.log('▶️ Video onCanPlay fired')}
                       />
                     </div>
                     <canvas
