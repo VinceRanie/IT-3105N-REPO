@@ -253,18 +253,37 @@ exports.submitBlast = async (req, res) => {
     console.log('📝 Preparing NCBI BLAST submission for:', microbial.code_name);
     console.log('📊 FASTA length:', microbial.fasta_sequence.length);
     
-    // Validate FASTA sequence
-    if (!microbial.fasta_sequence.includes('>') || microbial.fasta_sequence.length < 20) {
-      console.error('❌ Invalid FASTA sequence format');
-      return res.status(400).json({ error: 'Invalid FASTA sequence format or too short' });
+    // Validate and clean FASTA sequence
+    const fastaValidation = validateAndCleanFasta(microbial.fasta_sequence);
+    
+    if (!fastaValidation.isValid) {
+      console.error('❌ FASTA validation failed:', fastaValidation.errors);
+      return res.status(400).json({ 
+        error: 'Invalid FASTA sequence',
+        details: fastaValidation.errors.join('; '),
+        warnings: fastaValidation.warnings
+      });
     }
+    
+    // Log validation results
+    if (fastaValidation.warnings.length > 0) {
+      console.log('⚠️ FASTA warnings:');
+      fastaValidation.warnings.forEach(w => console.log('  ', w));
+    }
+    
+    if (fastaValidation.changes.length > 0) {
+      console.log('✏️ FASTA changes made:');
+      fastaValidation.changes.forEach(c => console.log('  ', c));
+    }
+    
+    const cleanedFasta = fastaValidation.cleaned;
 
     // Submit to NCBI BLAST using form-url-encoded format
     const params = new URLSearchParams();
     params.append('CMD', 'Put');
     params.append('PROGRAM', 'blastn');
     params.append('DATABASE', 'nt');
-    params.append('QUERY', microbial.fasta_sequence);
+    params.append('QUERY', cleanedFasta);
     params.append('EMAIL', EMAIL);
     params.append('TOOL', TOOL);
     params.append('HITLIST_SIZE', '10');
@@ -359,7 +378,13 @@ exports.submitBlast = async (req, res) => {
       rid,
       status: 'pending',
       estimatedTime: '30-60 seconds',
-      expiresAt: expirationTime
+      expiresAt: expirationTime,
+      fastaValidation: {
+        original_length: microbial.fasta_sequence.length,
+        cleaned_length: cleanedFasta.length,
+        warnings: fastaValidation.warnings,
+        changes: fastaValidation.changes
+      }
     });
 
   } catch (err) {
@@ -649,6 +674,126 @@ exports.getBlastResults = async (req, res) => {
     });
   }
 };
+
+// Helper function to validate and clean FASTA sequences for BLAST compatibility
+function validateAndCleanFasta(fastaSequence) {
+  console.log('🧬 Validating and cleaning FASTA sequence...');
+  console.log('📊 Original length:', fastaSequence.length);
+  
+  const result = {
+    isValid: false,
+    cleaned: fastaSequence,
+    warnings: [],
+    errors: [],
+    changes: []
+  };
+  
+  if (!fastaSequence || typeof fastaSequence !== 'string') {
+    result.errors.push('FASTA sequence is not a string');
+    return result;
+  }
+  
+  let cleaned = fastaSequence.trim();
+  
+  // Check for FASTA header
+  if (!cleaned.includes('>')) {
+    result.errors.push('No FASTA header found (missing >)');
+    result.changes.push('Added auto-generated FASTA header');
+    cleaned = '>sequence\n' + cleaned;
+  }
+  
+  // Split into lines for processing
+  const lines = cleaned.split(/\r?\n/).map(line => line.trim()).filter(line => line.length > 0);
+  
+  if (lines.length === 0) {
+    result.errors.push('FASTA sequence is empty');
+    return result;
+  }
+  
+  // Separate headers from sequence
+  const processedLines = [];
+  let inSequence = false;
+  let sequenceOnly = '';
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    
+    if (line.startsWith('>')) {
+      if (inSequence && sequenceOnly.length === 0) {
+        result.warnings.push(`Header at line ${i + 1} found with no sequence before it`);
+      }
+      
+      // Validate header format
+      if (line.length > 1) {
+        processedLines.push(line);
+        inSequence = true;
+        sequenceOnly = '';
+      } else {
+        result.errors.push(`Invalid header at line ${i + 1}: header is too short`);
+      }
+    } else {
+      // This is a sequence line
+      if (!inSequence) {
+        result.warnings.push(`Sequence data at line ${i + 1} before any header. Treating as sequence.`);
+        inSequence = true;
+      }
+      
+      // Clean sequence: remove spaces, numbers, and invalid characters
+      let cleanedSeq = line.toUpperCase();
+      
+      // For nucleotide sequences (BLASTN)
+      const validNucleotides = /[ATGCNRYSWKMBDHV\-]/gi;
+      const invalidChars = cleanedSeq.match(/[^ATGCNRYSWKMBDHV\-]/gi) || [];
+      
+      if (invalidChars.length > 0) {
+        const uniqueInvalid = [...new Set(invalidChars)];
+        result.warnings.push(`Line ${i + 1}: Removed invalid characters: ${uniqueInvalid.join(', ')}`);
+        cleanedSeq = cleanedSeq.replace(/[^ATGCNRYSWKMBDHV\-]/gi, '');
+      }
+      
+      if (cleanedSeq.length > 0) {
+        // Wrap long lines to 60 characters per line (standard FASTA format)
+        for (let j = 0; j < cleanedSeq.length; j += 60) {
+          processedLines.push(cleanedSeq.substring(j, j + 60));
+        }
+        sequenceOnly += cleanedSeq;
+      }
+    }
+  }
+  
+  // Final validation
+  if (sequenceOnly.length === 0) {
+    result.errors.push('No valid sequence data found after cleaning');
+    return result;
+  }
+  
+  if (sequenceOnly.length < 30) {
+    result.errors.push(`Sequence is too short (${sequenceOnly.length} bp). Minimum 30 bp recommended for BLAST.`);
+    return result;
+  }
+  
+  if (sequenceOnly.length > 5000000) {
+    result.warnings.push(`Sequence is very long (${sequenceOnly.length} bp). BLAST may take longer to process.`);
+  }
+  
+  // Reconstruct cleaned FASTA
+  result.cleaned = processedLines.join('\n');
+  result.isValid = true;
+  
+  console.log('✅ FASTA validation complete:');
+  console.log('  - Original length:', fastaSequence.length);
+  console.log('  - Cleaned sequence length:', sequenceOnly.length);
+  console.log('  - Valid characters:', sequenceOnly.length);
+  console.log('  - Warnings:', result.warnings.length);
+  console.log('  - Errors:', result.errors.length);
+  console.log('  - Changes made:', result.changes.length);
+  
+  if (result.warnings.length > 0) {
+    result.changes.push('Ⓘ Warnings detected - reviewed and handled:', result.warnings.slice(0, 3).join('; '));
+  }
+  
+  return result;
+}
 
 // Helper function to parse BLAST JSON results
 function parseBlastResults(data) {
