@@ -45,10 +45,29 @@ exports.getAll = async (req, res) => {
 exports.getByStatus = async (req, res) => {
   try {
     const { status } = req.params;
+    
+    // Validate status parameter to prevent SQL injection and invalid queries
+    const validStatuses = ['pending', 'approved', 'denied', 'ongoing', 'visited'];
+    if (!validStatuses.includes(status.toLowerCase())) {
+      console.warn(`⚠️ Invalid status requested: ${status}`);
+      return res.status(400).json({ 
+        error: 'Invalid status', 
+        validStatuses: validStatuses 
+      });
+    }
+    
+    console.log(`📋 Fetching appointments with status: ${status}`);
     const appointments = await Appointment.getAppointmentsByStatus(status);
+    console.log(`✅ Found ${appointments.length} appointments with status: ${status}`);
+    
     res.json(appointments);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(`❌ Error fetching appointments by status:`, err);
+    res.status(500).json({ 
+      error: 'Failed to fetch appointments', 
+      message: err.message,
+      timestamp: new Date().toISOString()
+    });
   }
 };
 

@@ -28,6 +28,7 @@ export default function AdminAppointmentDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('pending');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState<'approve' | 'deny' | 'scan'>('approve');
@@ -42,20 +43,47 @@ export default function AdminAppointmentDashboard() {
   ];
 
   useEffect(() => {
-    fetchAppointments();
+    // Reset appointments and error when tab changes to avoid stale data
+    setAppointments([]);
+    setError(null);
+    // Small delay to ensure clean state before fetch
+    const timer = setTimeout(() => {
+      fetchAppointments();
+    }, 50);
+    return () => clearTimeout(timer);
   }, [activeTab]);
 
   const fetchAppointments = async () => {
     setLoading(true);
+    setError(null);
     try {
-      const response = await fetch(`/API/appointments/status/${activeTab}`);
+      console.log(`📋 Fetching appointments with status: ${activeTab}`);
+      const response = await fetch(`/API/appointments/status/${activeTab}`, {
+        // Add cache-busting headers
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
+      
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const error = await response.json();
+        console.error(`❌ Error fetching appointments (${response.status}):`, error);
+        const errorMessage = error.error || `HTTP error! status: ${response.status}`;
+        setError(errorMessage);
+        setAppointments([]);
+      } else {
+        const data = await response.json();
+        console.log(`✅ Fetched ${data.length || 0} appointments with status: ${activeTab}`);
+        
+        // Ensure we're setting data for the current tab (prevents race conditions)
+        setAppointments(Array.isArray(data) ? data : []);
+        setError(null);
       }
-      const data = await response.json();
-      setAppointments(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error('Error fetching appointments:', error);
+    } catch (error: any) {
+      const errorMessage = `Failed to fetch appointments: ${error.message}`;
+      console.error(errorMessage);
+      setError(errorMessage);
       setAppointments([]);
     } finally {
       setLoading(false);
@@ -192,6 +220,28 @@ export default function AdminAppointmentDashboard() {
           </button>
         ))}
       </div>
+
+      {/* Error Alert */}
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <div className="flex items-start gap-3">
+            <div className="text-red-600 font-semibold">ERROR:</div>
+            <div className="text-red-800 flex-1">{error}</div>
+            <button
+              onClick={() => setError(null)}
+              className="text-red-600 hover:text-red-800 font-semibold"
+            >
+              ✕
+            </button>
+          </div>
+          <button
+            onClick={() => fetchAppointments()}
+            className="mt-3 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors text-sm"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* Appointments List */}
       {loading ? (
