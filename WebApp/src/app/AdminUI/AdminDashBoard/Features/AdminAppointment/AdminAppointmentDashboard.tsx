@@ -52,7 +52,7 @@ export default function AdminAppointmentDashboard() {
   useEffect(() => {
     // When tab changes, update the displayed appointments for that tab
     if (allAppointments.length > 0) {
-      const tabAppointments = allAppointments.filter(app => app.status === activeTab);
+      const tabAppointments = allAppointments.filter((app: Appointment) => app.status === activeTab);
       setAppointments(tabAppointments);
       setError(null);
     }
@@ -86,17 +86,17 @@ export default function AdminAppointmentDashboard() {
         
         // Count appointments by status
         const counts = {
-          pending: allAppts.filter(app => app.status === 'pending').length,
-          ongoing: allAppts.filter(app => app.status === 'ongoing').length,
-          visited: allAppts.filter(app => app.status === 'visited').length,
-          denied: allAppts.filter(app => app.status === 'denied').length,
+          pending: allAppts.filter((app: Appointment) => app.status === 'pending').length,
+          ongoing: allAppts.filter((app: Appointment) => app.status === 'ongoing').length,
+          visited: allAppts.filter((app: Appointment) => app.status === 'visited').length,
+          denied: allAppts.filter((app: Appointment) => app.status === 'denied').length,
         };
         
         console.log(`📊 Status counts:`, counts);
         setStatusCounts(counts);
         
         // Filter for active tab
-        const tabAppointments = allAppts.filter(app => app.status === activeTab);
+        const tabAppointments = allAppts.filter((app: Appointment) => app.status === activeTab);
         setAppointments(tabAppointments);
         setError(null);
       }
@@ -128,16 +128,16 @@ export default function AdminAppointmentDashboard() {
         
         // Recount
         const counts = {
-          pending: allAppts.filter(app => app.status === 'pending').length,
-          ongoing: allAppts.filter(app => app.status === 'ongoing').length,
-          visited: allAppts.filter(app => app.status === 'visited').length,
-          denied: allAppts.filter(app => app.status === 'denied').length,
+          pending: allAppts.filter((app: Appointment) => app.status === 'pending').length,
+          ongoing: allAppts.filter((app: Appointment) => app.status === 'ongoing').length,
+          visited: allAppts.filter((app: Appointment) => app.status === 'visited').length,
+          denied: allAppts.filter((app: Appointment) => app.status === 'denied').length,
         };
         
         setStatusCounts(counts);
         
         // Update current tab display
-        const tabAppointments = allAppts.filter(app => app.status === activeTab);
+        const tabAppointments = allAppts.filter((app: Appointment) => app.status === activeTab);
         setAppointments(tabAppointments);
       }
     } catch (error) {
