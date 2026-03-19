@@ -341,7 +341,7 @@ export default function AdminAppointmentDashboard() {
         // Timeout after 5 seconds
         setTimeout(() => {
           clearInterval(checkVideoReady);
-          if (videoRef.current?.readyState < 2) {
+          if (!videoRef.current || videoRef.current.readyState < 2) {
             console.error('❌ Video did not reach ready state within 5 seconds');
             alert('Camera stream loading timeout');
             stopCamera();
