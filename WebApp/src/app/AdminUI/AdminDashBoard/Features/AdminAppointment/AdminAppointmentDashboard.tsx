@@ -288,29 +288,49 @@ export default function AdminAppointmentDashboard() {
 
   const startCamera = async () => {
     try {
+      console.log('📷 Requesting camera access...');
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { 
           facingMode: 'environment',
           width: { ideal: 1280 }, 
           height: { ideal: 720 } 
-        }
+        },
+        audio: false
       });
+      
+      console.log('✅ Camera stream obtained:', stream.getTracks());
       setCameraStream(stream);
       setCameraActive(true);
 
       // Set video stream to video element
       if (videoRef.current) {
+        console.log('🎥 Setting stream to video element...');
         videoRef.current.srcObject = stream;
-        videoRef.current.onloadedmetadata = () => {
-          videoRef.current?.play().catch(err => console.error('Play error:', err));
-        };
+        
+        // Wait for the video to be ready before starting scan
+        const playPromise = videoRef.current.play();
+        
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              console.log('▶️ Video playing successfully');
+              // Wait a moment for video to stabilize before scanning
+              setTimeout(() => {
+                console.log('🔍 Starting QR code scanner...');
+                scanQRCode();
+              }, 500);
+            })
+            .catch(err => {
+              console.error('❌ Play error:', err);
+              alert('Error playing video stream: ' + err.message);
+              stopCamera();
+            });
+        }
       }
-
-      // Start scanning for QR codes
-      scanQRCode();
     } catch (err: any) {
-      alert(`Unable to access camera: ${err.message}`);
-      console.error('Camera access error:', err);
+      const errorMsg = err.message || JSON.stringify(err);
+      console.error('❌ Camera access error:', err);
+      alert(`Unable to access camera: ${errorMsg}`);
       setCameraActive(false);
     }
   };
@@ -319,59 +339,89 @@ export default function AdminAppointmentDashboard() {
     const video = videoRef.current;
     const canvas = canvasRef.current;
     
-    if (!video || !canvas || !cameraActive) {
+    if (!video || !canvas) {
+      console.error('❌ Video or canvas ref not available');
       return;
     }
 
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) {
+      console.error('❌ Canvas context not available');
+      return;
+    }
 
     let lastDetectedCode = '';
+    let frameCount = 0;
     let detectionTimeout: NodeJS.Timeout | null = null;
 
     const scanFrame = () => {
-      if (!cameraActive || !video || video.videoWidth === 0) {
+      // Check if camera is still active
+      if (!cameraActive) {
+        console.log('🛑 Scanning stopped - camera not active');
+        return;
+      }
+
+      if (!video || !canvas) {
         setTimeout(scanFrame, 100);
         return;
       }
 
-      // Set canvas size to match video
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-
-      // Draw video frame to canvas
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-      // Get image data
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      
-      // Scan for QR code
-      const code = jsQR(imageData.data, imageData.width, imageData.height, {
-        inversionAttempts: 'dontInvert'
-      });
-
-      if (code) {
-        console.log('✅ QR Code detected:', code.data);
-        
-        // Only update if it's a different code or after timeout
-        if (code.data !== lastDetectedCode) {
-          lastDetectedCode = code.data;
-          setQrInput(code.data);
-          
-          // Auto-verify after a short delay
-          if (detectionTimeout) clearTimeout(detectionTimeout);
-          detectionTimeout = setTimeout(() => {
-            setQrInput(code.data);
-            // You can auto-verify here if desired
-          }, 500);
+      // Wait for video to have dimensions
+      if (video.videoWidth === 0 || video.videoHeight === 0) {
+        frameCount++;
+        if (frameCount % 10 === 0) {
+          console.log(`⏳ Waiting for video dimensions... (${frameCount})`);
         }
+        setTimeout(scanFrame, 50);
+        return;
       }
 
-      if (cameraActive) {
-        requestAnimationFrame(scanFrame);
+      frameCount++;
+
+      try {
+        // Set canvas size to match video
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+
+        // Draw video frame to canvas
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        // Get image data
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        
+        if (!imageData || !imageData.data) {
+          console.error('❌ Failed to get image data');
+          setTimeout(scanFrame, 100);
+          return;
+        }
+
+        // Scan for QR code
+        const code = jsQR(imageData.data, imageData.width, imageData.height, {
+          inversionAttempts: 'dontInvert'
+        });
+
+        if (code && code.data) {
+          console.log('✅ QR Code detected:', code.data);
+          
+          // Only update if it's a different code
+          if (code.data !== lastDetectedCode) {
+            lastDetectedCode = code.data;
+            setQrInput(code.data);
+            console.log('📝 QR input field updated with:', code.data);
+          }
+        }
+
+        // Continue scanning
+        if (cameraActive) {
+          requestAnimationFrame(scanFrame);
+        }
+      } catch (error) {
+        console.error('❌ Scan error:', error);
+        setTimeout(scanFrame, 100);
       }
     };
 
+    console.log('🚀 Starting scan loop...');
     scanFrame();
   };
 
@@ -610,13 +660,18 @@ export default function AdminAppointmentDashboard() {
                       <span>👁️</span>
                       <span>Point camera at QR code. It will scan automatically.</span>
                     </div>
-                    <div className="relative bg-black rounded-lg overflow-hidden" style={{ width: '100%', paddingBottom: '75%' }}>
+                    <div className="w-full bg-black rounded-lg overflow-hidden flex items-center justify-center" style={{ aspectRatio: '4/3' }}>
                       <video
                         ref={videoRef}
-                        autoPlay
-                        playsInline
-                        muted
-                        className="absolute top-0 left-0 w-full h-full object-cover"
+                        autoPlay={true}
+                        playsInline={true}
+                        muted={true}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover',
+                          display: 'block'
+                        }}
                       />
                     </div>
                     <canvas
