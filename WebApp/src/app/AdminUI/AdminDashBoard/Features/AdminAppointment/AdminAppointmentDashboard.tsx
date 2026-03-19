@@ -27,6 +27,8 @@ type TabType = 'pending' | 'ongoing' | 'visited' | 'denied';
 export default function AdminAppointmentDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('pending');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
+  const [statusCounts, setStatusCounts] = useState({ pending: 0, ongoing: 0, visited: 0, denied: 0 });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
@@ -43,23 +45,25 @@ export default function AdminAppointmentDashboard() {
   ];
 
   useEffect(() => {
-    // Reset appointments and error when tab changes to avoid stale data
-    setAppointments([]);
-    setError(null);
-    // Small delay to ensure clean state before fetch
-    const timer = setTimeout(() => {
-      fetchAppointments();
-    }, 50);
-    return () => clearTimeout(timer);
-  }, [activeTab]);
+    // On initial load, fetch all appointments to get status counts
+    fetchAllAppointmentsAndCount();
+  }, []);
 
-  const fetchAppointments = async () => {
+  useEffect(() => {
+    // When tab changes, update the displayed appointments for that tab
+    if (allAppointments.length > 0) {
+      const tabAppointments = allAppointments.filter(app => app.status === activeTab);
+      setAppointments(tabAppointments);
+      setError(null);
+    }
+  }, [activeTab, allAppointments]);
+
+  const fetchAllAppointmentsAndCount = async () => {
     setLoading(true);
     setError(null);
     try {
-      console.log(`📋 Fetching appointments with status: ${activeTab}`);
-      const response = await fetch(`/API/appointments/status/${activeTab}`, {
-        // Add cache-busting headers
+      console.log(`📋 Fetching all appointments for counting`);
+      const response = await fetch(`/API/appointments`, {
         headers: {
           'Cache-Control': 'no-cache',
           'Pragma': 'no-cache'
@@ -71,22 +75,73 @@ export default function AdminAppointmentDashboard() {
         console.error(`❌ Error fetching appointments (${response.status}):`, error);
         const errorMessage = error.error || `HTTP error! status: ${response.status}`;
         setError(errorMessage);
-        setAppointments([]);
+        setAllAppointments([]);
+        setStatusCounts({ pending: 0, ongoing: 0, visited: 0, denied: 0 });
       } else {
         const data = await response.json();
-        console.log(`✅ Fetched ${data.length || 0} appointments with status: ${activeTab}`);
+        console.log(`✅ Fetched ${data.data?.length || data.length || 0} total appointments`);
         
-        // Ensure we're setting data for the current tab (prevents race conditions)
-        setAppointments(Array.isArray(data) ? data : []);
+        const allAppts = Array.isArray(data.data) ? data.data : (Array.isArray(data) ? data : []);
+        setAllAppointments(allAppts);
+        
+        // Count appointments by status
+        const counts = {
+          pending: allAppts.filter(app => app.status === 'pending').length,
+          ongoing: allAppts.filter(app => app.status === 'ongoing').length,
+          visited: allAppts.filter(app => app.status === 'visited').length,
+          denied: allAppts.filter(app => app.status === 'denied').length,
+        };
+        
+        console.log(`📊 Status counts:`, counts);
+        setStatusCounts(counts);
+        
+        // Filter for active tab
+        const tabAppointments = allAppts.filter(app => app.status === activeTab);
+        setAppointments(tabAppointments);
         setError(null);
       }
     } catch (error: any) {
       const errorMessage = `Failed to fetch appointments: ${error.message}`;
       console.error(errorMessage);
       setError(errorMessage);
-      setAppointments([]);
+      setAllAppointments([]);
+      setStatusCounts({ pending: 0, ongoing: 0, visited: 0, denied: 0 });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const refreshAppointmentCounts = async () => {
+    // Refresh the counts after an action (approve, deny, etc.)
+    try {
+      const response = await fetch(`/API/appointments`, {
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        const allAppts = Array.isArray(data.data) ? data.data : (Array.isArray(data) ? data : []);
+        setAllAppointments(allAppts);
+        
+        // Recount
+        const counts = {
+          pending: allAppts.filter(app => app.status === 'pending').length,
+          ongoing: allAppts.filter(app => app.status === 'ongoing').length,
+          visited: allAppts.filter(app => app.status === 'visited').length,
+          denied: allAppts.filter(app => app.status === 'denied').length,
+        };
+        
+        setStatusCounts(counts);
+        
+        // Update current tab display
+        const tabAppointments = allAppts.filter(app => app.status === activeTab);
+        setAppointments(tabAppointments);
+      }
+    } catch (error) {
+      console.error('Error refreshing appointment counts:', error);
     }
   };
 
@@ -104,7 +159,7 @@ export default function AdminAppointmentDashboard() {
 
       if (response.ok) {
         alert('Appointment approved! Email sent to user with QR code.');
-        fetchAppointments();
+        refreshAppointmentCounts();
         closeModal();
       }
     } catch (error) {
@@ -127,7 +182,7 @@ export default function AdminAppointmentDashboard() {
 
       if (response.ok) {
         alert('Appointment denied. Email sent to user.');
-        fetchAppointments();
+        refreshAppointmentCounts();
         closeModal();
       }
     } catch (error) {
@@ -148,7 +203,7 @@ export default function AdminAppointmentDashboard() {
 
       if (response.ok) {
         alert(`Appointment verified! Student: ${data.appointment.student_id}`);
-        fetchAppointments();
+        refreshAppointmentCounts();
         closeModal();
       } else {
         alert(data.message || 'Invalid QR code');
@@ -193,12 +248,20 @@ export default function AdminAppointmentDashboard() {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-800">Appointment Management</h1>
-        <button
-          onClick={() => setShowModal(true)}
-          className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
-        >
-          Scan QR Code
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => refreshAppointmentCounts()}
+            className="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition-colors text-sm"
+          >
+            🔄 Refresh
+          </button>
+          <button
+            onClick={() => setShowModal(true)}
+            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+          >
+            Scan QR Code
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -214,8 +277,12 @@ export default function AdminAppointmentDashboard() {
             }`}
           >
             {tab.label}
-            <span className="ml-2 px-2 py-1 text-xs rounded-full bg-gray-200">
-              {appointments.length}
+            <span className={`ml-2 px-2 py-1 text-xs rounded-full font-semibold ${
+              statusCounts[tab.key] > 0 
+                ? 'bg-red-500 text-white' 
+                : 'bg-gray-200 text-gray-600'
+            }`}>
+              {statusCounts[tab.key]}
             </span>
           </button>
         ))}
