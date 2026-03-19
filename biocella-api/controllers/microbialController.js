@@ -281,14 +281,19 @@ exports.submitBlast = async (req, res) => {
     // Submit to NCBI BLAST using form-url-encoded format
     const params = new URLSearchParams();
     params.append('CMD', 'Put');
-    params.append('PROGRAM', 'blastn');
-    params.append('DATABASE', 'nt');
+    params.append('PROGRAM', fastaValidation.blastProgram);
+    params.append('DATABASE', fastaValidation.seqType === 'protein' ? 'nr' : 'nt');
     params.append('QUERY', cleanedFasta);
     params.append('EMAIL', EMAIL);
     params.append('TOOL', TOOL);
     params.append('HITLIST_SIZE', '10');
     params.append('EXPECT', '10');
     params.append('FORMAT_TYPE', 'JSON2');
+    
+    console.log(`🔬 BLAST Parameters:`);
+    console.log(`  - Program: ${fastaValidation.blastProgram.toUpperCase()}`);
+    console.log(`  - Database: ${fastaValidation.seqType === 'protein' ? 'nr (Non-redundant)' : 'nt (Nucleotide)'}`);
+    console.log(`  - Sequence Type: ${fastaValidation.seqType.toUpperCase()}`);
 
     let submitRes;
     try {
@@ -380,6 +385,9 @@ exports.submitBlast = async (req, res) => {
       estimatedTime: '30-60 seconds',
       expiresAt: expirationTime,
       fastaValidation: {
+        sequence_type: fastaValidation.seqType.toUpperCase(),
+        blast_program: fastaValidation.blastProgram.toUpperCase(),
+        database: fastaValidation.seqType === 'protein' ? 'nr (Non-redundant)' : 'nt (Nucleotide)',
         original_length: microbial.fasta_sequence.length,
         cleaned_length: cleanedFasta.length,
         warnings: fastaValidation.warnings,
@@ -675,6 +683,29 @@ exports.getBlastResults = async (req, res) => {
   }
 };
 
+// Helper function to detect if sequence is protein or nucleotide
+function detectSequenceType(sequence) {
+  // Extract just the sequence part (remove headers and whitespace)
+  const seqLines = sequence.split(/\n/).filter(line => !line.startsWith('>') && line.trim().length > 0);
+  const seqContent = seqLines.join('').toUpperCase();
+  
+  if (seqContent.length === 0) return null;
+  
+  // Count different character types
+  const proteinOnly = /[EFIPQZ]/gi; // Amino acids only in proteins
+  const nucleotidesOnly = /[U]/gi;  // U is only in RNA
+  
+  const proteinCount = (seqContent.match(proteinOnly) || []).length;
+  
+  // If we find protein-only amino acids, it's a protein sequence
+  if (proteinCount > seqContent.length * 0.01) { // More than 1% protein-specific
+    return 'protein';
+  }
+  
+  // Otherwise assume nucleotide (default for BLAST)
+  return 'nucleotide';
+}
+
 // Helper function to validate and clean FASTA sequences for BLAST compatibility
 function validateAndCleanFasta(fastaSequence) {
   console.log('🧬 Validating and cleaning FASTA sequence...');
@@ -683,6 +714,8 @@ function validateAndCleanFasta(fastaSequence) {
   const result = {
     isValid: false,
     cleaned: fastaSequence,
+    seqType: null,
+    blastProgram: 'blastn',
     warnings: [],
     errors: [],
     changes: []
@@ -694,6 +727,13 @@ function validateAndCleanFasta(fastaSequence) {
   }
   
   let cleaned = fastaSequence.trim();
+  
+  // Detect sequence type BEFORE cleaning
+  const detectedType = detectSequenceType(cleaned);
+  result.seqType = detectedType;
+  result.blastProgram = detectedType === 'protein' ? 'blastp' : 'blastn';
+  
+  console.log(`🧬 Detected sequence type: ${result.seqType.toUpperCase()}, using ${result.blastProgram.toUpperCase()}`);
   
   // Check for FASTA header
   if (!cleaned.includes('>')) {
@@ -738,17 +778,25 @@ function validateAndCleanFasta(fastaSequence) {
         inSequence = true;
       }
       
-      // Clean sequence: remove spaces, numbers, and invalid characters
+      // Clean sequence based on type
       let cleanedSeq = line.toUpperCase();
+      let validPattern;
       
-      // For nucleotide sequences (BLASTN)
-      const validNucleotides = /[ATGCNRYSWKMBDHV\-]/gi;
-      const invalidChars = cleanedSeq.match(/[^ATGCNRYSWKMBDHV\-]/gi) || [];
+      if (result.seqType === 'protein') {
+        // Protein: Allow standard amino acids
+        validPattern = /[ACDEFGHIKLMNPQRSTVWY\*\-]/gi;
+      } else {
+        // Nucleotide: Allow IUPAC codes
+        validPattern = /[ATGCNRYSWKMBDHV\-U]/gi;
+      }
+      
+      const matches = cleanedSeq.match(validPattern) || [];
+      const invalidChars = cleanedSeq.match(new RegExp(`[^${validPattern.source}]`, 'gi')) || [];
       
       if (invalidChars.length > 0) {
         const uniqueInvalid = [...new Set(invalidChars)];
         result.warnings.push(`Line ${i + 1}: Removed invalid characters: ${uniqueInvalid.join(', ')}`);
-        cleanedSeq = cleanedSeq.replace(/[^ATGCNRYSWKMBDHV\-]/gi, '');
+        cleanedSeq = matches.join('');
       }
       
       if (cleanedSeq.length > 0) {
@@ -767,13 +815,14 @@ function validateAndCleanFasta(fastaSequence) {
     return result;
   }
   
-  if (sequenceOnly.length < 30) {
-    result.errors.push(`Sequence is too short (${sequenceOnly.length} bp). Minimum 30 bp recommended for BLAST.`);
+  const minLength = result.seqType === 'protein' ? 20 : 30;
+  if (sequenceOnly.length < minLength) {
+    result.errors.push(`Sequence is too short (${sequenceOnly.length} ${result.seqType}). Minimum ${minLength} required for BLAST.`);
     return result;
   }
   
   if (sequenceOnly.length > 5000000) {
-    result.warnings.push(`Sequence is very long (${sequenceOnly.length} bp). BLAST may take longer to process.`);
+    result.warnings.push(`Sequence is very long (${sequenceOnly.length} characters). BLAST may take longer to process.`);
   }
   
   // Reconstruct cleaned FASTA
@@ -781,6 +830,8 @@ function validateAndCleanFasta(fastaSequence) {
   result.isValid = true;
   
   console.log('✅ FASTA validation complete:');
+  console.log(`  - Sequence type: ${result.seqType.toUpperCase()}`);
+  console.log(`  - BLAST program: ${result.blastProgram.toUpperCase()}`);
   console.log('  - Original length:', fastaSequence.length);
   console.log('  - Cleaned sequence length:', sequenceOnly.length);
   console.log('  - Valid characters:', sequenceOnly.length);
