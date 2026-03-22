@@ -15,17 +15,35 @@ if (!hasGmailConfig) {
 // OAuth2 Configuration for Gmail (lazy loaded only when needed)
 let oauth2Client = null;
 let google = null;
+let googleInitError = null;
+
+// Try to load google module - but don't crash if it fails
+try {
+  google = require('googleapis').google;
+  console.log('✅ googleapis module loaded successfully');
+} catch (error) {
+  console.error('⚠️  Failed to load googleapis module:', error.message);
+  googleInitError = error;
+}
 
 const initializeGoogleAuth = () => {
   try {
-    if (oauth2Client) return; // Already initialized
+    if (oauth2Client) {
+      return; // Already initialized
+    }
+    
+    if (!google) {
+      if (googleInitError) {
+        throw new Error('googleapis module failed to load: ' + googleInitError.message);
+      }
+      throw new Error('googleapis module not available');
+    }
     
     if (!hasGmailConfig) {
       console.warn('Cannot initialize Google Auth: Gmail credentials are missing');
       return;
     }
 
-    google = require('googleapis').google;
     oauth2Client = new google.auth.OAuth2(
       process.env.GMAIL_CLIENT_ID,
       process.env.GMAIL_CLIENT_SECRET,
@@ -40,6 +58,7 @@ const initializeGoogleAuth = () => {
   } catch (error) {
     console.error('❌ Error initializing Google OAuth2:', error.message);
     oauth2Client = null;
+    throw error;
   }
 };
 
@@ -55,7 +74,9 @@ const createTransporter = async () => {
       throw new Error('Gmail OAuth2 not configured. Please set GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN, and GMAIL_USER environment variables.');
     }
 
-    const { credentials } = await oauth2Client.refreshAccessToken();
+    const { credentials } = await oauth2Client.refreshAccessToken().catch((err) => {
+      throw new Error('Failed to refresh access token: ' + err.message);
+    });
     
     const transporter = nodemailer.createTransport({
       service: 'gmail',
@@ -76,7 +97,7 @@ const createTransporter = async () => {
   }
 };
 
-// Helper function to send emails
+// Helper function to send emails - NEVER crash the main process
 const sendEmail = async (mailOptions) => {
   try {
     if (!hasGmailConfig) {
@@ -95,7 +116,8 @@ const sendEmail = async (mailOptions) => {
     return info;
   } catch (error) {
     console.error('❌ Error sending email:', error.message);
-    throw error;
+    // IMPORTANT: Don't throw - let the calling function know but don't crash
+    return { error: error.message, messageId: null };
   }
 };
 

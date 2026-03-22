@@ -128,43 +128,41 @@ exports.approve = async (req, res) => {
     await Appointment.updateAppointmentStatus(req.params.id, 'approved', req.body.remarks);
     await Appointment.updateAppointmentStatus(req.params.id, 'ongoing');
     
-    // Send email to user if email exists
+    // Send email to user if email exists (but don't crash if it fails)
     if (appointment.user_email) {
-      try {
-        // Remove data URL prefix to get just the base64 data
-        const base64Data = qrCodeDataUrl.replace(/^data:image\/png;base64,/, '');
-        
-        await sendEmail({
-          to: appointment.user_email,
-          subject: 'Appointment Approved - Biocella',
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #4CAF50;">Your appointment has been approved!</h2>
-              <p><strong>Date:</strong> ${formattedDate}</p>
-              <p><strong>Department:</strong> ${appointment.department}</p>
-              <p><strong>Purpose:</strong> ${appointment.purpose}</p>
-              <p><strong>Student ID:</strong> ${appointment.student_id}</p>
-              ${req.body.remarks ? `<p><strong>Admin Remarks:</strong> ${req.body.remarks}</p>` : ''}
-              <hr>
-              <h3>Your QR Code:</h3>
-              <p>Please present the attached QR code when you arrive at Biocella.</p>
-              <p><strong>Important:</strong> Save the QR code image on your phone or print it out to show when you arrive.</p>
-              <p style="font-size: 12px; color: #666; margin-top: 20px;">QR Code ID: ${qrData}</p>
-            </div>
-          `,
-          attachments: [
-            {
-              filename: `appointment-${req.params.id}-qrcode.png`,
-              content: base64Data,
-              encoding: 'base64',
-              cid: 'qrcode'
-            }
-          ]
-        });
-      } catch (emailErr) {
-        console.error('Email send error:', emailErr);
-        // Continue even if email fails
-      }
+      // Remove data URL prefix to get just the base64 data
+      const base64Data = qrCodeDataUrl.replace(/^data:image\/png;base64,/, '');
+      
+      sendEmail({
+        to: appointment.user_email,
+        subject: 'Appointment Approved - Biocella',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #4CAF50;">Your appointment has been approved!</h2>
+            <p><strong>Date:</strong> ${formattedDate}</p>
+            <p><strong>Department:</strong> ${appointment.department}</p>
+            <p><strong>Purpose:</strong> ${appointment.purpose}</p>
+            <p><strong>Student ID:</strong> ${appointment.student_id}</p>
+            ${req.body.remarks ? `<p><strong>Admin Remarks:</strong> ${req.body.remarks}</p>` : ''}
+            <hr>
+            <h3>Your QR Code:</h3>
+            <p>Please present the attached QR code when you arrive at Biocella.</p>
+            <p><strong>Important:</strong> Save the QR code image on your phone or print it out to show when you arrive.</p>
+            <p style="font-size: 12px; color: #666; margin-top: 20px;">QR Code ID: ${qrData}</p>
+          </div>
+        `,
+        attachments: [
+          {
+            filename: `appointment-${req.params.id}-qrcode.png`,
+            content: base64Data,
+            encoding: 'base64',
+            cid: 'qrcode'
+          }
+        ]
+      }).catch((emailErr) => {
+        console.error('📧 Email send failed (non-critical):', emailErr.message || emailErr);
+        // Don't throw - email failure is not critical to appointment approval
+      });
     }
     
     res.json({ 
@@ -196,28 +194,27 @@ exports.deny = async (req, res) => {
     const { reason } = req.body;
     await Appointment.updateAppointmentStatus(req.params.id, 'denied', reason);
     
-    // Send email to user if email exists
+    // Send email to user if email exists (but don't crash if it fails)
     if (appointment.user_email) {
-      try {
-        await sendEmail({
-          to: appointment.user_email,
-          subject: 'Appointment Request Denied - Biocella',
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #f44336;">Your appointment request has been denied</h2>
-              <p><strong>Requested Date:</strong> ${formattedDate}</p>
-              <p><strong>Department:</strong> ${appointment.department}</p>
-              <p><strong>Purpose:</strong> ${appointment.purpose}</p>
-              <p><strong>Student ID:</strong> ${appointment.student_id}</p>
-              <hr>
-              <p><strong>Reason:</strong> ${reason || 'No reason provided'}</p>
-              <p>Please contact us if you have any questions or would like to reschedule.</p>
-            </div>
-          `
-        });
-      } catch (emailErr) {
-        console.error('Email send error:', emailErr);
-      }
+      sendEmail({
+        to: appointment.user_email,
+        subject: 'Appointment Request Denied - Biocella',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #f44336;">Your appointment request has been denied</h2>
+            <p><strong>Requested Date:</strong> ${formattedDate}</p>
+            <p><strong>Department:</strong> ${appointment.department}</p>
+            <p><strong>Purpose:</strong> ${appointment.purpose}</p>
+            <p><strong>Student ID:</strong> ${appointment.student_id}</p>
+            <hr>
+            <p><strong>Reason:</strong> ${reason || 'No reason provided'}</p>
+            <p>Please contact us if you have any questions or would like to reschedule.</p>
+          </div>
+        `
+      }).catch((emailErr) => {
+        console.error('📧 Email send failed (non-critical):', emailErr.message || emailErr);
+        // Don't throw - email failure is not critical
+      });
     }
     
     res.json({ message: "Appointment denied" });

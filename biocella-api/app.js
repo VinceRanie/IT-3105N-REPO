@@ -6,6 +6,16 @@ const app = express();
 const connectMongo = require('./config/mongo');
 const mainRoutes = require('./routes/routes');
 
+// Global error handlers - prevent process crashes
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error);
+  // Note: After uncaught exception, you should ideally restart the process
+});
+
 // Enable CORS
 app.use(cors({
   origin: [
@@ -29,6 +39,15 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Routes - mounted at root because Apache proxy already adds /api
 app.use('/', mainRoutes);
+
+// Global error handler middleware
+app.use((err, req, res, next) => {
+  console.error('❌ Global error handler caught:', err);
+  res.status(err.status || 500).json({
+    error: err.message || 'Internal Server Error',
+    timestamp: new Date().toISOString()
+  });
+});
 
 // Start server with MongoDB connection
 const PORT = process.env.PORT || 3000;
