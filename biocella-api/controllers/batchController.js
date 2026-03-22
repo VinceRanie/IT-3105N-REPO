@@ -6,9 +6,17 @@ exports.create = async (req, res) => {
   try {
     console.log('Batch create request received:', req.body);
     
+    // Convert ISO date string to YYYY-MM-DD format for MySQL DATE column
+    let data = { ...req.body };
+    if (data.expiration_date) {
+      const dateObj = new Date(data.expiration_date);
+      data.expiration_date = dateObj.toISOString().split('T')[0]; // Extract YYYY-MM-DD
+      console.log('Converted expiration_date to:', data.expiration_date);
+    }
+    
     // First create the batch to get the ID
     const tempData = {
-      ...req.body,
+      ...data,
       qr_code: null
     };
     const batchId = await Batch.createBatch(tempData);
@@ -20,7 +28,7 @@ exports.create = async (req, res) => {
     
     // Update the batch with the QR code
     await Batch.updateBatch(batchId, {
-      ...req.body,
+      ...data,
       qr_code: qrCodeDataURL
     });
     console.log('QR code added to batch:', batchId);
@@ -62,7 +70,15 @@ exports.update = async (req, res) => {
   try {
     console.log('Batch update request received:', { id: req.params.id, data: req.body });
     
-    const affected = await Batch.updateBatch(req.params.id, req.body);
+    // Convert ISO date string to YYYY-MM-DD format for MySQL DATE column
+    let data = { ...req.body };
+    if (data.expiration_date) {
+      const dateObj = new Date(data.expiration_date);
+      data.expiration_date = dateObj.toISOString().split('T')[0]; // Extract YYYY-MM-DD
+      console.log('Converted expiration_date to:', data.expiration_date);
+    }
+    
+    const affected = await Batch.updateBatch(req.params.id, data);
     
     console.log('Batch update result - affected rows:', affected);
     
