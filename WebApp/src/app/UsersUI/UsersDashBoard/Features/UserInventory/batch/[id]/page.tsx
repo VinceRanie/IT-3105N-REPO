@@ -32,20 +32,29 @@ export default function BatchEditPage() {
   const [amountUsed, setAmountUsed] = useState(0);
   const [purpose, setPurpose] = useState("");
   const [userId, setUserId] = useState<number | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
-    const user = getUserData();
-    if (user?.userId) {
-      setUserId(user.userId);
-    }
+    setIsMounted(true);
   }, []);
 
   useEffect(() => {
-    if (userId !== null) {
+    if (isMounted) {
+      const user = getUserData();
+      if (user?.userId) {
+        setUserId(user.userId);
+      } else {
+        setError("User not authenticated. Please log in.");
+      }
+    }
+  }, [isMounted]);
+
+  useEffect(() => {
+    if (isMounted && userId !== null) {
       fetchBatch();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [batchId, userId]);
+  }, [isMounted, batchId, userId]);
 
   const fetchBatch = async () => {
     try {

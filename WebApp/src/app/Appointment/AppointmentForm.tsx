@@ -14,6 +14,7 @@ interface AppointmentFormData {
 export default function AppointmentForm() {
   const router = useRouter();
   const [userId, setUserId] = useState<number | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
   const [formData, setFormData] = useState<AppointmentFormData>({
     student_id: '',
     department: '',
@@ -25,11 +26,17 @@ export default function AppointmentForm() {
   const [success, setSuccess] = useState('');
 
   useEffect(() => {
-    const user = getUserData();
-    if (user?.userId) {
-      setUserId(user.userId);
-    }
+    setIsMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (isMounted) {
+      const user = getUserData();
+      if (user?.userId) {
+        setUserId(user.userId);
+      }
+    }
+  }, [isMounted]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     setFormData({

@@ -33,6 +33,7 @@ export default function UserAppointmentDashboard() {
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ department: '', date: '', purpose: '' });
   const [userId, setUserId] = useState<number | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
 
   const tabs: { key: TabType; label: string }[] = [
     { key: 'pending', label: 'Pending' },
@@ -42,14 +43,18 @@ export default function UserAppointmentDashboard() {
   ];
 
   useEffect(() => {
-    // Get the logged in user from auth context
-    const user = getUserData();
-    if (user?.userId) {
-      setUserId(user.userId);
-    }
-    
-    fetchAppointments();
+    setIsMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (isMounted) {
+      const user = getUserData();
+      if (user?.userId) {
+        setUserId(user.userId);
+      }
+      fetchAppointments();
+    }
+  }, [isMounted]);
 
   const fetchAppointments = async () => {
     setLoading(true);

@@ -41,10 +41,16 @@ export default function LoginForm() {
       if (response.ok) {
         setMessage({ text: data.message || 'Login successful!', type: 'success' });
         
-        // Store JWT token in localStorage for authenticated requests
+        // Store JWT token and user data in localStorage for authenticated requests
         if (data.token) {
           localStorage.setItem('authToken', data.token);
           localStorage.setItem('userEmail', formData.email);
+          // Store userData with userId and role
+          localStorage.setItem('userData', JSON.stringify({
+            userId: data.userId,
+            email: formData.email,
+            role: data.role || 'student'
+          }));
         }
 
         // Redirect based on user role
