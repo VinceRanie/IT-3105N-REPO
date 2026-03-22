@@ -69,11 +69,6 @@ export default function UserAppointmentDashboard() {
   };
 
   const handleBook = async () => {
-    try {
-      const res = await fetch(`${API_URL}/appointments/create`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
     if (!userId) {
       alert('User not authenticated');
       return;
@@ -85,6 +80,11 @@ export default function UserAppointmentDashboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_id: userId,
+          student_id: 'USER-123',
+          department: form.department,
+          date: form.date,
+          purpose: form.purpose
+        })
       });
       if(res.ok) {
         setShowModal(false);

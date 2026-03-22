@@ -53,10 +53,7 @@ export default function BatchEditPage() {
       if (!response.ok) throw new Error("Failed to fetch batch");
       const data = await response.json();
       setBatch(data);
-    } catch (e || userId === null) {
-      setError("User not authenticated");
-      return;
-    }
+    } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setLoading(false);
@@ -65,7 +62,10 @@ export default function BatchEditPage() {
 
   const handleLogUsage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!batch) return;
+    if (!batch || userId === null) {
+      setError("User not authenticated");
+      return;
+    }
 
     setSaving(true);
     setError(null);
