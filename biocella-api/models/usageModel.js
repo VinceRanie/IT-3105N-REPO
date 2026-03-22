@@ -3,11 +3,19 @@ const db = require("../config/mysql.js");
 // CREATE
 exports.createUsageLog = async (data) => {
   const { chemical_id, user_id, amount_used, purpose, batch_id } = data;
-  const [result] = await db.execute(
-    "INSERT INTO chemical_usage_log (chemical_id, user_id, date_used, amount_used, purpose, batch_id) VALUES (?, ?, NOW(), ?, ?, ?)",
-    [chemical_id, user_id, amount_used, purpose, batch_id]
-  );
-  return result.insertId;
+  console.log('Usage model createUsageLog called with:', { chemical_id, user_id, amount_used, purpose, batch_id });
+  
+  try {
+    const [result] = await db.execute(
+      "INSERT INTO chemical_usage_log (chemical_id, user_id, date_used, amount_used, purpose, batch_id) VALUES (?, ?, NOW(), ?, ?, ?)",
+      [chemical_id, user_id, amount_used, purpose, batch_id]
+    );
+    console.log('Usage log created with ID:', result.insertId);
+    return result.insertId;
+  } catch (err) {
+    console.error('Usage model insert SQL error:', err.message, err.code, err.sqlState);
+    throw err;
+  }
 };
 
 // READ ALL

@@ -34,11 +34,19 @@ exports.getBatchById = async (id) => {
 // UPDATE
 exports.updateBatch = async (id, data) => {
   const { quantity, used_quantity, expiration_date, location } = data;
-  const [result] = await db.execute(
-    "UPDATE chemical_stock_batch SET quantity=?, used_quantity=?, expiration_date=?, location=? WHERE batch_id=?",
-    [quantity, used_quantity, expiration_date, location || null, id]
-  );
-  return result.affectedRows;
+  console.log('Batch model updateBatch called with:', { id, quantity, used_quantity, expiration_date, location });
+  
+  try {
+    const [result] = await db.execute(
+      "UPDATE chemical_stock_batch SET quantity=?, used_quantity=?, expiration_date=?, location=? WHERE batch_id=?",
+      [quantity, used_quantity, expiration_date, location || null, id]
+    );
+    console.log('Batch model update SQL result:', { affectedRows: result.affectedRows, changedRows: result.changedRows });
+    return result.affectedRows;
+  } catch (err) {
+    console.error('Batch model update SQL error:', err.message, err.code, err.sqlState);
+    throw err;
+  }
 };
 
 // DELETE
