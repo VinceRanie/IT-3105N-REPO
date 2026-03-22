@@ -26,7 +26,7 @@ app.use(cors({
     'https://it-3105-n-repo-98sx.vercel.app',
     'https://it-3105-n-repo-sqsf.vercel.app'
   ],
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   credentials: true
 }));
 
