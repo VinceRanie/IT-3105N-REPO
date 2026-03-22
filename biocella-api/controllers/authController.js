@@ -1,7 +1,7 @@
 const authModel = require("../models/authModel");
 const jwt = require("jsonwebtoken");
 const { v4: uuidv4 } = require("uuid");
-const nodemailer = require("nodemailer");
+const { sendEmail } = require('../config/email');
 
 const HttpStatus = {
   OK: 200,
@@ -14,15 +14,6 @@ const HttpStatus = {
 
 const JWT_SECRET = process.env.JWT_TOKEN || "your-secret-key-change-in-production";
 const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_BASE_URL || "http://localhost:3000";
-
-// Email transporter (same as appointment controller)
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  }
-});
 
 // LOGIN
 exports.login = async (req, res) => {
@@ -145,8 +136,7 @@ exports.register = async (req, res) => {
 
     // Send email with verification link
     try {
-      await transporter.sendMail({
-        from: process.env.EMAIL_USER,
+      await sendEmail({
         to: email,
         subject: "Set Your Password to Complete Registration",
         html: `

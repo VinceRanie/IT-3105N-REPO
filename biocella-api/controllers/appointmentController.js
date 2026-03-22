@@ -1,14 +1,5 @@
 const Appointment = require("../models/appointmentModel");
-const nodemailer = require('nodemailer');
-
-// Email configuration (you'll need to configure this with your email service)
-const transporter = nodemailer.createTransport({
-  service: 'gmail', // or your email service
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  }
-});
+const { sendEmail } = require('../config/email');
 
 // CREATE
 exports.create = async (req, res) => {
@@ -123,8 +114,7 @@ exports.approve = async (req, res) => {
         // Remove data URL prefix to get just the base64 data
         const base64Data = qrCodeDataUrl.replace(/^data:image\/png;base64,/, '');
         
-        await transporter.sendMail({
-          from: process.env.EMAIL_USER,
+        await sendEmail({
           to: appointment.user_email,
           subject: 'Appointment Approved - Biocella',
           html: `
@@ -189,8 +179,7 @@ exports.deny = async (req, res) => {
     // Send email to user if email exists
     if (appointment.user_email) {
       try {
-        await transporter.sendMail({
-          from: process.env.EMAIL_USER,
+        await sendEmail({
           to: appointment.user_email,
           subject: 'Appointment Request Denied - Biocella',
           html: `
