@@ -88,7 +88,7 @@ export default function BatchEditPage() {
       }
 
       // Update batch used_quantity
-      await fetch(`${API_URL}/batches/${batchId}`, {
+      const batchResponse = await fetch(`${API_URL}/batches/${batchId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -99,8 +99,12 @@ export default function BatchEditPage() {
         }),
       });
 
+      if (!batchResponse.ok) {
+        throw new Error("Failed to update batch quantity");
+      }
+
       // Log usage
-      await fetch(`${API_URL}/usage`, {
+      const usageResponse = await fetch(`${API_URL}/usage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -112,6 +116,10 @@ export default function BatchEditPage() {
           batch_id: batch.batch_id,
         }),
       });
+
+      if (!usageResponse.ok) {
+        throw new Error("Failed to create usage log");
+      }
 
       // Refresh batch data
       await fetchBatch();
