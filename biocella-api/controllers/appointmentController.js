@@ -1,5 +1,18 @@
 const Appointment = require("../models/appointmentModel");
-const { sendEmail } = require('../config/email');
+
+// Safely import email config - don't crash if it fails
+let sendEmail;
+try {
+  sendEmail = require('../config/email').sendEmail;
+} catch (error) {
+  console.error('⚠️  Warning: Failed to load email config. Email notifications will not be sent.');
+  console.error('Error details:', error.message);
+  // Provide a dummy sendEmail function that doesn't crash
+  sendEmail = async (options) => {
+    console.warn('Email sending not available:', options.subject);
+    return { messageId: 'DUMMY' };
+  };
+}
 
 // CREATE
 exports.create = async (req, res) => {

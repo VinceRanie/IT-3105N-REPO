@@ -1,5 +1,4 @@
 const nodemailer = require('nodemailer');
-const { google } = require('googleapis');
 
 // Check if Gmail OAuth2 credentials are configured
 const hasGmailConfig = !!(
@@ -13,24 +12,45 @@ if (!hasGmailConfig) {
   console.warn('⚠️  Warning: Gmail OAuth2 credentials not fully configured. Email notifications will be skipped.');
 }
 
-// OAuth2 Configuration for Gmail (only if credentials are provided)
+// OAuth2 Configuration for Gmail (lazy loaded only when needed)
 let oauth2Client = null;
+let google = null;
 
-if (hasGmailConfig) {
-  oauth2Client = new google.auth.OAuth2(
-    process.env.GMAIL_CLIENT_ID,
-    process.env.GMAIL_CLIENT_SECRET,
-    'https://developers.google.com/oauthplayground' // This is the default redirect URI
-  );
+const initializeGoogleAuth = () => {
+  try {
+    if (oauth2Client) return; // Already initialized
+    
+    if (!hasGmailConfig) {
+      console.warn('Cannot initialize Google Auth: Gmail credentials are missing');
+      return;
+    }
 
-  oauth2Client.setCredentials({
-    refresh_token: process.env.GMAIL_REFRESH_TOKEN
-  });
-}
+    google = require('googleapis').google;
+    oauth2Client = new google.auth.OAuth2(
+      process.env.GMAIL_CLIENT_ID,
+      process.env.GMAIL_CLIENT_SECRET,
+      'https://developers.google.com/oauthplayground'
+    );
+
+    oauth2Client.setCredentials({
+      refresh_token: process.env.GMAIL_REFRESH_TOKEN
+    });
+
+    console.log('✅ Google OAuth2 initialized successfully');
+  } catch (error) {
+    console.error('❌ Error initializing Google OAuth2:', error.message);
+    oauth2Client = null;
+  }
+};
 
 // Create Gmail transporter with OAuth2
 const createTransporter = async () => {
   try {
+    // Initialize if needed
+    if (!oauth2Client && hasGmailConfig) {
+      initializeGoogleAuth();
+    }
+
     if (!oauth2Client) {
       throw new Error('Gmail OAuth2 not configured. Please set GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN, and GMAIL_USER environment variables.');
     }
@@ -75,7 +95,6 @@ const sendEmail = async (mailOptions) => {
     return info;
   } catch (error) {
     console.error('❌ Error sending email:', error.message);
-    // Don't throw - allow the main operation to continue even if email fails
     throw error;
   }
 };
