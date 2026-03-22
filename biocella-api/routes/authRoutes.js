@@ -11,6 +11,7 @@ router.post("/get-user-by-token", authController.getUserByToken);
 router.post("/logout", authController.logout);
 router.get("/verify-token", authController.verifyToken);
 router.get("/profile", authController.getUserProfile);
+router.post("/google-verify", authController.verifyGoogleProfile);
 
 // Admin user management
 router.get("/users", authController.getUsers);

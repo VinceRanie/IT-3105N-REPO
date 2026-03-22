@@ -552,3 +552,66 @@ exports.verifyToken = async (req, res) => {
     });
   }
 };
+
+// VERIFY GOOGLE ID TOKEN AND RETURN PROFILE (for finalize signup prefill)
+exports.verifyGoogleProfile = async (req, res) => {
+  try {
+    const { token, email } = req.body;
+
+    if (!token) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        message: "Google ID token is required.",
+        statusCode: HttpStatus.BAD_REQUEST,
+      });
+    }
+
+    const profile = await new Promise((resolve, reject) => {
+      const url = `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(token)}`;
+      const https = require('https');
+      https
+        .get(url, (resp) => {
+          let data = '';
+          resp.on('data', (chunk) => (data += chunk));
+          resp.on('end', () => {
+            if (resp.statusCode !== 200) {
+              return reject(new Error('Invalid Google token'));
+            }
+            try {
+              resolve(JSON.parse(data));
+            } catch (e) {
+              reject(e);
+            }
+          });
+        })
+        .on('error', reject);
+    });
+
+    // Optional: enforce email match if provided
+    if (email && profile.email && profile.email.toLowerCase() !== email.toLowerCase()) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        message: "Google email does not match the signup email.",
+        statusCode: HttpStatus.BAD_REQUEST,
+      });
+    }
+
+    return res.status(HttpStatus.OK).json({
+      message: "Google profile verified",
+      profile: {
+        email: profile.email,
+        email_verified: profile.email_verified,
+        name: profile.name,
+        first_name: profile.given_name,
+        last_name: profile.family_name,
+        picture: profile.picture,
+      },
+      statusCode: HttpStatus.OK,
+    });
+  } catch (error) {
+    console.error("Verify Google Profile Error:", error);
+    return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+      message: "Failed to verify Google token.",
+      error: error.message || error,
+      statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+    });
+  }
+};

@@ -6,6 +6,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 // Configure API endpoint
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
+
+declare global {
+  interface Window {
+    google?: any;
+  }
+}
 
 interface UserData {
   firstName?: string;
@@ -41,6 +48,7 @@ export default function FinalizeSignup() {
 
   const [message, setMessage] = useState<{ text: string; type: 'error' | 'success' } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [googleReady, setGoogleReady] = useState(false);
 
   // Fetch user data by token
   useEffect(() => {
@@ -92,6 +100,22 @@ export default function FinalizeSignup() {
     fetchUserByToken();
   }, [token]);
 
+  // Load Google Identity script
+  useEffect(() => {
+    if (!GOOGLE_CLIENT_ID) return;
+    if (window.google) {
+      setGoogleReady(true);
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => setGoogleReady(true);
+    script.onerror = () => setMessage({ text: 'Failed to load Google services. You can continue manually.', type: 'error' });
+    document.body.appendChild(script);
+  }, []);
+
   const handleChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
@@ -141,6 +165,55 @@ export default function FinalizeSignup() {
     }
   };
 
+  const handleGooglePrefill = () => {
+    if (!googleReady || !window.google || !GOOGLE_CLIENT_ID) {
+      setMessage({ text: 'Google sign-in is not available right now.', type: 'error' });
+      return;
+    }
+
+    window.google.accounts.id.initialize({
+      client_id: GOOGLE_CLIENT_ID,
+      callback: async (response: any) => {
+        try {
+          const res = await fetch(`${API_BASE_URL}/auth/google-verify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: response.credential, email: userData.email }),
+          });
+
+          const data = await res.json();
+          if (!res.ok) {
+            setMessage({ text: data.message || 'Failed to verify Google account.', type: 'error' });
+            return;
+          }
+
+          setUserData((prev) => ({
+            ...prev,
+            firstName: data.profile.first_name || prev.firstName,
+            lastName: data.profile.last_name || prev.lastName,
+          }));
+
+          setFormData((prev) => ({
+            ...prev,
+            firstName: data.profile.first_name || prev.firstName,
+            lastName: data.profile.last_name || prev.lastName,
+          }));
+
+          setMessage({ text: 'Google info imported. Please review and submit.', type: 'success' });
+        } catch (err) {
+          console.error('Google verify error:', err);
+          setMessage({ text: 'Failed to verify Google account.', type: 'error' });
+        }
+      },
+    });
+
+    window.google.accounts.id.prompt((notification: any) => {
+      if (notification.isNotDisplayed()) {
+        setMessage({ text: 'Google prompt not displayed. You may need to allow pop-ups or try another browser.', type: 'error' });
+      }
+    });
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -170,6 +243,18 @@ export default function FinalizeSignup() {
           <div className="pb-6 text-left">
             <h2 className="text-2xl font-bold text-[#113F67] mt-4">Complete Your Account Setup</h2>
             <p className="text-sm text-gray-600">Fill in your details to finish registration</p>
+            {GOOGLE_CLIENT_ID && (
+              <div className="mt-3">
+                <button
+                  type="button"
+                  onClick={handleGooglePrefill}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-white text-gray-800 border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 cursor-pointer"
+                >
+                  <span role="img" aria-label="Google">🔒</span>
+                  <span>Prefill with Google</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {message && (
