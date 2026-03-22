@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { API_URL } from '@/config/api';
+import { getUserData } from '@/app/utils/authUtil';
 
 interface Appointment {
   appointment_id: number;
@@ -41,16 +42,11 @@ export default function UserAppointmentDashboard() {
   ];
 
   useEffect(() => {
-    // Determine the logged in user based on logic existing in app
-    // Currently, let's assume we can parse it from localStorage
-    try {
-      const storedToken = localStorage.getItem('authToken');
-      if (storedToken) {
-        // Decode token or fetch from API. For now, fetch all but backend should filter
-        // We'll just fetch all and filter in frontend if no user-specific endpoint exists
-        // Actually, user is decoded during login, let's fetch profile or just fetch all appointments and sort
-      }
-    } catch(e) {}
+    // Get the logged in user from auth context
+    const user = getUserData();
+    if (user?.userId) {
+      setUserId(user.userId);
+    }
     
     fetchAppointments();
   }, []);
@@ -78,12 +74,17 @@ export default function UserAppointmentDashboard() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          user_id: 1, // hardcoded user ID for now assuming no token context provided in instructions
-          student_id: 'USER-123',
-          department: form.department,
-          date: form.date,
-          purpose: form.purpose
-        })
+    if (!userId) {
+      alert('User not authenticated');
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_URL}/appointments/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: userId,
       });
       if(res.ok) {
         setShowModal(false);

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Save, ArrowLeft } from "lucide-react";
 import { API_URL } from "@/config/api";
+import { getUserData } from "@/app/utils/authUtil";
 
 interface Batch {
   batch_id: number;
@@ -30,12 +31,21 @@ export default function BatchEditPage() {
   // Usage form
   const [amountUsed, setAmountUsed] = useState(0);
   const [purpose, setPurpose] = useState("");
-  const [userId] = useState(1); // TODO: Get from auth context
+  const [userId, setUserId] = useState<number | null>(null);
 
   useEffect(() => {
-    fetchBatch();
+    const user = getUserData();
+    if (user?.userId) {
+      setUserId(user.userId);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (userId !== null) {
+      fetchBatch();
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [batchId]);
+  }, [batchId, userId]);
 
   const fetchBatch = async () => {
     try {
@@ -43,7 +53,10 @@ export default function BatchEditPage() {
       if (!response.ok) throw new Error("Failed to fetch batch");
       const data = await response.json();
       setBatch(data);
-    } catch (err) {
+    } catch (e || userId === null) {
+      setError("User not authenticated");
+      return;
+    }
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setLoading(false);

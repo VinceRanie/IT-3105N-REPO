@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { getUserData } from '@/app/utils/authUtil';
 
 interface AppointmentFormData {
   student_id: string;
@@ -12,6 +13,7 @@ interface AppointmentFormData {
 
 export default function AppointmentForm() {
   const router = useRouter();
+  const [userId, setUserId] = useState<number | null>(null);
   const [formData, setFormData] = useState<AppointmentFormData>({
     student_id: '',
     department: '',
@@ -21,6 +23,13 @@ export default function AppointmentForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  useEffect(() => {
+    const user = getUserData();
+    if (user?.userId) {
+      setUserId(user.userId);
+    }
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     setFormData({
@@ -37,9 +46,11 @@ export default function AppointmentForm() {
     setSuccess('');
 
     try {
-      // Get user_id from session/auth context
-      // For now, you'll need to add this manually or get from auth
-      const user_id = 1; // TODO: Get from auth context
+      // Get user_id from auth context
+      if (!userId) {
+        setError('User not authenticated. Please log in first.');
+        return;
+      }
 
       const response = await fetch('/API/appointments', {
         method: 'POST',
@@ -48,7 +59,7 @@ export default function AppointmentForm() {
         },
         body: JSON.stringify({
           ...formData,
-          user_id,
+          user_id: userId,
         }),
       });
 

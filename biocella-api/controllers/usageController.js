@@ -1,14 +1,59 @@
 const Usage = require("../models/usageModel");
+const db = require("../config/mysql");
 
 // CREATE
 exports.create = async (req, res) => {
   try {
     console.log('Usage log request received:', req.body);
+    
+    const { chemical_id, user_id, amount_used, purpose, batch_id } = req.body;
+    
+    // Validate required fields
+    if (!chemical_id || !user_id || !amount_used || !purpose || !batch_id) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: chemical_id, user_id, amount_used, purpose, batch_id' 
+      });
+    }
+    
+    // Validate that the user exists before creating usage log
+    const [userRows] = await db.execute('SELECT user_id FROM user WHERE user_id = ?', [user_id]);
+    if (userRows.length === 0) {
+      return res.status(404).json({ 
+        error: `User with ID ${user_id} not found in the system`,
+        details: 'Foreign key constraint: user_id must exist in user table'
+      });
+    }
+    
+    // Validate that the chemical exists
+    const [chemicalRows] = await db.execute('SELECT chemical_id FROM reagents_chemicals WHERE chemical_id = ?', [chemical_id]);
+    if (chemicalRows.length === 0) {
+      return res.status(404).json({ 
+        error: `Chemical with ID ${chemical_id} not found` 
+      });
+    }
+    
+    // Validate that the batch exists
+    const [batchRows] = await db.execute('SELECT batch_id FROM chemical_batch WHERE batch_id = ?', [batch_id]);
+    if (batchRows.length === 0) {
+      return res.status(404).json({ 
+        error: `Batch with ID ${batch_id} not found` 
+      });
+    }
+    
     const id = await Usage.createUsageLog(req.body);
     console.log('Usage log created with ID:', id);
     res.status(201).json({ message: "Usage log created", log_id: id });
   } catch (err) {
     console.error('Error creating usage log:', err);
+    
+    // Handle foreign key constraint errors
+    if (err.code === 'ER_NO_REFERENCED_ROW_2') {
+      return res.status(400).json({ 
+        error: 'Foreign key constraint error - one of the referenced IDs (user_id, chemical_id, batch_id) does not exist',
+        details: err.sqlMessage
+      });
+    }
+    
     res.status(500).json({ error: err.message });
   }
 };
