@@ -13,7 +13,7 @@ const buttons = [
   { label: "All", value: "all" },
   { label: "Student", value: "student" },
   { label: "Faculty", value: "faculty" },
-  { label: "Research Asst.", value: "ra" },
+  { label: "Research Asst.", value: "staff" },
 ];
 
 export default function AdminControls({ active, onRoleChange, search, onSearchChange }: Props) {

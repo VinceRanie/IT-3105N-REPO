@@ -3,7 +3,16 @@ const jwt = require("jsonwebtoken");
 const { v4: uuidv4 } = require("uuid");
 const { sendEmail } = require('../config/email');
 
-const ALLOWED_ROLES = ["student", "faculty", "ra"];
+// DB enum roles: student, faculty, staff (staff corresponds to RA)
+const ALLOWED_ROLES = ["student", "faculty", "staff"];
+
+// Normalize incoming role (accept 'ra' alias as 'staff')
+const normalizeRole = (role) => {
+  if (!role) return null;
+  const r = role.toLowerCase();
+  if (r === "ra") return "staff";
+  return r;
+};
 
 const HttpStatus = {
   OK: 200,
@@ -191,7 +200,7 @@ exports.register = async (req, res) => {
 exports.adminInvite = async (req, res) => {
   try {
     const { email, role = "student" } = req.body;
-    const normalizedRole = role.toLowerCase();
+    const normalizedRole = normalizeRole(role);
 
     if (!email || typeof email !== "string") {
       return res.status(HttpStatus.BAD_REQUEST).json({
@@ -200,7 +209,7 @@ exports.adminInvite = async (req, res) => {
       });
     }
 
-    if (!ALLOWED_ROLES.includes(normalizedRole)) {
+    if (!normalizedRole || !ALLOWED_ROLES.includes(normalizedRole)) {
       return res.status(HttpStatus.BAD_REQUEST).json({
         message: "Invalid role. Use student, faculty, or ra.",
         statusCode: HttpStatus.BAD_REQUEST,
@@ -471,7 +480,7 @@ exports.updateUserRole = async (req, res) => {
     const { role } = req.body;
     const { id } = req.params;
 
-    const normalizedRole = role?.toLowerCase();
+    const normalizedRole = normalizeRole(role);
 
     if (!normalizedRole) {
       return res.status(HttpStatus.BAD_REQUEST).json({

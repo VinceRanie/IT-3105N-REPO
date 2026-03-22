@@ -3,7 +3,7 @@
 export interface AuthUser {
   userId: number;
   email: string;
-  role: 'admin' | 'ra' | 'student' | 'faculty';
+  role: 'admin' | 'student' | 'faculty' | 'staff' | 'ra'; // 'staff' is DB value, 'ra' kept for backward compatibility
 }
 
 export interface AuthResponse {

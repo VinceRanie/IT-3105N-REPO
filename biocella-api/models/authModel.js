@@ -1,8 +1,8 @@
 const db = require("../config/mysql.js");
 const bcrypt = require("bcryptjs");
 
-// Allowed roles for manual updates
-const ALLOWED_ROLES = ["student", "faculty", "ra"];
+// Allowed roles for manual updates (DB enum uses 'staff' for RA)
+const ALLOWED_ROLES = ["student", "faculty", "staff"];
 
 // CREATE - Register new user
 exports.createUser = async (email, resetToken) => {

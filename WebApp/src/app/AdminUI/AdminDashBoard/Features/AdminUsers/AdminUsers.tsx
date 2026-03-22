@@ -19,7 +19,7 @@ interface User {
 const roleLabels: Record<string, string> = {
   student: "Student",
   faculty: "Faculty",
-  ra: "Research Asst.",
+  staff: "Research Asst.",
 };
 
 export default function UserTable() {
@@ -30,7 +30,7 @@ export default function UserTable() {
   const [search, setSearch] = useState("");
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState("ra");
+  const [inviteRole, setInviteRole] = useState("staff");
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [isMounted, setIsMounted] = useState(false);
 
@@ -137,7 +137,7 @@ export default function UserTable() {
 
       setMessage({ text: "Invitation sent. The user will finalize via email.", type: "success" });
       setInviteEmail("");
-      setInviteRole("ra");
+      setInviteRole("staff");
       fetchUsers();
     } catch (err: any) {
       setMessage({ text: err.message || "Failed to invite user", type: "error" });
@@ -180,7 +180,7 @@ export default function UserTable() {
           >
             <option value="student">Student</option>
             <option value="faculty">Faculty</option>
-            <option value="ra">Research Assistant</option>
+            <option value="staff">Research Assistant</option>
           </select>
           <button
             type="submit"
