@@ -1,5 +1,5 @@
 const nodemailer = require('nodemailer');
-const { google } = require('google-auth-library');
+const { google } = require('googleapis');
 
 // OAuth2 Configuration for Gmail
 const oauth2Client = new google.auth.OAuth2(
