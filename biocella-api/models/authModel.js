@@ -1,11 +1,27 @@
 const db = require("../config/mysql.js");
 const bcrypt = require("bcryptjs");
 
+// Allowed roles for manual updates
+const ALLOWED_ROLES = ["student", "faculty", "ra"];
+
 // CREATE - Register new user
 exports.createUser = async (email, resetToken) => {
   const [result] = await db.execute(
     "INSERT INTO user (email, reset_token, first_name, last_name, role) VALUES (?, ?, ?, ?, ?)",
     [email, resetToken, "", "", "student"]
+  );
+  return result.insertId;
+};
+
+// CREATE - Admin-invited user (allows non-USC emails and custom role)
+exports.createUserByAdmin = async (email, resetToken, role = "student") => {
+  if (!ALLOWED_ROLES.includes(role)) {
+    throw new Error("Invalid role");
+  }
+
+  const [result] = await db.execute(
+    "INSERT INTO user (email, reset_token, first_name, last_name, role) VALUES (?, ?, ?, ?, ?)",
+    [email, resetToken, "", "", role]
   );
   return result.insertId;
 };
@@ -37,6 +53,16 @@ exports.userExists = async (email) => {
   return rows.length > 0;
 };
 
+// READ - Get all non-admin users
+exports.getAllNonAdminUsers = async () => {
+  const [rows] = await db.execute(
+    `SELECT user_id, email, first_name, last_name, department, course, role, is_setup_complete
+     FROM user
+     WHERE role <> 'admin'`
+  );
+  return rows;
+};
+
 // UPDATE - Reset failed login attempts after successful login
 exports.resetFailedLoginAttempts = async (userId) => {
   await db.execute(
@@ -51,6 +77,19 @@ exports.incrementFailedLoginAttempts = async (userId, newAttempts, lockoutTime =
     "UPDATE user SET failed_login_attempts = ?, lockout_until = ? WHERE user_id = ?",
     [newAttempts, lockoutTime, userId]
   );
+};
+
+// UPDATE - Role change (cannot promote/demote admins)
+exports.updateUserRole = async (userId, role) => {
+  if (!ALLOWED_ROLES.includes(role)) {
+    throw new Error("Invalid role");
+  }
+
+  const [result] = await db.execute(
+    "UPDATE user SET role = ? WHERE user_id = ? AND role <> 'admin'",
+    [role, userId]
+  );
+  return result.affectedRows;
 };
 
 // UPDATE - Set password

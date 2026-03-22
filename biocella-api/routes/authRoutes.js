@@ -12,4 +12,9 @@ router.post("/logout", authController.logout);
 router.get("/verify-token", authController.verifyToken);
 router.get("/profile", authController.getUserProfile);
 
+// Admin user management
+router.get("/users", authController.getUsers);
+router.patch("/users/:id/role", authController.updateUserRole);
+router.post("/admin-invite", authController.adminInvite);
+
 module.exports = router;

@@ -3,6 +3,8 @@ const jwt = require("jsonwebtoken");
 const { v4: uuidv4 } = require("uuid");
 const { sendEmail } = require('../config/email');
 
+const ALLOWED_ROLES = ["student", "faculty", "ra"];
+
 const HttpStatus = {
   OK: 200,
   CREATED: 201,
@@ -179,6 +181,79 @@ exports.register = async (req, res) => {
     console.error("Registration Error:", error);
     return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
       message: "An unexpected error occurred during registration.",
+      error: error.message || error,
+      statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+    });
+  }
+};
+
+// ADMIN INVITE (bypass USC email restriction, custom role)
+exports.adminInvite = async (req, res) => {
+  try {
+    const { email, role = "student" } = req.body;
+    const normalizedRole = role.toLowerCase();
+
+    if (!email || typeof email !== "string") {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        message: "Valid email is required.",
+        statusCode: HttpStatus.BAD_REQUEST,
+      });
+    }
+
+    if (!ALLOWED_ROLES.includes(normalizedRole)) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        message: "Invalid role. Use student, faculty, or ra.",
+        statusCode: HttpStatus.BAD_REQUEST,
+      });
+    }
+
+    const existingUser = await authModel.userExists(email);
+    if (existingUser) {
+      return res.status(HttpStatus.CONFLICT).json({
+        message: "User already exists.",
+        statusCode: HttpStatus.CONFLICT,
+      });
+    }
+
+    const resetToken = uuidv4();
+    const userId = await authModel.createUserByAdmin(email, resetToken, normalizedRole);
+
+    try {
+      await sendEmail({
+        to: email,
+        subject: "Set your password to access BIOCELLA",
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #113F67;">You're invited to BIOCELLA</h2>
+            <p>Hi,</p>
+            <p>An administrator created an account for you with the role: <strong>${normalizedRole.toUpperCase()}</strong>.</p>
+            <p>Please click the link below to set your password and finish setup:</p>
+            <p>
+              <a href="${APP_BASE_URL}/signup/finalize?token=${resetToken}" 
+                 style="display: inline-block; padding: 10px 20px; background-color: #113F67; color: white; text-decoration: none; border-radius: 5px;">
+                Complete your account
+              </a>
+            </p>
+            <p style="color: #666; font-size: 12px;">If you did not expect this invitation, please ignore this email.</p>
+            <p>Sincerely,<br>BIOCELLA Team</p>
+          </div>
+        `,
+      });
+    } catch (emailError) {
+      console.error("Admin invite email error:", emailError);
+    }
+
+    return res.status(HttpStatus.CREATED).json({
+      message: "User invited successfully. A password setup link has been sent to the email.",
+      userId,
+      email,
+      role: normalizedRole,
+      statusCode: HttpStatus.CREATED,
+    });
+  } catch (error) {
+    console.error("Admin Invite Error:", error);
+    return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+      message: "An unexpected error occurred during admin invite.",
       error: error.message || error,
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
     });
@@ -369,6 +444,66 @@ exports.logout = async (req, res) => {
     console.error("Logout Error:", error);
     return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
       message: "An unexpected error occurred during logout.",
+      error: error.message || error,
+      statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+    });
+  }
+};
+
+// GET ALL NON-ADMIN USERS
+exports.getUsers = async (_req, res) => {
+  try {
+    const users = await authModel.getAllNonAdminUsers();
+    return res.status(HttpStatus.OK).json({ users, statusCode: HttpStatus.OK });
+  } catch (error) {
+    console.error("Get Users Error:", error);
+    return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+      message: "Failed to fetch users.",
+      error: error.message || error,
+      statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+    });
+  }
+};
+
+// UPDATE USER ROLE
+exports.updateUserRole = async (req, res) => {
+  try {
+    const { role } = req.body;
+    const { id } = req.params;
+
+    const normalizedRole = role?.toLowerCase();
+
+    if (!normalizedRole) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        message: "Role is required.",
+        statusCode: HttpStatus.BAD_REQUEST,
+      });
+    }
+
+    if (!ALLOWED_ROLES.includes(normalizedRole)) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        message: "Invalid role. Use student, faculty, or ra.",
+        statusCode: HttpStatus.BAD_REQUEST,
+      });
+    }
+
+    const affected = await authModel.updateUserRole(id, normalizedRole);
+
+    if (!affected) {
+      return res.status(HttpStatus.NOT_FOUND).json({
+        message: "User not found or cannot update admin role.",
+        statusCode: HttpStatus.NOT_FOUND,
+      });
+    }
+
+    return res.status(HttpStatus.OK).json({
+      message: "User role updated successfully.",
+      statusCode: HttpStatus.OK,
+    });
+  } catch (error) {
+    console.error("Update User Role Error:", error);
+    return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+      message: "Failed to update user role.",
       error: error.message || error,
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
     });

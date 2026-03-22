@@ -1,12 +1,5 @@
-import AdminUser from "./AdminUsers";
-import AdminControls from "./AdminControls"
+import AdminUsers from "./AdminUsers";
 
-export default function AdminUsers(){
-
-    return(
-        <>
-        <AdminControls/>
-        <AdminUser/>
-        </> 
-    )
+export default function AdminUsersPage(){
+    return <AdminUsers/>;
 }

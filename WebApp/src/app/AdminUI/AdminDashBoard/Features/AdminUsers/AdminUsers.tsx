@@ -1,188 +1,282 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { API_URL } from "@/config/api";
+import { getAuthHeader, getUserData } from "@/app/utils/authUtil";
+import AdminControls from "./AdminControls";
 
 interface User {
-  id: number;
+  user_id: number;
+  email: string;
+  first_name: string;
+  last_name: string;
   department: string;
   course: string;
-  fullname: string;
-  idNumber: string;
-  email: string;
+  role: string;
+  is_setup_complete: number;
 }
 
-const sampleUsers: User[] = [
-  {
-    id: 1,
-    department: "Department of Computer, Information, Sciences and Mathematics",
-    course: "Computer Science",
-    fullname: "Ken Rod E. Babatido",
-    idNumber: "20102188",
-    email: "20102188@usc.edu.ph",
-  },
-  {
-    id: 2,
-    department: "Department of Computer, Information, Sciences and Mathematics",
-    course: "Computer Science",
-    fullname: "Ken Rod E. Babatido",
-    idNumber: "20102188",
-    email: "20102188@usc.edu.ph",
-  },
-  {
-    id: 3,
-    department: "Department of Computer, Information, Sciences and Mathematics",
-    course: "Computer Science",
-    fullname: "Ken Rod E. Babatido",
-    idNumber: "20102188",
-    email: "20102188@usc.edu.ph",
-  },
-  {
-    id: 4,
-    department: "Department of Computer, Information, Sciences and Mathematics",
-    course: "Computer Science",
-    fullname: "Ken Rod E. Babatido",
-    idNumber: "20102188",
-    email: "20102188@usc.edu.ph",
-  },
-  {
-    id: 5,
-    department: "Department of Computer, Information, Sciences and Mathematics",
-    course: "Computer Science",
-    fullname: "Ken Rod E. Babatido",
-    idNumber: "20102188",
-    email: "20102188@usc.edu.ph",
-  },
-  {
-    id: 6,
-    department: "Department of Computer, Information, Sciences and Mathematics",
-    course: "Computer Science",
-    fullname: "Ken Rod E. Babatido",
-    idNumber: "20102188",
-    email: "20102188@usc.edu.ph",
-  },
-  {
-    id: 7,
-    department: "Department of Computer, Information, Sciences and Mathematics",
-    course: "Computer Science",
-    fullname: "Ken Rod E. Babatido",
-    idNumber: "20102188",
-    email: "20102188@usc.edu.ph",
-  },
-  {
-    id: 8,
-    department: "Department of Computer, Information, Sciences and Mathematics",
-    course: "Computer Science",
-    fullname: "Ken Rod E. Babatido",
-    idNumber: "20102188",
-    email: "20102188@usc.edu.ph",
-  },
-  {
-    id: 9,
-    department: "Department of Computer, Information, Sciences and Mathematics",
-    course: "Computer Science",
-    fullname: "Ken Rod E. Babatido",
-    idNumber: "20102188",
-    email: "20102188@usc.edu.ph",
-  },
-
-  {
-    id: 10,
-    department: "Department of Computer, Information, Sciences and Mathematics",
-    course: "Computer Science",
-    fullname: "Ken Rod E. Babatido",
-    idNumber: "20102188",
-    email: "20102189@usc.edu.ph",
-  },
-];
+const roleLabels: Record<string, string> = {
+  student: "Student",
+  faculty: "Faculty",
+  ra: "Research Asst.",
+};
 
 export default function UserTable() {
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [activeRole, setActiveRole] = useState("all");
+  const [search, setSearch] = useState("");
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState("ra");
+  const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  const fetchUsers = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const headers = {
+        "Content-Type": "application/json",
+        ...getAuthHeader(),
+      };
+      const res = await fetch(`${API_URL}/auth/users`, { headers });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to load users");
+      }
+
+      setUsers(data.users || []);
+    } catch (err: any) {
+      setError(err.message || "Failed to load users");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isMounted) {
+      fetchUsers();
+    }
+  }, [isMounted]);
+
+  const filteredUsers = useMemo(() => {
+    const query = search.toLowerCase();
+    return users.filter((u) => {
+      const matchesRole = activeRole === "all" ? true : u.role?.toLowerCase() === activeRole;
+      const matchesSearch =
+        !query ||
+        `${u.first_name} ${u.last_name}`.toLowerCase().includes(query) ||
+        u.email.toLowerCase().includes(query) ||
+        (u.department || "").toLowerCase().includes(query) ||
+        (u.course || "").toLowerCase().includes(query);
+      return matchesRole && matchesSearch;
+    });
+  }, [activeRole, search, users]);
 
   const handleRowClick = (id: number) => {
     setSelectedUserId((prev) => (prev === id ? null : id));
   };
 
+  const handleRoleUpdate = async (id: number, role: string) => {
+    try {
+      const headers = {
+        "Content-Type": "application/json",
+        ...getAuthHeader(),
+      };
+
+      const res = await fetch(`${API_URL}/auth/users/${id}/role`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ role }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to update role");
+      }
+
+      setUsers((prev) => prev.map((u) => (u.user_id === id ? { ...u, role } : u)));
+      setMessage({ text: "Role updated successfully", type: "success" });
+    } catch (err: any) {
+      setMessage({ text: err.message || "Failed to update role", type: "error" });
+    }
+  };
+
+  const handleInvite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inviteEmail) {
+      setMessage({ text: "Email is required", type: "error" });
+      return;
+    }
+
+    try {
+      const headers = {
+        "Content-Type": "application/json",
+        ...getAuthHeader(),
+      };
+
+      const res = await fetch(`${API_URL}/auth/admin-invite`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to invite user");
+      }
+
+      setMessage({ text: "Invitation sent. The user will finalize via email.", type: "success" });
+      setInviteEmail("");
+      setInviteRole("ra");
+      fetchUsers();
+    } catch (err: any) {
+      setMessage({ text: err.message || "Failed to invite user", type: "error" });
+    }
+  };
+
+  if (!isMounted) {
+    return null;
+  }
+
   return (
-    <div className="w-full  h-210 mx-auto px-4 sm:px-6 lg:px-8 py-6 relative">
+    <div className="w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 relative space-y-4">
+      <AdminControls
+        active={activeRole}
+        onRoleChange={setActiveRole}
+        search={search}
+        onSearchChange={setSearch}
+      />
+
+      <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-4">
+        <h3 className="text-lg font-semibold text-[#113F67] mb-3">Invite user (admin-only bypass)</h3>
+        {message && (
+          <div className={`mb-3 rounded px-3 py-2 text-sm ${message.type === "error" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}`}>
+            {message.text}
+          </div>
+        )}
+        <form className="flex flex-col md:flex-row gap-3" onSubmit={handleInvite}>
+          <input
+            type="email"
+            placeholder="Email"
+            className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm"
+            value={inviteEmail}
+            onChange={(e) => setInviteEmail(e.target.value)}
+            required
+          />
+          <select
+            className="border border-gray-300 rounded-md px-3 py-2 text-sm"
+            value={inviteRole}
+            onChange={(e) => setInviteRole(e.target.value)}
+          >
+            <option value="student">Student</option>
+            <option value="faculty">Faculty</option>
+            <option value="ra">Research Assistant</option>
+          </select>
+          <button
+            type="submit"
+            className="bg-[#113F67] text-white px-4 py-2 rounded-md shadow hover:bg-[#0c2f4d] cursor-pointer"
+          >
+            Send invite
+          </button>
+        </form>
+      </div>
+
       <div className="bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden w-full">
         <div className="overflow-auto max-h-[32rem] relative">
           <table className="table-auto w-full relative">
             <thead className="bg-[#113F67] sticky top-0 z-10">
               <tr>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">
-                  No.
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">
-                  Department
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">
-                  Course
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">
-                  Full Name
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">
-                  ID Number
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">
-                  Email Address
-                </th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">No.</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">Name</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">Email</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">Role</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">Department</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">Course</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {sampleUsers.map((user, index) => (
-                <React.Fragment key={user.id}>
-                  <tr
-                    className="bg-white hover:bg-blue-50 transition-colors duration-150 cursor-pointer"
-                    onClick={() => handleRowClick(user.id)}
-                  >
-                    <td className="px-4 py-3 text-sm font-medium text-gray-800">
-                      {index + 1}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-800">
-                      {user.department}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-800">
-                      {user.course}
-                    </td>
-                    <td className="px-4 py-3 text-sm font-medium text-gray-800">
-                      {user.fullname}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-600 font-mono">
-                      {user.idNumber}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">
-                      {user.email}
-                    </td>
-                  </tr>
+              {loading && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-3 text-sm text-gray-600">
+                    Loading users...
+                  </td>
+                </tr>
+              )}
 
-                  {selectedUserId === user.id && (
-                    <tr className="bg-gray-50">
-                      <td colSpan={6}>
-                        <div className="flex justify-end gap-3 p-3">
-                          <button className="bg-green-500 text-white px-3 py-1 rounded-md shadow hover:bg-green-600 cursor-pointer">
-                            Student
-                          </button>
-                          <button className="bg-blue-500 text-white px-3 py-1 rounded-md shadow hover:bg-blue-600 cursor-pointer">
-                            Faculty
-                          </button>
-                          <button className="bg-yellow-500 text-white px-3 py-1 rounded-md shadow hover:bg-yellow-600 cursor-pointer">
-                            Research Asst.
-                          </button>
-                        </div>
+              {error && !loading && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-3 text-sm text-red-600">
+                    {error}
+                  </td>
+                </tr>
+              )}
+
+              {!loading && !error && filteredUsers.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-3 text-sm text-gray-600">
+                    No users found.
+                  </td>
+                </tr>
+              )}
+
+              {!loading && !error &&
+                filteredUsers.map((user, index) => (
+                  <React.Fragment key={user.user_id}>
+                    <tr
+                      className="bg-white hover:bg-blue-50 transition-colors duration-150 cursor-pointer"
+                      onClick={() => handleRowClick(user.user_id)}
+                    >
+                      <td className="px-4 py-3 text-sm font-medium text-gray-800">{index + 1}</td>
+                      <td className="px-4 py-3 text-sm font-medium text-gray-800">
+                        {`${user.first_name || ""} ${user.last_name || ""}`.trim() || "Pending setup"}
                       </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{user.email}</td>
+                      <td className="px-4 py-3 text-sm text-gray-800">{roleLabels[user.role?.toLowerCase()] || user.role}</td>
+                      <td className="px-4 py-3 text-sm text-gray-800">{user.department || "—"}</td>
+                      <td className="px-4 py-3 text-sm text-gray-800">{user.course || "—"}</td>
                     </tr>
-                  )}
-                </React.Fragment>
-              ))}
+
+                    {selectedUserId === user.user_id && (
+                      <tr className="bg-gray-50">
+                        <td colSpan={6}>
+                          <div className="flex flex-wrap justify-end gap-3 p-3">
+                            {Object.entries(roleLabels).map(([value, label]) => (
+                              <button
+                                key={value}
+                                onClick={() => handleRoleUpdate(user.user_id, value)}
+                                className={`px-3 py-1 rounded-md shadow text-white cursor-pointer ${
+                                  value === "student"
+                                    ? "bg-green-500 hover:bg-green-600"
+                                    : value === "faculty"
+                                    ? "bg-blue-500 hover:bg-blue-600"
+                                    : "bg-yellow-500 hover:bg-yellow-600"
+                                }`}
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))}
             </tbody>
           </table>
         </div>
 
         <div className="bg-gray-50 px-4 py-3 border-t border-gray-200">
-          <p className="text-sm text-gray-600">
-            Showing {sampleUsers.length} students
-          </p>
+          <p className="text-sm text-gray-600">Showing {filteredUsers.length} users</p>
         </div>
       </div>
     </div>
