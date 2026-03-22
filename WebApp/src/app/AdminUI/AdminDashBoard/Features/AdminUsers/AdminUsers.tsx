@@ -33,6 +33,11 @@ export default function UserTable() {
   const [inviteRole, setInviteRole] = useState("staff");
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [isMounted, setIsMounted] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
 
   useEffect(() => {
     setIsMounted(true);
@@ -111,13 +116,7 @@ export default function UserTable() {
     }
   };
 
-  const handleInvite = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inviteEmail) {
-      setMessage({ text: "Email is required", type: "error" });
-      return;
-    }
-
+  const submitInvite = async () => {
     try {
       const headers = {
         "Content-Type": "application/json",
@@ -144,12 +143,67 @@ export default function UserTable() {
     }
   };
 
+  const handleInvite = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inviteEmail) {
+      setMessage({ text: "Email is required", type: "error" });
+      return;
+    }
+
+    const roleLabel = roleLabels[inviteRole] || inviteRole;
+    setConfirmDialog({
+      title: "Send invitation?",
+      message: `Email: ${inviteEmail}\nRole: ${roleLabel}`,
+      onConfirm: () => {
+        setConfirmDialog(null);
+        submitInvite();
+      },
+    });
+  };
+
+  const confirmRoleChange = (user: User, role: string) => {
+    const roleLabel = roleLabels[role] || role;
+    setConfirmDialog({
+      title: "Confirm role change",
+      message: `User: ${user.email}\nNew role: ${roleLabel}`,
+      onConfirm: () => {
+        setConfirmDialog(null);
+        handleRoleUpdate(user.user_id, role);
+      },
+    });
+  };
+
   if (!isMounted) {
     return null;
   }
 
   return (
     <div className="w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 relative space-y-4">
+      {confirmDialog && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 space-y-4">
+            <div>
+              <h4 className="text-lg font-semibold text-[#113F67]">{confirmDialog.title}</h4>
+              <p className="mt-2 whitespace-pre-line text-sm text-gray-700">{confirmDialog.message}</p>
+            </div>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmDialog(null)}
+                className="px-4 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-100 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDialog.onConfirm}
+                className="px-4 py-2 rounded-md bg-[#113F67] text-white hover:bg-[#0c2f4d] cursor-pointer"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <AdminControls
         active={activeRole}
         onRoleChange={setActiveRole}
@@ -253,7 +307,7 @@ export default function UserTable() {
                             {Object.entries(roleLabels).map(([value, label]) => (
                               <button
                                 key={value}
-                                onClick={() => handleRoleUpdate(user.user_id, value)}
+                                onClick={() => confirmRoleChange(user, value)}
                                 className={`px-3 py-1 rounded-md shadow text-white cursor-pointer ${
                                   value === "student"
                                     ? "bg-green-500 hover:bg-green-600"
