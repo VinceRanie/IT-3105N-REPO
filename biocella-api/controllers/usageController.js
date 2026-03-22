@@ -33,7 +33,7 @@ exports.create = async (req, res) => {
     }
     
     // Validate that the batch exists
-    const [batchRows] = await db.execute('SELECT batch_id FROM chemical_batch WHERE batch_id = ?', [batch_id]);
+    const [batchRows] = await db.execute('SELECT batch_id FROM batches WHERE batch_id = ?', [batch_id]);
     if (batchRows.length === 0) {
       return res.status(404).json({ 
         error: `Batch with ID ${batch_id} not found` 
