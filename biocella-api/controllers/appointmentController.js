@@ -25,10 +25,17 @@ exports.create = async (req, res) => {
 // READ ALL
 exports.getAll = async (req, res) => {
   try {
+    console.log('📋 Fetching all appointments');
     const appointments = await Appointment.getAllAppointments();
+    console.log(`✅ Successfully fetched ${appointments.length} appointments`);
     res.json(appointments);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('❌ Error fetching appointments:', err);
+    res.status(500).json({ 
+      error: err.message,
+      message: 'Failed to fetch appointments from database',
+      timestamp: new Date().toISOString()
+    });
   }
 };
 
