@@ -17,8 +17,8 @@ try {
 // CREATE
 exports.create = async (req, res) => {
   try {
-    // Check for schedule conflicts
-    const hasConflict = await Appointment.checkScheduleConflict(req.body.date);
+    // Check for schedule conflicts (check time range overlap)
+    const hasConflict = await Appointment.checkScheduleConflict(req.body.date, req.body.end_time);
     if (hasConflict) {
       return res.status(409).json({ 
         error: "Schedule conflict: An appointment already exists at this time" 
@@ -332,25 +332,40 @@ exports.getAvailability = async (req, res) => {
       '13:00', '14:00', '15:00', '16:00'
     ];
     
-    // Build booked times map
-    const bookedTimes = {};
+    // Build booked times set - mark ALL hours covered by appointment duration
+    const bookedTimes = new Set();
+    
     appointments.forEach(appt => {
-      const hour = new Date(appt.date).getHours();
-      bookedTimes[`${String(hour).padStart(2, '0')}:00`] = true;
+      const startDate = new Date(appt.date);
+      const endDate = appt.end_time ? new Date(appt.end_time) : new Date(startDate.getTime() + 60 * 60 * 1000); // Default 1 hour
+      
+      // Mark all hours from start to end as booked
+      let currentHour = startDate.getHours();
+      const endHour = endDate.getHours();
+      
+      // If end_time is exact on the hour, include that hour
+      // Otherwise, mark hours up to (but not including) end hour
+      const endMinute = endDate.getMinutes();
+      let finalEndHour = endMinute === 0 ? endHour : endHour;
+      
+      while (currentHour < finalEndHour) {
+        bookedTimes.add(`${String(currentHour).padStart(2, '0')}:00`);
+        currentHour++;
+      }
     });
     
     // Build availability status
     const availability = timeSlots.map(time => ({
       time,
-      available: !bookedTimes[time],
-      booked: !!bookedTimes[time]
+      available: !bookedTimes.has(time),
+      booked: !!bookedTimes.has(time)
     }));
     
     res.json({
       date,
       totalSlots: timeSlots.length,
-      bookedCount: appointments.length,
-      availableCount: timeSlots.length - appointments.length,
+      bookedCount: bookedTimes.size,
+      availableCount: timeSlots.length - bookedTimes.size,
       timeSlots: availability
     });
   } catch (err) {

@@ -105,6 +105,7 @@ export default function TimeSlotModal({
 
     try {
       const appointmentDate = `${format(date, 'yyyy-MM-dd')}T${selectedStartTime}`;
+      const appointmentEndTime = `${format(date, 'yyyy-MM-dd')}T${selectedEndTime}`;
 
       // Extract student ID and user_id from available sources
       let studentId = '';
@@ -155,7 +156,7 @@ export default function TimeSlotModal({
         return;
       }
 
-      console.log('[DEBUG] Submitting appointment:', { studentId, userId, department, purpose });
+      console.log('[DEBUG] Submitting appointment:', { studentId, userId, department, purpose, startTime: selectedStartTime, endTime: selectedEndTime });
 
       const response = await fetch('/API/appointments', {
         method: 'POST',
@@ -165,7 +166,8 @@ export default function TimeSlotModal({
           student_id: studentId,
           department,
           purpose,
-          date: appointmentDate
+          date: appointmentDate,
+          end_time: appointmentEndTime
         })
       });
 
