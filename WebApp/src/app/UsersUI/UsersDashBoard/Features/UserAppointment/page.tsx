@@ -1,5 +1,5 @@
-import UserAppointmentDashboard from "./UserAppointmentDashboard";
+import StudentAppointmentCalendar from "./StudentAppointmentCalendar";
 
 export default function UserAppointmentPage(){
-    return <UserAppointmentDashboard/>;
+    return <StudentAppointmentCalendar/>;
 }
