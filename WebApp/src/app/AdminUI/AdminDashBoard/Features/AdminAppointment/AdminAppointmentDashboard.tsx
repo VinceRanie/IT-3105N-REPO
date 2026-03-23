@@ -366,7 +366,7 @@ export default function AdminAppointmentDashboard() {
         alert(`✅ Appointment verified! Student: ${data.appointment.student_id}`);
         refreshAppointmentCounts();
         closeModal();
-        setQRInput('');  // Clear input after successful verification
+        setQrInput('');  // Clear input after successful verification
       } else {
         alert('❌ ' + (data.message || 'Invalid QR code'));
       }
