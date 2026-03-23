@@ -46,7 +46,7 @@ export default function StudentAppointmentCalendar() {
     try {
       const month = format(currentMonth, 'M');
       const year = format(currentMonth, 'yyyy');
-      const res = await fetch(`/API/appointments/calendar/overview?month=${month}&year=${year}`);
+      const res = await fetch(`/API/appointments/calendar?month=${month}&year=${year}`);
       const data = await res.json();
       
       // Build day status map
@@ -95,7 +95,7 @@ export default function StudentAppointmentCalendar() {
   const fetchAvailability = async (date: Date) => {
     try {
       const dateStr = format(date, 'yyyy-MM-dd');
-      const res = await fetch(`/API/appointments/availability/date?date=${dateStr}`);
+      const res = await fetch(`/API/appointments/availability?date=${dateStr}`);
       const data = await res.json();
       setAvailability(data);
     } catch (err) {
