@@ -71,8 +71,8 @@ export default function StudentAppointmentCalendar() {
     today.setHours(0, 0, 0, 0);
     const dateStr = format(date, 'yyyy-MM-dd');
 
-    // Disable: past dates (before today) and Sundays
-    if (isBefore(date, today) || getDay(date) === 0) {
+    // Disable: today or past dates (minimum 1 day advance notice) and Sundays
+    if (isBefore(date, addDays(today, 1)) || getDay(date) === 0) {
       return 'disabled';
     }
 

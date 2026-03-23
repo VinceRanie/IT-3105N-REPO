@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
 
     if (!month || !year) {
       return NextResponse.json(
-        { error: 'Month and year parameters are required' },
+        { error: 'Month and year parameters are required', daysWithAppointments: {} },
         { status: 400 }
       );
     }
@@ -28,15 +28,22 @@ export async function GET(request: NextRequest) {
     const data = await response.json();
 
     if (!response.ok) {
-      return NextResponse.json(data, { status: response.status });
+      // Return safe response with empty calendar
+      return NextResponse.json({
+        month,
+        year,
+        daysWithAppointments: {}
+      });
     }
 
     return NextResponse.json(data);
   } catch (error) {
     console.error('[API Route] Get Calendar Overview Error:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch calendar overview' },
-      { status: 500 }
-    );
+    // Return safe empty response
+    return NextResponse.json({
+      month: new Date().getMonth() + 1,
+      year: new Date().getFullYear(),
+      daysWithAppointments: {}
+    });
   }
 }
