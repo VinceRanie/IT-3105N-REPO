@@ -3,7 +3,7 @@
 import { useState, useEffect, use } from "react";
 import { API_URL } from "@/config/api";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Edit, QrCode, Trash2, Plus, Download, ChevronDown, ChevronUp, ExternalLink, Loader2 } from "lucide-react";
+import { ArrowLeft, QrCode, Download, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
 import Image from "next/image";
 import jsPDF from "jspdf";
 
@@ -20,9 +20,6 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
   const [generatingPDF, setGeneratingPDF] = useState(false);
   const [activeTab, setActiveTab] = useState("info");
   const [expandedBlastResults, setExpandedBlastResults] = useState<Set<number>>(new Set());
-  const [blastLoading, setBlastLoading] = useState(false);
-  const [blastPolling, setBlastPolling] = useState(false);
-  const [blastExpired, setBlastExpired] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -49,26 +46,6 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
       console.error("Error fetching specimen details:", error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!confirm("Are you sure you want to delete this specimen?")) return;
-    
-    try {
-      const response = await fetch(`${API_URL}/microbials/${resolvedParams.id}`, {
-        method: "DELETE",
-      });
-
-      if (response.ok) {
-        alert("Specimen deleted successfully!");
-        router.push("/AdminUI/AdminDashBoard/Features/AdminCollection");
-      } else {
-        alert("Failed to delete specimen");
-      }
-    } catch (error) {
-      console.error("Error deleting specimen:", error);
-      alert("Error deleting specimen");
     }
   };
 
@@ -101,149 +78,6 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
     if (!specimen?.blast_rid) return false;
     if (!specimen?.blast_rid_expired_at) return false;
     return new Date(specimen.blast_rid_expired_at) <= new Date();
-  };
-
-  const submitBlast = async () => {
-    if (!specimen.fasta_sequence) {
-      alert("No FASTA sequence available to submit for BLAST");
-      return;
-    }
-
-    setBlastLoading(true);
-    setBlastExpired(false); // Reset expired status
-    try {
-      const response = await fetch(`${API_URL}/microbials/${resolvedParams.id}/blast`, {
-        method: 'POST',
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        alert(`BLAST submitted successfully! RID: ${data.rid}\n\nResults will be available in ${data.estimatedTime}`);
-        
-        // Refresh specimen to get the new RID
-        await fetchSpecimenDetails();
-        
-        // Start polling for results
-        startBlastPolling();
-      } else {
-        const error = await response.json();
-        alert(`Failed to submit BLAST: ${error.error}`);
-      }
-    } catch (error) {
-      console.error("Error submitting BLAST:", error);
-      alert("Error submitting BLAST");
-    } finally {
-      setBlastLoading(false);
-    }
-  };
-
-  const checkBlastResults = async () => {
-    try {
-      // Add timeout to prevent hanging - increased to 30 seconds for backend processing
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
-      
-      const response = await fetch(
-        `${API_URL}/microbials/${resolvedParams.id}/blast/results`,
-        { 
-          signal: controller.signal,
-          mode: 'cors',
-          cache: 'no-cache',
-          headers: {
-            'Content-Type': 'application/json',
-          }
-        }
-      );
-      clearTimeout(timeoutId);
-      
-      if (response.ok) {
-        const data = await response.json();
-        
-        if (data.status === 'completed') {
-          // Refresh specimen to show results
-          await fetchSpecimenDetails();
-          setBlastPolling(false);
-          setBlastExpired(false);
-          alert("BLAST results are ready!");
-          return true;
-        } else if (data.status === 'pending') {
-          console.log("BLAST still pending...");
-          return false;
-        } else if (data.status === 'failed') {
-          setBlastPolling(false);
-          alert("BLAST search failed on NCBI server");
-          return true;
-        } else if (data.status === 'expired') {
-          setBlastPolling(false);
-          setBlastExpired(true);
-          console.log("BLAST RID has expired:", data.message);
-          return true;
-        } else if (data.status === 'error') {
-          // Don't stop polling for format errors - might be temporary NCBI issue
-          if (data.message && data.message.includes('Invalid response format')) {
-            console.warn('NCBI format error - will retry:', data.message);
-            return false; // Continue polling
-          }
-          // For other errors, stop polling and alert
-          setBlastPolling(false);
-          alert(`BLAST error: ${data.message || 'Unknown error occurred'}\n\nYou may need to re-submit the BLAST search.`);
-          return true;
-        }
-      } else {
-        console.warn(`BLAST check returned status ${response.status}`);
-      }
-    } catch (error: any) {
-      if (error.name === 'AbortError') {
-        console.warn("BLAST results check timed out - will retry");
-        // Don't alert on timeout, just log - polling will retry
-      } else if (error.message === 'Failed to fetch') {
-        console.error("Network error or backend server not responding:", error);
-        // Continue polling - might be temporary network issue
-      } else {
-        console.error("Error checking BLAST results:", error);
-      }
-      // Don't stop polling on network errors, just log and continue
-    }
-    return false;
-  };
-
-  const manualBlastCheck = async () => {
-    setBlastPolling(true);
-    try {
-      const isComplete = await checkBlastResults();
-      if (!isComplete) {
-        // Show helpful message if still pending
-        setTimeout(() => {
-          if (!specimen.blast_results) {
-            alert(`BLAST search is still processing. RID: ${specimen.blast_rid}\n\nThis can take 1-2 minutes. The page will auto-refresh when results are ready.`);
-          }
-          setBlastPolling(false);
-        }, 2000);
-      }
-    } catch (err) {
-      console.error("Manual check error:", err);
-      setBlastPolling(false);
-    }
-  };
-
-  const startBlastPolling = () => {
-    setBlastPolling(true);
-    
-    let pollCount = 0;
-    const maxPolls = 30; // 30 attempts = 5 minutes
-    
-    const pollInterval = setInterval(async () => {
-      pollCount++;
-      
-      const isComplete = await checkBlastResults();
-      if (isComplete) {
-        clearInterval(pollInterval);
-      } else if (pollCount >= maxPolls) {
-        clearInterval(pollInterval);
-        setBlastPolling(false);
-        console.log("BLAST polling stopped after 5 minutes");
-      }
-    }, 10000); // Check every 10 seconds
   };
 
   const generatePDF = async () => {
@@ -626,20 +460,6 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
                 </>
               )}
             </button>
-            <button
-              onClick={() => router.push(`/AdminUI/AdminDashBoard/Features/AdminCollection?edit=${resolvedParams.id}`)}
-              className="flex items-center gap-2 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600"
-            >
-              <Edit className="w-4 h-4" />
-              Edit
-            </button>
-            <button
-              onClick={handleDelete}
-              className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
-            >
-              <Trash2 className="w-4 h-4" />
-              Delete
-            </button>
           </div>
         </div>
 
@@ -828,10 +648,6 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
               <div className="bg-white shadow rounded-xl p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-lg font-semibold">Morphology Data</h2>
-                  <button className="flex items-center gap-2 px-3 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600">
-                    <Plus className="w-4 h-4" />
-                    Add Data
-                  </button>
                 </div>
                 <p className="text-gray-500 text-sm">No morphology data available yet.</p>
               </div>
@@ -841,27 +657,6 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
               <div className="bg-white shadow rounded-xl p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-lg font-semibold">Genome Sequence Data</h2>
-                  {specimen.fasta_sequence && !specimen.blast_results && !blastLoading && !blastPolling && (
-                    <button 
-                      onClick={submitBlast}
-                      className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                      <ExternalLink className="w-4 h-4" />
-                      Run BLAST Analysis
-                    </button>
-                  )}
-                  {blastLoading && (
-                    <div className="flex items-center gap-2 text-blue-600">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Submitting to NCBI...
-                    </div>
-                  )}
-                  {blastPolling && (
-                    <div className="flex items-center gap-2 text-orange-600">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Waiting for results...
-                    </div>
-                  )}
                 </div>
 
                 {specimen.fasta_sequence || specimen.fasta_file || specimen.blast_results ? (
@@ -1064,84 +859,11 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
 
                     {/* No BLAST Results Yet - Only show if RID is not expired or if showing expired state */}
                     {specimen.blast_rid && (!specimen.blast_results || !specimen.blast_results.matches || specimen.blast_results.matches.length === 0) && (
-                      <div className={`text-center py-8 border rounded-lg ${
-                        blastExpired ? 'bg-red-50 border-red-200' : 'bg-yellow-50 border-yellow-200'
-                      }`}>
-                        <div className="flex flex-col items-center gap-3">
-                          {blastPolling ? (
-                            <>
-                              <Loader2 className="w-8 h-8 text-orange-600 animate-spin" />
-                              <p className="text-gray-700 font-medium">Checking for BLAST results...</p>
-                              {!isBlastRidExpired() && (
-                                <p className="text-sm text-gray-600">
-                                  RID: <span className="font-mono">{specimen.blast_rid}</span>
-                                </p>
-                              )}
-                              <p className="text-xs text-gray-500">
-                                Results typically available in 30-60 seconds after submission
-                              </p>
-                            </>
-                          ) : blastExpired || isBlastRidExpired() ? (
-                            <>
-                              <div className="text-red-600 mb-2">
-                                <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                              </div>
-                              <p className="text-gray-800 font-semibold mb-1">BLAST Request Expired</p>
-                              <p className="text-xs text-gray-600 mb-4 max-w-md">
-                                NCBI BLAST results expire after 24-36 hours. This request is no longer available on NCBI servers.
-                              </p>
-                              <button
-                                onClick={submitBlast}
-                                disabled={blastLoading}
-                                className="px-5 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                {blastLoading ? (
-                                  <>
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                    Re-submitting...
-                                  </>
-                                ) : (
-                                  <>
-                                    <ExternalLink className="w-4 h-4" />
-                                    Re-run BLAST Analysis
-                                  </>
-                                )}
-                              </button>
-                              <p className="text-xs text-gray-500 mt-2">
-                                This will submit a new BLAST request with the same FASTA sequence
-                              </p>
-                            </>
-                          ) : (
-                            <>
-                              <p className="text-gray-700 mb-1">BLAST results not yet available</p>
-                              <p className="text-xs text-gray-500 mb-3">
-                                RID: <span className="font-mono">{specimen.blast_rid}</span>
-                              </p>
-                              <button
-                                onClick={manualBlastCheck}
-                                disabled={blastPolling}
-                                className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                <ExternalLink className="w-4 h-4" />
-                                Check Results Now
-                              </button>
-                              <p className="text-xs text-gray-500 mt-2">
-                                Results typically take 1-2 minutes to process
-                              </p>
-                              <a
-                                href={`https://blast.ncbi.nlm.nih.gov/Blast.cgi?CMD=Get&RID=${specimen.blast_rid}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-xs text-blue-600 hover:text-blue-800 underline mt-1 flex items-center gap-1"
-                              >
-                                View on NCBI Website
-                                <ExternalLink className="w-3 h-3" />
-                              </a>
-                            </>
-                          )}
-                        </div>
+                      <div className="text-center py-6 border rounded-lg bg-yellow-50 border-yellow-200">
+                        <p className="text-gray-700 font-medium mb-1">BLAST results are not available.</p>
+                        <p className="text-xs text-gray-600">
+                          This is a read-only view; BLAST submissions are disabled for students.
+                        </p>
                       </div>
                     )}
                   </div>
