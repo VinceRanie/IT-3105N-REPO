@@ -44,19 +44,23 @@ export default function TimeSlotModal({
       // Try to get user from localStorage first (from login session)
       const storedUser = localStorage.getItem('user');
       if (storedUser) {
-        setUserInfo(JSON.parse(storedUser));
+        try {
+          setUserInfo(JSON.parse(storedUser));
+        } catch (e) {
+          console.warn('Invalid stored user data');
+        }
         return;
       }
       
-      // Fallback: try to get from backend (silent fail if not available)
+      // Only try backend if localStorage is empty
       const res = await fetch('/API/users/me');
       if (res.ok) {
         const data = await res.json();
         setUserInfo(data);
       }
-      // 404 is expected if backend doesn't have /users/me - proceed without user info
+      // 404 or other error - proceed silently
     } catch (err) {
-      // Silent error - user can still book without pre-filled info
+      // Network error or timeout - proceed without user info
     }
   };
 
@@ -89,26 +93,49 @@ export default function TimeSlotModal({
     try {
       const appointmentDate = `${format(date, 'yyyy-MM-dd')}T${selectedStartTime}`;
 
-      // Extract student ID from email or use stored value
+      // Extract student ID and user_id from available sources
       let studentId = '';
+      let userId = null;
+      let department = '';
+
+      // Try userInfo first (from /API/users/me or fetched from backend)
       if (userInfo?.email) {
         studentId = userInfo.email.split('@')[0];
-      } else {
-        // Try to get from localStorage
+        userId = userInfo.user_id || null;
+        department = userInfo.department || '';
+      }
+
+      // Fallback: try localStorage
+      if (!studentId) {
         const storedUser = localStorage.getItem('user');
         if (storedUser) {
-          const parsed = JSON.parse(storedUser);
-          studentId = parsed.email?.split('@')[0] || parsed.student_id || '';
+          try {
+            const parsed = JSON.parse(storedUser);
+            studentId = parsed.email?.split('@')[0] || parsed.student_id || '';
+            userId = parsed.user_id || null;
+            department = parsed.department || '';
+          } catch (e) {
+            console.warn('Failed to parse stored user');
+          }
         }
       }
+
+      // Final check: if still no student_id, prompt user
+      if (!studentId) {
+        setError('Could not identify student. Please log in and try again.');
+        setLoading(false);
+        return;
+      }
+
+      console.log('[DEBUG] Submitting appointment:', { studentId, userId, department, purpose });
 
       const response = await fetch('/API/appointments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          user_id: userInfo?.user_id || null,
+          user_id: userId,
           student_id: studentId,
-          department: userInfo?.department || '',
+          department,
           purpose,
           date: appointmentDate
         })
@@ -130,6 +157,35 @@ export default function TimeSlotModal({
   };
 
   const availableEndTimes = getAvailableEndTimes();
+
+  // Compute what will be submitted (same logic as handleSubmit)
+  const getSubmissionData = () => {
+    let studentId = '';
+    let userId = null;
+    let department = '';
+
+    if (userInfo?.email) {
+      studentId = userInfo.email.split('@')[0];
+      userId = userInfo.user_id || null;
+      department = userInfo.department || '';
+    }
+
+    if (!studentId) {
+      const storedUser = localStorage.getItem('user');
+      if (storedUser) {
+        try {
+          const parsed = JSON.parse(storedUser);
+          studentId = parsed.email?.split('@')[0] || parsed.student_id || '';
+          userId = parsed.user_id || null;
+          department = parsed.department || '';
+        } catch (e) {}
+      }
+    }
+
+    return { studentId, userId, department };
+  };
+
+  const submissionData = getSubmissionData();
 
   // Guard: if availability is missing, show loading state
   if (!availability || !availability.timeSlots) {
@@ -217,17 +273,20 @@ export default function TimeSlotModal({
                 <span>Time:</span>
                 <strong>{selectedStartTime} - {selectedEndTime || '?'}</strong>
               </div>
-              {userInfo && (
-                <>
-                  <div className={styles.summaryRow}>
-                    <span>Student ID:</span>
-                    <strong>{userInfo.email?.split('@')[0]}</strong>
-                  </div>
-                  <div className={styles.summaryRow}>
-                    <span>Department:</span>
-                    <strong>{userInfo.department || 'N/A'}</strong>
-                  </div>
-                </>
+              <div className={styles.summaryRow}>
+                <span>Student ID:</span>
+                <strong>{submissionData.studentId || '⚠️ Not Found'}</strong>
+              </div>
+              {submissionData.department && (
+                <div className={styles.summaryRow}>
+                  <span>Department:</span>
+                  <strong>{submissionData.department}</strong>
+                </div>
+              )}
+              {!submissionData.studentId && (
+                <p style={{ color: '#e74c3c', fontSize: '12px', margin: '10px 0 0 0' }}>
+                  ⚠️ Warning: Student ID could not be found. Please ensure you're logged in.
+                </p>
               )}
             </div>
 
