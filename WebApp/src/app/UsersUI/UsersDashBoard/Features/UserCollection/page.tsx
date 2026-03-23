@@ -202,8 +202,8 @@ export default function AdminCollectionPage() {
       alert("Error: Specimen ID is missing");
       return;
     }
-// Navigate to public specimen details page 
-      router.push(`/specimen/${specimen._id}`);
+    // Route students to the user-specific specimen page
+    router.push(`/UsersUI/UsersDashBoard/Features/UserCollection/specimen/${specimen._id}`);
   };
 
   const handleEditSpecimen = (specimen: any) => {
