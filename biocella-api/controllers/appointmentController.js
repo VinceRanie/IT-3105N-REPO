@@ -17,6 +17,8 @@ try {
 // CREATE
 exports.create = async (req, res) => {
   try {
+    console.log('[DEBUG] Create appointment - req.body:', JSON.stringify(req.body, null, 2));
+    
     // Check for schedule conflicts (check time range overlap)
     const hasConflict = await Appointment.checkScheduleConflict(req.body.date, req.body.end_time);
     if (hasConflict) {
@@ -31,6 +33,7 @@ exports.create = async (req, res) => {
       appointment_id: id 
     });
   } catch (err) {
+    console.error('[ERROR] Create appointment error:', err);
     res.status(500).json({ error: err.message });
   }
 };

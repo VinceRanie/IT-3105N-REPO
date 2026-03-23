@@ -4,9 +4,13 @@ const crypto = require('crypto');
 
 // CREATE
 exports.createAppointment = async (data) => {
+  console.log('[DEBUG] createAppointment received data:', JSON.stringify(data, null, 2));
+  
   const { user_id, student_id, department, purpose, date, end_time } = data;
   const status = 'pending';
   const qr_code = null; // Will be generated upon approval
+  
+  console.log('[DEBUG] Extracted values:', { user_id, student_id, department, purpose, date, end_time });
   
   const [result] = await db.execute(
     "INSERT INTO appointment (user_id, student_id, department, purpose, date, end_time, status, qr_code, pending_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())",
