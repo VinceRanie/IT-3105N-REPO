@@ -228,30 +228,43 @@ exports.verifyQR = async (req, res) => {
   try {
     const { qrCode, appointmentId } = req.body;
     
-    // Verify the token matches the appointment
+    if (!qrCode || !appointmentId) {
+      return res.status(400).json({ message: "QR code and appointment ID are required" });
+    }
+    
+    // Fetch appointment and verify QR code matches
     const appointment = await Appointment.getAppointmentById(appointmentId);
     
-    if (!appointment || appointment.qr_code !== qrCode) {
-      return res.status(404).json({ message: "Invalid QR code or appointment not found" });
+    if (!appointment) {
+      return res.status(404).json({ message: "Appointment not found" });
+    }
+    
+    // Verify QR code token matches
+    if (appointment.qr_code !== qrCode) {
+      return res.status(401).json({ message: "Invalid QR code" });
     }
     
     // Check if appointment is in ongoing status
     if (appointment.status !== 'ongoing') {
       return res.status(400).json({ 
-        message: `Cannot verify: Appointment is ${appointment.status}`,
-        appointment 
+        message: `Cannot verify: Appointment is ${appointment.status}. Only ongoing appointments can be marked as visited.`,
+        currentStatus: appointment.status
       });
     }
     
     // Update status to visited
-    await Appointment.updateAppointmentStatus(appointment.appointment_id, 'visited');
+    await Appointment.updateAppointmentStatus(appointmentId, 'visited');
+    
+    // Fetch updated appointment
+    const updatedAppointment = await Appointment.getAppointmentById(appointmentId);
     
     res.json({ 
       message: "Appointment verified and marked as visited",
-      appointment 
+      appointment: updatedAppointment
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('QR Verification Error:', err);
+    res.status(500).json({ error: err.message || "Failed to verify QR code" });
   }
 };
 
