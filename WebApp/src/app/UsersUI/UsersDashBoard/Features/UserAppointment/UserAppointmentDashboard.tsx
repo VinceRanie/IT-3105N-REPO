@@ -31,9 +31,19 @@ export default function UserAppointmentDashboard() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({ department: '', date: '', purpose: '' });
+  const [form, setForm] = useState({ department: '', date: '', time: '', purpose: '' });
+  const [conflicts, setConflicts] = useState<Record<string, boolean>>({});
+  const [checkingAvailability, setCheckingAvailability] = useState(false);
   const [userId, setUserId] = useState<number | null>(null);
   const [isMounted, setIsMounted] = useState(false);
+
+  // Define availability rules
+  const blockedWeekdays = [0]; // 0 = Sunday
+  const blockedDates: string[] = []; // Add specific YYYY-MM-DD dates if admins block certain days
+  const timeSlots = [
+    '09:00', '10:00', '11:00', '12:00',
+    '13:00', '14:00', '15:00', '16:00'
+  ];
 
   const tabs: { key: TabType; label: string }[] = [
     { key: 'pending', label: 'Pending' },
@@ -73,13 +83,67 @@ export default function UserAppointmentDashboard() {
     }
   };
 
+  const isDateBlocked = (dateStr: string) => {
+    if (!dateStr) return false;
+    if (blockedDates.includes(dateStr)) return true;
+    const dt = new Date(dateStr);
+    return blockedWeekdays.includes(dt.getDay());
+  };
+
+  const loadConflictsForDate = async (dateStr: string) => {
+    if (!dateStr) return;
+    setCheckingAvailability(true);
+    try {
+      // Reuse cached appointments instead of extra fetch if already loaded
+      let current = appointments;
+      if (!appointments.length) {
+        const res = await fetch(`${API_URL}/appointments`);
+        const data = await res.json();
+        current = data.data || [];
+        setAppointments(current);
+      }
+
+      const sameDay = current.filter((app) => {
+        const appDate = new Date(app.date);
+        const appDay = format(appDate, 'yyyy-MM-dd');
+        return appDay === dateStr && (app.status === 'approved' || app.status === 'ongoing');
+      });
+
+      const conflictMap: Record<string, boolean> = {};
+      timeSlots.forEach((slot) => {
+        conflictMap[slot] = sameDay.some((app) => format(new Date(app.date), 'HH:mm') === slot);
+      });
+      setConflicts(conflictMap);
+    } catch (error) {
+      console.error('Error checking availability:', error);
+    } finally {
+      setCheckingAvailability(false);
+    }
+  };
+
   const handleBook = async () => {
     if (!userId) {
       alert('User not authenticated');
       return;
     }
 
+    if (!form.date || !form.time) {
+      alert('Please select a date and time.');
+      return;
+    }
+
+    if (isDateBlocked(form.date)) {
+      alert('Selected date is unavailable. Please pick another day.');
+      return;
+    }
+
+    if (conflicts[form.time]) {
+      alert('That time slot is already taken. Please choose another time.');
+      return;
+    }
+
     try {
+      const dateTime = `${form.date}T${form.time}`;
       const res = await fetch(`${API_URL}/appointments/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -87,13 +151,14 @@ export default function UserAppointmentDashboard() {
           user_id: userId,
           student_id: 'USER-123',
           department: form.department,
-          date: form.date,
+          date: dateTime,
           purpose: form.purpose
         })
       });
       if(res.ok) {
         setShowModal(false);
-        setForm({ department: '', date: '', purpose: '' });
+        setForm({ department: '', date: '', time: '', purpose: '' });
+        setConflicts({});
         fetchAppointments();
       } else {
         alert('Failed to create appointment');
@@ -161,7 +226,7 @@ export default function UserAppointmentDashboard() {
                     <h3 className="text-lg font-semibold cursor-pointer text-blue-600">
                       Appointment #{app.appointment_id}
                     </h3>
-                    <p className="text-gray-600 mt-1">Date: {format(new Date(app.date), 'MMMM dd, yyyy')}</p>
+                    <p className="text-gray-600 mt-1">Date: {format(new Date(app.date), 'MMMM dd, yyyy, hh:mm a')}</p>
                     <p className="text-gray-600">Department: {app.department}</p>
                     <p className="text-gray-600 mt-2">Purpose: {app.purpose}</p>
                   </div>
@@ -190,9 +255,33 @@ export default function UserAppointmentDashboard() {
               <input
                 type="date"
                 value={form.date}
-                onChange={(e) => setForm({...form, date: e.target.value})}
+                onChange={(e) => {
+                  const nextDate = e.target.value;
+                  setForm({ ...form, date: nextDate, time: '' });
+                  setConflicts({});
+                  loadConflictsForDate(nextDate);
+                }}
                 className="w-full px-4 py-2 border rounded-md"
               />
+              {form.date && isDateBlocked(form.date) && (
+                <p className="text-sm text-red-600">This date is unavailable (Sunday or blocked by admin).</p>
+              )}
+              <select
+                value={form.time}
+                onChange={(e) => setForm({ ...form, time: e.target.value })}
+                className="w-full px-4 py-2 border rounded-md"
+                disabled={!form.date || isDateBlocked(form.date) || checkingAvailability}
+              >
+                <option value="">Select a time</option>
+                {timeSlots.map((slot) => (
+                  <option key={slot} value={slot} disabled={!!conflicts[slot]}>
+                    {slot} {conflicts[slot] ? '(Unavailable)' : ''}
+                  </option>
+                ))}
+              </select>
+              {checkingAvailability && (
+                <p className="text-sm text-gray-500">Checking availability…</p>
+              )}
               <textarea
                 placeholder="Purpose of visit"
                 value={form.purpose}
