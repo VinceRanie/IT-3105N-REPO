@@ -36,6 +36,7 @@ export default function UserAppointmentDashboard() {
   const [checkingAvailability, setCheckingAvailability] = useState(false);
   const [userId, setUserId] = useState<number | null>(null);
   const [isMounted, setIsMounted] = useState(false);
+  const [userEmail, setUserEmail] = useState<string>('');
 
   // Define availability rules
   const blockedWeekdays = [0]; // 0 = Sunday
@@ -48,6 +49,12 @@ export default function UserAppointmentDashboard() {
   const minDate = format(addDays(new Date(), 1), 'yyyy-MM-dd');
 
   const formatSlot = (slot: string) => format(parse(slot, 'HH:mm', new Date()), 'hh:mm a');
+
+  const extractStudentId = (email: string): string => {
+    if (!email) return '';
+    const parts = email.split('@');
+    return parts[0];
+  };
 
   const tabs: { key: TabType; label: string }[] = [
     { key: 'pending', label: 'Pending' },
@@ -65,6 +72,9 @@ export default function UserAppointmentDashboard() {
       const user = getUserData();
       if (user?.userId) {
         setUserId(user.userId);
+      }
+      if (user?.email) {
+        setUserEmail(user.email);
       }
       fetchAppointments();
     }
@@ -150,12 +160,13 @@ export default function UserAppointmentDashboard() {
 
     try {
       const dateTime = `${form.date}T${form.time}`;
+      const studentId = extractStudentId(userEmail);
       const res = await fetch(`${API_URL}/appointments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_id: userId,
-          student_id: 'USER-123',
+          student_id: studentId,
           department: form.department,
           date: dateTime,
           purpose: form.purpose
