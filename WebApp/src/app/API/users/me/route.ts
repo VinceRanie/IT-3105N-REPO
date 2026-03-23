@@ -15,7 +15,11 @@ export async function GET(request: NextRequest) {
     const data = await response.json();
 
     if (!response.ok) {
-      return NextResponse.json(data, { status: response.status });
+      // If backend returns 404 or 500, return 400 so frontend knows to fallback
+      return NextResponse.json(
+        { error: 'User endpoint not available, please use stored session' },
+        { status: 404 }
+      );
     }
 
     return NextResponse.json(data);
@@ -23,7 +27,7 @@ export async function GET(request: NextRequest) {
     console.error('[API Route] Get User Error:', error);
     return NextResponse.json(
       { error: 'Failed to fetch user information' },
-      { status: 500 }
+      { status: 404 }
     );
   }
 }

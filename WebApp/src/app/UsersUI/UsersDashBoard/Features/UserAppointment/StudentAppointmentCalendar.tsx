@@ -68,10 +68,11 @@ export default function StudentAppointmentCalendar() {
 
   const getDateStatus = (date: Date): 'disabled' | 'booked' | 'partial' | 'available' => {
     const today = new Date();
+    today.setHours(0, 0, 0, 0);
     const dateStr = format(date, 'yyyy-MM-dd');
 
-    // Disable past dates and Sundays
-    if (isBefore(date, startOfDay(today)) || getDay(date) === 0) {
+    // Disable: past dates (before today) and Sundays
+    if (isBefore(date, today) || getDay(date) === 0) {
       return 'disabled';
     }
 
@@ -101,12 +102,6 @@ export default function StudentAppointmentCalendar() {
     } catch (err) {
       console.error('Failed to fetch availability:', err);
     }
-  };
-
-  const startOfDay = (date: Date) => {
-    const d = new Date(date);
-    d.setHours(0, 0, 0, 0);
-    return d;
   };
 
   const daysInMonth = eachDayOfInterval({

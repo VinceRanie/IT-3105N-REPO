@@ -41,11 +41,22 @@ export default function TimeSlotModal({
 
   const fetchUserInfo = async () => {
     try {
+      // Try to get user from localStorage first (from login session)
+      const storedUser = localStorage.getItem('user');
+      if (storedUser) {
+        setUserInfo(JSON.parse(storedUser));
+        return;
+      }
+      
+      // Fallback: try to get from backend
       const res = await fetch('/API/users/me');
-      const data = await res.json();
-      setUserInfo(data);
+      if (res.ok) {
+        const data = await res.json();
+        setUserInfo(data);
+      }
     } catch (err) {
       console.error('Failed to fetch user info:', err);
+      // Proceed without user info - user can still book
     }
   };
 
@@ -78,12 +89,25 @@ export default function TimeSlotModal({
     try {
       const appointmentDate = `${format(date, 'yyyy-MM-dd')}T${selectedStartTime}`;
 
+      // Extract student ID from email or use stored value
+      let studentId = '';
+      if (userInfo?.email) {
+        studentId = userInfo.email.split('@')[0];
+      } else {
+        // Try to get from localStorage
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+          const parsed = JSON.parse(storedUser);
+          studentId = parsed.email?.split('@')[0] || parsed.student_id || '';
+        }
+      }
+
       const response = await fetch('/API/appointments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          user_id: userInfo?.user_id,
-          student_id: userInfo?.email?.split('@')[0],
+          user_id: userInfo?.user_id || null,
+          student_id: studentId,
           department: userInfo?.department || '',
           purpose,
           date: appointmentDate

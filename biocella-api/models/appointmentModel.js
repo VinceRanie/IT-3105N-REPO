@@ -131,7 +131,7 @@ exports.verifyQRCode = async (qrCode) => {
 
 // GET APPOINTMENTS FOR DATE RANGE (for calendar view)
 exports.getAppointmentsByDateRange = async (startDate, endDate, userId = null) => {
-  let query = "SELECT * FROM appointment WHERE date >= ? AND date <= ? AND deleted_at IS NULL AND status != 'denied'";
+  let query = "SELECT * FROM appointment WHERE date >= ? AND date <= ? AND deleted_at IS NULL AND status IN ('approved', 'ongoing')";
   const params = [startDate, endDate];
   
   if (userId) {
