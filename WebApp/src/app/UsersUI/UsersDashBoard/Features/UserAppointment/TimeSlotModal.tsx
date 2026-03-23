@@ -54,7 +54,7 @@ export default function TimeSlotModal({
 
     const startHour = parseInt(selectedStartTime.split(':')[0]);
     const maxEndHour = startHour + maxDuration;
-    const availableTimes = [];
+    const availableTimes: string[] = [];
 
     availability.timeSlots.forEach(slot => {
       const slotHour = parseInt(slot.time.split(':')[0]);
