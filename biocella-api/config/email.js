@@ -18,11 +18,15 @@ let google = null;
 let googleInitError = null;
 
 // Try to load google module - but don't crash if it fails
+let google = null;
+let googleInitError = null;
+
 try {
   google = require('googleapis').google;
   console.log('✅ googleapis module loaded successfully');
 } catch (error) {
-  console.error('⚠️  Failed to load googleapis module:', error.message);
+  console.warn('⚠️  Warning: googleapis module not available. Gmail notifications will be disabled.');
+  console.warn('   Install with: npm install googleapis');
   googleInitError = error;
 }
 
