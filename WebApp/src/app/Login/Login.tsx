@@ -44,12 +44,13 @@ export default function LoginForm() {
         // Store JWT token and user data in localStorage for authenticated requests
         if (data.token) {
           localStorage.setItem('authToken', data.token);
-          localStorage.setItem('userEmail', formData.email);
-          // Store userData with userId and role
+          localStorage.setItem('userEmail', data.email || formData.email);
+          // Store userData with all available fields
           localStorage.setItem('userData', JSON.stringify({
             userId: data.userId,
-            email: formData.email,
-            role: data.role || 'student'
+            email: data.email || formData.email,
+            role: data.role || 'student',
+            token: data.token
           }));
         }
 

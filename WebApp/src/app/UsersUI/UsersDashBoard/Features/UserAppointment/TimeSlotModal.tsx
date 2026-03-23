@@ -42,10 +42,21 @@ export default function TimeSlotModal({
   const fetchUserInfo = async () => {
     try {
       // Try to get user from localStorage first (from login session)
-      const storedUser = localStorage.getItem('user');
+      // Check both 'userData' (from Login component) and 'user' as fallback
+      let storedUser = localStorage.getItem('userData');
+      if (!storedUser) {
+        storedUser = localStorage.getItem('user');
+      }
+
       if (storedUser) {
         try {
-          setUserInfo(JSON.parse(storedUser));
+          const parsed = JSON.parse(storedUser);
+          // Add email to user object from stored params if not present
+          if (!parsed.email) {
+            parsed.email = localStorage.getItem('userEmail') || '';
+          }
+          setUserInfo(parsed);
+          console.log('[DEBUG] User loaded from localStorage:', parsed);
         } catch (e) {
           console.warn('Invalid stored user data');
         }
@@ -57,9 +68,11 @@ export default function TimeSlotModal({
       if (res.ok) {
         const data = await res.json();
         setUserInfo(data);
+        console.log('[DEBUG] User loaded from backend:', data);
       }
       // 404 or other error - proceed silently
     } catch (err) {
+      console.warn('Could not fetch user info:', err);
       // Network error or timeout - proceed without user info
     }
   };
@@ -101,21 +114,36 @@ export default function TimeSlotModal({
       // Try userInfo first (from /API/users/me or fetched from backend)
       if (userInfo?.email) {
         studentId = userInfo.email.split('@')[0];
-        userId = userInfo.user_id || null;
+        userId = userInfo.userId || userInfo.user_id || null;
         department = userInfo.department || '';
       }
 
-      // Fallback: try localStorage
+      // Fallback: try localStorage (both 'userData' and 'user' keys)
       if (!studentId) {
-        const storedUser = localStorage.getItem('user');
+        let storedUser = localStorage.getItem('userData');
+        if (!storedUser) {
+          storedUser = localStorage.getItem('user');
+        }
+
         if (storedUser) {
           try {
             const parsed = JSON.parse(storedUser);
-            studentId = parsed.email?.split('@')[0] || parsed.student_id || '';
-            userId = parsed.user_id || null;
+            if (parsed.email) {
+              studentId = parsed.email.split('@')[0];
+            } else {
+              const storedEmail = localStorage.getItem('userEmail');
+              if (storedEmail) {
+                studentId = storedEmail.split('@')[0];
+              }
+            }
+            userId = parsed.userId || parsed.user_id || null;
             department = parsed.department || '';
           } catch (e) {
             console.warn('Failed to parse stored user');
+            const storedEmail = localStorage.getItem('userEmail');
+            if (storedEmail) {
+              studentId = storedEmail.split('@')[0];
+            }
           }
         }
       }
@@ -166,19 +194,38 @@ export default function TimeSlotModal({
 
     if (userInfo?.email) {
       studentId = userInfo.email.split('@')[0];
-      userId = userInfo.user_id || null;
+      userId = userInfo.userId || userInfo.user_id || null;
       department = userInfo.department || '';
     }
 
     if (!studentId) {
-      const storedUser = localStorage.getItem('user');
+      // Check both 'userData' (from Login) and 'user' (fallback)
+      let storedUser = localStorage.getItem('userData');
+      if (!storedUser) {
+        storedUser = localStorage.getItem('user');
+      }
+
       if (storedUser) {
         try {
           const parsed = JSON.parse(storedUser);
-          studentId = parsed.email?.split('@')[0] || parsed.student_id || '';
-          userId = parsed.user_id || null;
+          if (parsed.email) {
+            studentId = parsed.email.split('@')[0];
+          } else {
+            // Try userEmail as fallback
+            const storedEmail = localStorage.getItem('userEmail');
+            if (storedEmail) {
+              studentId = storedEmail.split('@')[0];
+            }
+          }
+          userId = parsed.userId || parsed.user_id || null;
           department = parsed.department || '';
-        } catch (e) {}
+        } catch (e) {
+          // Try direct email from localStorage
+          const storedEmail = localStorage.getItem('userEmail');
+          if (storedEmail) {
+            studentId = storedEmail.split('@')[0];
+          }
+        }
       }
     }
 
