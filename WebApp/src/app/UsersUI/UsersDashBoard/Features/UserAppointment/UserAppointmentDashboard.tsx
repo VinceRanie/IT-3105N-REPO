@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { format } from 'date-fns';
+import { format, addDays, parse } from 'date-fns';
 import { API_URL } from '@/config/api';
 import { getUserData } from '@/app/utils/authUtil';
 
@@ -45,6 +45,10 @@ export default function UserAppointmentDashboard() {
     '13:00', '14:00', '15:00', '16:00'
   ];
 
+  const minDate = format(addDays(new Date(), 1), 'yyyy-MM-dd');
+
+  const formatSlot = (slot: string) => format(parse(slot, 'HH:mm', new Date()), 'hh:mm a');
+
   const tabs: { key: TabType; label: string }[] = [
     { key: 'pending', label: 'Pending' },
     { key: 'approved', label: 'Approved & Ongoing' },
@@ -87,7 +91,9 @@ export default function UserAppointmentDashboard() {
     if (!dateStr) return false;
     if (blockedDates.includes(dateStr)) return true;
     const dt = new Date(dateStr);
-    return blockedWeekdays.includes(dt.getDay());
+    const today = new Date();
+    const isPastOrToday = dt.setHours(0,0,0,0) <= today.setHours(0,0,0,0);
+    return isPastOrToday || blockedWeekdays.includes(dt.getDay());
   };
 
   const loadConflictsForDate = async (dateStr: string) => {
@@ -144,7 +150,7 @@ export default function UserAppointmentDashboard() {
 
     try {
       const dateTime = `${form.date}T${form.time}`;
-      const res = await fetch(`${API_URL}/appointments/create`, {
+      const res = await fetch(`${API_URL}/appointments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -262,6 +268,7 @@ export default function UserAppointmentDashboard() {
                   loadConflictsForDate(nextDate);
                 }}
                 className="w-full px-4 py-2 border rounded-md"
+                min={minDate}
               />
               {form.date && isDateBlocked(form.date) && (
                 <p className="text-sm text-red-600">This date is unavailable (Sunday or blocked by admin).</p>
@@ -275,7 +282,7 @@ export default function UserAppointmentDashboard() {
                 <option value="">Select a time</option>
                 {timeSlots.map((slot) => (
                   <option key={slot} value={slot} disabled={!!conflicts[slot]}>
-                    {slot} {conflicts[slot] ? '(Unavailable)' : ''}
+                    {formatSlot(slot)} {conflicts[slot] ? '(Unavailable)' : ''}
                   </option>
                 ))}
               </select>
