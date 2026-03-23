@@ -356,18 +356,19 @@ export default function AdminAppointmentDashboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           qrCode: token,
-          appointmentId: appointmentId || undefined
+          appointmentId: appointmentId || undefined  // Optional - backend will look up by token if not provided
         }),
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        alert(`Appointment verified! Student: ${data.appointment.student_id}`);
+        alert(`✅ Appointment verified! Student: ${data.appointment.student_id}`);
         refreshAppointmentCounts();
         closeModal();
+        setQRInput('');  // Clear input after successful verification
       } else {
-        alert(data.message || 'Invalid QR code');
+        alert('❌ ' + (data.message || 'Invalid QR code'));
       }
     } catch (error) {
       console.error('Error scanning QR:', error);

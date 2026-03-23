@@ -234,20 +234,21 @@ exports.verifyQR = async (req, res) => {
       return res.status(400).json({ message: "QR code is required" });
     }
     
-    if (!appointmentId) {
-      return res.status(400).json({ message: "Appointment ID is required" });
+    let appointment;
+    
+    // If appointmentId is provided, fetch by ID
+    if (appointmentId) {
+      const idNum = parseInt(appointmentId, 10);
+      if (isNaN(idNum)) {
+        return res.status(400).json({ message: "Invalid appointment ID format" });
+      }
+      appointment = await Appointment.getAppointmentById(idNum);
+      console.log('📋 Fetched appointment by ID:', appointment);
+    } else {
+      // Otherwise, look up by QR code token
+      appointment = await Appointment.verifyQRCode(qrCode);
+      console.log('📋 Fetched appointment by QR token:', appointment);
     }
-    
-    // Convert appointmentId to integer if it's a string
-    const idNum = parseInt(appointmentId, 10);
-    if (isNaN(idNum)) {
-      return res.status(400).json({ message: "Invalid appointment ID format" });
-    }
-    
-    // Fetch appointment and verify QR code matches
-    const appointment = await Appointment.getAppointmentById(idNum);
-    
-    console.log('📋 Fetched appointment:', appointment);
     
     if (!appointment) {
       return res.status(404).json({ message: "Appointment not found" });
@@ -269,11 +270,11 @@ exports.verifyQR = async (req, res) => {
     }
     
     // Update status to visited
-    await Appointment.updateAppointmentStatus(idNum, 'visited');
-    console.log('✅ Status updated to visited');
+    await Appointment.updateAppointmentStatus(appointment.appointment_id, 'visited');
+    console.log('✅ Status updated to visited for appointment:', appointment.appointment_id);
     
     // Fetch updated appointment
-    const updatedAppointment = await Appointment.getAppointmentById(idNum);
+    const updatedAppointment = await Appointment.getAppointmentById(appointment.appointment_id);
     
     res.json({ 
       message: "Appointment verified and marked as visited",
