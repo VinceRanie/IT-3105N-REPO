@@ -17,19 +17,24 @@ exports.createAppointment = async (data) => {
 
 // READ ALL
 exports.getAllAppointments = async () => {
-  const [rows] = await db.execute("SELECT * FROM appointment ORDER BY date DESC");
+  const [rows] = await db.execute(
+    "SELECT * FROM appointment WHERE deleted_at IS NULL ORDER BY date DESC"
+  );
   return rows;
 };
 
 // READ BY STATUS
 exports.getAppointmentsByStatus = async (status) => {
-  const [rows] = await db.execute("SELECT * FROM appointment WHERE status = ? ORDER BY date DESC", [status]);
+  const [rows] = await db.execute(
+    "SELECT * FROM appointment WHERE status = ? AND deleted_at IS NULL ORDER BY date DESC",
+    [status]
+  );
   return rows;
 };
 
 // CHECK FOR SCHEDULE CONFLICTS
 exports.checkScheduleConflict = async (date, excludeId = null) => {
-  let query = "SELECT * FROM appointment WHERE date = ? AND status IN ('approved', 'ongoing')";
+  let query = "SELECT * FROM appointment WHERE date = ? AND status IN ('approved', 'ongoing') AND deleted_at IS NULL";
   const params = [date];
   
   if (excludeId) {
@@ -43,7 +48,10 @@ exports.checkScheduleConflict = async (date, excludeId = null) => {
 
 // READ ONE By ID
 exports.getAppointmentById = async (id) => {
-  const [rows] = await db.execute("SELECT * FROM appointment WHERE appointment_id = ?", [id]);
+  const [rows] = await db.execute(
+    "SELECT * FROM appointment WHERE appointment_id = ? AND deleted_at IS NULL",
+    [id]
+  );
   return rows[0];
 };
 
@@ -53,7 +61,7 @@ exports.getAppointmentWithUserEmail = async (id) => {
     `SELECT a.*, u.email as user_email 
      FROM appointment a 
      LEFT JOIN user u ON a.user_id = u.user_id 
-     WHERE a.appointment_id = ?`,
+     WHERE a.appointment_id = ? AND a.deleted_at IS NULL`,
     [id]
   );
   return rows[0];
@@ -115,14 +123,48 @@ exports.generateQRCode = async (appointmentId) => {
 // VERIFY QR CODE
 exports.verifyQRCode = async (qrCode) => {
   const [rows] = await db.execute(
-    "SELECT * FROM appointment WHERE qr_code = ? AND status = 'ongoing'",
+    "SELECT * FROM appointment WHERE qr_code = ? AND status = 'ongoing' AND deleted_at IS NULL",
     [qrCode]
   );
   return rows[0];
 };
 
-// DELETE
-exports.deleteAppointment = async (id) => {
-  const [result] = await db.execute("DELETE FROM appointment WHERE appointment_id = ?", [id]);
+// GET APPOINTMENTS FOR DATE RANGE (for calendar view)
+exports.getAppointmentsByDateRange = async (startDate, endDate, userId = null) => {
+  let query = "SELECT * FROM appointment WHERE date >= ? AND date <= ? AND deleted_at IS NULL AND status != 'denied'";
+  const params = [startDate, endDate];
+  
+  if (userId) {
+    query += " AND user_id = ?";
+    params.push(userId);
+  }
+  
+  const [rows] = await db.execute(query, params);
+  return rows;
+};
+
+// GET APPOINTMENTS FOR SPECIFIC DATE
+exports.getAppointmentsByDate = async (date) => {
+  const [rows] = await db.execute(
+    "SELECT * FROM appointment WHERE DATE(date) = DATE(?) AND deleted_at IS NULL AND status IN ('approved', 'ongoing')",
+    [date]
+  );
+  return rows;
+};
+
+// SOFT DELETE (Mark as no-show)
+exports.softDeleteAppointment = async (id) => {
+  const [result] = await db.execute(
+    "UPDATE appointment SET deleted_at = NOW() WHERE appointment_id = ? AND deleted_at IS NULL",
+    [id]
+  );
+  return result.affectedRows;
+};
+
+// AUTO-EXPIRE ONGOING APPOINTMENTS (cron job)
+exports.expireOldAppointments = async () => {
+  const [result] = await db.execute(
+    "UPDATE appointment SET deleted_at = NOW() WHERE status = 'ongoing' AND date < NOW() AND deleted_at IS NULL"
+  );
   return result.affectedRows;
 };

@@ -313,3 +313,100 @@ exports.remove = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+// GET AVAILABILITY FOR A DATE (for student calendar)
+exports.getAvailability = async (req, res) => {
+  try {
+    const { date } = req.query;
+    
+    if (!date) {
+      return res.status(400).json({ message: "Date parameter is required (YYYY-MM-DD)" });
+    }
+    
+    // Get all appointments for this date
+    const appointments = await Appointment.getAppointmentsByDate(date);
+    
+    // Time slots configuration (9 AM to 4 PM, 1-hour intervals)
+    const timeSlots = [
+      '09:00', '10:00', '11:00', '12:00', 
+      '13:00', '14:00', '15:00', '16:00'
+    ];
+    
+    // Build booked times map
+    const bookedTimes = {};
+    appointments.forEach(appt => {
+      const hour = new Date(appt.date).getHours();
+      bookedTimes[`${String(hour).padStart(2, '0')}:00`] = true;
+    });
+    
+    // Build availability status
+    const availability = timeSlots.map(time => ({
+      time,
+      available: !bookedTimes[time],
+      booked: !!bookedTimes[time]
+    }));
+    
+    res.json({
+      date,
+      totalSlots: timeSlots.length,
+      bookedCount: appointments.length,
+      availableCount: timeSlots.length - appointments.length,
+      timeSlots: availability
+    });
+  } catch (err) {
+    console.error('❌ Error fetching availability:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// GET CALENDAR OVERVIEW (for month view)
+exports.getCalendarOverview = async (req, res) => {
+  try {
+    const { month, year } = req.query;
+    
+    if (!month || !year) {
+      return res.status(400).json({ message: "Month and year parameters are required" });
+    }
+    
+    const startDate = new Date(`${year}-${String(month).padStart(2, '0')}-01`);
+    const endDate = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0);
+    
+    const appointments = await Appointment.getAppointmentsByDateRange(
+      startDate.toISOString().split('T')[0],
+      endDate.toISOString().split('T')[0]
+    );
+    
+    // Group appointments by date
+    const dateStatus = {};
+    appointments.forEach(appt => {
+      const dateStr = appt.date.toISOString().split('T')[0];
+      if (!dateStatus[dateStr]) {
+        dateStatus[dateStr] = { total: 0, booked: 0, available: 0 };
+      }
+      dateStatus[dateStr].total++;
+      dateStatus[dateStr].booked++;
+    });
+    
+    res.json({
+      month,
+      year,
+      daysWithAppointments: dateStatus
+    });
+  } catch (err) {
+    console.error('❌ Error fetching calendar overview:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// SOFT DELETE (Mark as no-show)
+exports.markNoShow = async (req, res) => {
+  try {
+    const affected = await Appointment.softDeleteAppointment(req.params.id);
+    if (!affected) {
+      return res.status(404).json({ message: "Appointment not found or already deleted" });
+    }
+    res.json({ message: "Appointment marked as no-show" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
