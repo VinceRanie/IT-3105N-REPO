@@ -97,10 +97,16 @@ export default function StudentAppointmentCalendar() {
     try {
       const dateStr = format(date, 'yyyy-MM-dd');
       const res = await fetch(`/API/appointments/availability?date=${dateStr}`);
-      const data = await res.json();
-      setAvailability(data);
+      if (res.ok) {
+        const data = await res.json();
+        setAvailability(data);
+      } else {
+        // If API fails, still show modal with empty slots - user can try again
+        console.warn('Failed to fetch availability:', res.status);
+      }
     } catch (err) {
-      console.error('Failed to fetch availability:', err);
+      console.warn('Failed to fetch availability:', err);
+      // Modal will still open with empty availability
     }
   };
 

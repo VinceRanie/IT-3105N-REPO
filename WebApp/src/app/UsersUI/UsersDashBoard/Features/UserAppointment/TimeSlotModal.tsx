@@ -48,15 +48,15 @@ export default function TimeSlotModal({
         return;
       }
       
-      // Fallback: try to get from backend
+      // Fallback: try to get from backend (silent fail if not available)
       const res = await fetch('/API/users/me');
       if (res.ok) {
         const data = await res.json();
         setUserInfo(data);
       }
+      // 404 is expected if backend doesn't have /users/me - proceed without user info
     } catch (err) {
-      console.error('Failed to fetch user info:', err);
-      // Proceed without user info - user can still book
+      // Silent error - user can still book without pre-filled info
     }
   };
 
@@ -130,6 +130,18 @@ export default function TimeSlotModal({
   };
 
   const availableEndTimes = getAvailableEndTimes();
+
+  // Guard: if availability is missing, show loading state
+  if (!availability || !availability.timeSlots) {
+    return (
+      <div className={styles.overlay} onClick={onClose}>
+        <div className={styles.modal} onClick={e => e.stopPropagation()}>
+          <button className={styles.closeBtn} onClick={onClose}>×</button>
+          <p style={{ padding: '20px', textAlign: 'center', color: '#666' }}>Loading available time slots...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.overlay} onClick={onClose}>
