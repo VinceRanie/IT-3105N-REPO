@@ -104,8 +104,9 @@ export default function TimeSlotModal({
     setError('');
 
     try {
-      const appointmentDate = `${format(date, 'yyyy-MM-dd')}T${selectedStartTime}`;
-      const appointmentEndTime = `${format(date, 'yyyy-MM-dd')}T${selectedEndTime}`;
+      const dateStr = format(date, 'yyyy-MM-dd');
+      const appointmentDate = `${dateStr} ${selectedStartTime}:00`;
+      const appointmentEndTime = `${dateStr} ${selectedEndTime}:00`;
 
       // Extract student ID and user_id from available sources
       let studentId = '';
