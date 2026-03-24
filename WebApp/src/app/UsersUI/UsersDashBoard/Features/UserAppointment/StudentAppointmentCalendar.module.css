@@ -195,10 +195,21 @@
 }
 
 .day.disabled {
-  background: #f3f4f6;
-  border-color: #d1d5db;
+  background: #d1d5db;
+  border-color: #9ca3af;
   cursor: not-allowed;
-  opacity: 0.5;
+  opacity: 1;
+  color: #6b7280;
+}
+
+.day.disabled:hover {
+  background: #d1d5db;
+  border-color: #9ca3af;
+  transform: none;
+}
+
+.day.disabled .dayNumber {
+  color: #6b7280;
 }
 
 .day.disabled:hover {

@@ -67,12 +67,19 @@ export default function StudentAppointmentCalendar() {
   };
 
   const getDateStatus = (date: Date): 'disabled' | 'booked' | 'partial' | 'available' => {
+    // Get today's date at midnight for proper comparison
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    
+    // Create a copy of the date for comparison (also at midnight)
+    const compareDate = new Date(date);
+    compareDate.setHours(0, 0, 0, 0);
+    
     const dateStr = format(date, 'yyyy-MM-dd');
 
     // Disable: today or past dates (minimum 1 day advance notice) and Sundays
-    if (isBefore(date, addDays(today, 1)) || getDay(date) === 0) {
+    // Must be at least tomorrow to book
+    if (compareDate <= today || getDay(date) === 0) {
       return 'disabled';
     }
 
