@@ -59,8 +59,8 @@ export default function LoginForm() {
         
         if (userRole === 'admin') {
           router.push('/AdminUI/AdminDashBoard');
-        } else if (userRole === 'ra' || userRole === 'RA') {
-          router.push('/UsersUI/UsersDashBoard'); // OR create separate RA dashboard
+        } else if (userRole === 'staff' || userRole === 'ra' || userRole === 'RA') {
+          router.push('/RAStaffUI/RAStaffDashBoard');
         } else {
           // student or default
           router.push('/UsersUI/UsersDashBoard');
