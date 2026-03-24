@@ -36,8 +36,8 @@ exports.getAppointmentsByStatus = async (status) => {
   return rows;
 };
 
-// CHECK FOR SCHEDULE CONFLICTS - checks for overlapping time ranges
-exports.checkScheduleConflict = async (date, end_time = null, excludeId = null) => {
+// CHECK FOR SCHEDULE CONFLICTS - checks for overlapping time ranges on the SAME DATE
+exports.checkScheduleConflict = async (date, end_time = null, excludeId = null, student_id = null) => {
   // If no end_time provided, assume 1-hour slot
   let endTime = end_time;
   if (!endTime && date) {
@@ -47,15 +47,21 @@ exports.checkScheduleConflict = async (date, end_time = null, excludeId = null) 
     endTime = startDate.toISOString().slice(0, 19).replace('T', ' ');
   }
 
-  // Query for appointments that overlap with the requested time range
+  // Query for appointments that overlap with the requested time range on the SAME DATE
   // Overlap occurs if: existing_start < requested_end AND existing_end > requested_start
   let query = `SELECT * FROM appointment 
     WHERE status IN ('approved', 'ongoing') 
     AND deleted_at IS NULL
+    AND DATE(date) = DATE(?)
     AND date < ?
     AND (end_time IS NULL OR end_time > ?)`;
   
-  const params = [endTime, date];
+  const params = [date, endTime, date];
+  
+  if (student_id) {
+    query += " AND student_id = ?";
+    params.push(student_id);
+  }
   
   if (excludeId) {
     query += " AND appointment_id != ?";

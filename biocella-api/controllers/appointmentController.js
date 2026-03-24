@@ -19,11 +19,11 @@ exports.create = async (req, res) => {
   try {
     console.log('[DEBUG] Create appointment - req.body:', JSON.stringify(req.body, null, 2));
     
-    // Check for schedule conflicts (check time range overlap)
-    const hasConflict = await Appointment.checkScheduleConflict(req.body.date, req.body.end_time);
+    // Check for schedule conflicts (check time range overlap on same date and same student)
+    const hasConflict = await Appointment.checkScheduleConflict(req.body.date, req.body.end_time, null, req.body.student_id);
     if (hasConflict) {
       return res.status(409).json({ 
-        error: "Schedule conflict: An appointment already exists at this time" 
+        error: "Schedule conflict: An appointment already exists at this time on this date" 
       });
     }
     
