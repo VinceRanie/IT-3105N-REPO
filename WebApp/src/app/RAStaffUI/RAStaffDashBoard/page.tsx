@@ -11,8 +11,8 @@ export default function RAStaffDashboard() {
   useProtectedRoute({ requiredRole: 'staff' });
 
   useEffect(() => {
-    // Auto-redirect to inventory on load
-    router.replace('/RAStaffUI/RAStaffDashBoard/Features/RAStaffInventory');
+    // Auto-redirect to collection on load
+    router.replace('/RAStaffUI/RAStaffDashBoard/Features/RAStaffCollection');
   }, [router]);
 
   return (

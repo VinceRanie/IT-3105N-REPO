@@ -8,6 +8,7 @@ import Image from "next/image"
 import { clearAuthData } from "@/app/utils/authUtil"
 
 const navigation = [
+  { name: "Collection", href: "/RAStaffUI/RAStaffDashBoard/Features/RAStaffCollection" },
   { name: "Inventory", href: "/RAStaffUI/RAStaffDashBoard/Features/RAStaffInventory" },
   { name: "Appointments", href: "/RAStaffUI/RAStaffDashBoard/Features/RAStaffAppointment" },
 ]

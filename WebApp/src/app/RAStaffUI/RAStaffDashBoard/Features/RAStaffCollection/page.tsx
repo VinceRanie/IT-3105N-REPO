@@ -1,0 +1,282 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { API_URL } from "@/config/api";
+import RAStaffCollection from "./RAStaffCollection";
+import RAStaffControls from "./RAStaffControls";
+import ProjectModal from "./ProjectModal";
+import SpecimenModal from "./SpecimenModal";
+import { useRouter } from "next/navigation";
+import { useProtectedRoute } from "@/app/hooks/useProtectedRoute";
+import { getAuthHeader } from "@/app/utils/authUtil";
+
+interface Project {
+  _id: string;
+  title: string;
+  code: string;
+  classification: string;
+  user_id: number;
+}
+
+interface Specimen {
+  _id: string;
+  code_name: string;
+  classification: string;
+  source: string;
+  date_accessed: string;
+  locale?: string;
+  project_fund?: string;
+  accession_number?: string;
+  accession_no?: string;
+  similarity_percent?: string;
+  project_id: Project | string;
+  description?: string;
+  qr_code?: string;
+  image_url?: string;
+  fasta_file?: string;
+  fasta_sequence?: string;
+  blast_rid?: string;
+  blast_results?: any;
+  biochemical_tests?: {
+    onpg?: string;
+    glu?: string;
+    adh?: string;
+    man?: string;
+    ldc?: string;
+    ino?: string;
+    odc?: string;
+    sor?: string;
+    cit?: string;
+    rha?: string;
+    h2s?: string;
+    sac?: string;
+    ure?: string;
+    mel?: string;
+    tda?: string;
+    amy?: string;
+    ind?: string;
+    ara?: string;
+    vp?: string;
+    no2?: string;
+    gel?: string;
+  };
+  catalase?: string;
+  hemolysis?: string;
+  oxidase?: string;
+  growth_media?: string;
+  special_reqs?: string;
+  activity?: string;
+  result?: string;
+  custom_fields?: Record<string, string>;
+}
+
+export default function RAStaffCollectionPage() {
+  // Protect route
+  useProtectedRoute({ requiredRole: "staff" });
+
+  const [specimens, setSpecimens] = useState<Specimen[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  
+  // Modal states
+  const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
+  const [isSpecimenModalOpen, setIsSpecimenModalOpen] = useState(false);
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [selectedSpecimen, setSelectedSpecimen] = useState<Specimen | null>(null);
+  
+  const router = useRouter();
+
+  // Fetch projects
+  const fetchProjects = async () => {
+    try {
+      const response = await fetch(`${API_URL}/projects`, {
+        headers: getAuthHeader(),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setProjects(data);
+      }
+    } catch (error) {
+      console.error("Error fetching projects:", error);
+    }
+  };
+
+  // Fetch specimens
+  const fetchSpecimens = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(`${API_URL}/microbials`, {
+        headers: getAuthHeader(),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        console.log("Fetched specimens:", data);
+        console.log("First specimen _id:", data[0]?._id);
+        setSpecimens(data);
+      } else {
+        console.error("Failed to fetch specimens:", response.status);
+      }
+    } catch (error) {
+      console.error("Error fetching specimens:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchProjects();
+    fetchSpecimens();
+  }, []);
+
+  // Project handlers
+  const handleSaveProject = async (projectData: any) => {
+    try {
+      const method = selectedProject ? "PUT" : "POST";
+      const url = selectedProject
+        ? `${API_URL}/projects/${selectedProject._id}`
+        : `${API_URL}/projects`;
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeader(),
+        },
+        body: JSON.stringify(projectData),
+      });
+
+      if (response.ok) {
+        await fetchProjects();
+        setIsProjectModalOpen(false);
+        setSelectedProject(null);
+        alert(selectedProject ? "Project updated successfully!" : "Project created successfully!");
+      } else {
+        const error = await response.json();
+        alert(`Error: ${error.message || "Failed to save project"}`);
+      }
+    } catch (error) {
+      console.error("Error saving project:", error);
+      alert("Error saving project");
+    }
+  };
+
+  // Specimen handlers
+  const handleSaveSpecimen = async (specimenData: FormData) => {
+    try {
+      const method = selectedSpecimen ? "PUT" : "POST";
+      const url = selectedSpecimen
+        ? `${API_URL}/microbials/${selectedSpecimen._id}`
+        : `${API_URL}/microbials`;
+
+      const response = await fetch(url, {
+        method,
+        headers: getAuthHeader(),
+        body: specimenData,
+      });
+
+      if (response.ok) {
+        await fetchSpecimens();
+        setIsSpecimenModalOpen(false);
+        setSelectedSpecimen(null);
+        alert(selectedSpecimen ? "Specimen updated successfully! QR code has been generated." : "Specimen added successfully! QR code has been generated.");
+      } else {
+        const error = await response.json();
+        alert(`Error: ${error.error || "Failed to save specimen"}`);
+      }
+    } catch (error) {
+      console.error("Error saving specimen:", error);
+      alert("Error saving specimen");
+    }
+  };
+
+  const handleViewSpecimen = (specimen: any) => {
+    console.log("View specimen:", specimen);
+    if (!specimen._id) {
+      alert("Error: Specimen ID is missing");
+      return;
+    }
+    router.push(`/RAStaffUI/RAStaffDashBoard/Features/RAStaffCollection/specimen/${specimen._id}`);
+  };
+
+  const handleEditSpecimen = (specimen: any) => {
+    console.log("Edit specimen:", specimen);
+    if (!specimen._id) {
+      alert("Error: Specimen ID is missing");
+      return;
+    }
+    setSelectedSpecimen(specimen);
+    setIsSpecimenModalOpen(true);
+  };
+
+  // Filter specimens based on search query
+  const filteredSpecimens = specimens.filter((specimen: any) => {
+    if (!searchQuery) return true;
+    
+    const query = searchQuery.toLowerCase();
+    return (
+      specimen.code_name?.toLowerCase().includes(query) ||
+      specimen.accession_number?.toLowerCase().includes(query) ||
+      specimen.accession_no?.toLowerCase().includes(query) ||
+      specimen.classification?.toLowerCase().includes(query) ||
+      specimen.source?.toLowerCase().includes(query) ||
+      specimen.locale?.toLowerCase().includes(query) ||
+      specimen.project_id?.title?.toLowerCase().includes(query)
+    );
+  });
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#113F67] mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading specimens...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <RAStaffControls
+        onAddProject={() => {
+          setSelectedProject(null);
+          setIsProjectModalOpen(true);
+        }}
+        onAddSpecimen={() => {
+          setSelectedSpecimen(null);
+          setIsSpecimenModalOpen(true);
+        }}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+      />
+      
+      <RAStaffCollection
+        specimens={filteredSpecimens}
+        onEdit={handleEditSpecimen}
+        onView={handleViewSpecimen}
+      />
+
+      <ProjectModal
+        isOpen={isProjectModalOpen}
+        onClose={() => {
+          setIsProjectModalOpen(false);
+          setSelectedProject(null);
+        }}
+        onSave={handleSaveProject}
+        project={selectedProject}
+      />
+
+      <SpecimenModal
+        isOpen={isSpecimenModalOpen}
+        onClose={() => {
+          setIsSpecimenModalOpen(false);
+          setSelectedSpecimen(null);
+        }}
+        onSave={handleSaveSpecimen}
+        specimen={selectedSpecimen}
+        projects={projects}
+      />
+    </>
+  );
+}
