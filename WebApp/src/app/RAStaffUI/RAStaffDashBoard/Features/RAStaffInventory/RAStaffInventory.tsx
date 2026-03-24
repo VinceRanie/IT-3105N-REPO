@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { Chemical, Batch } from "./types";
 import AddChemicalModal from "./AddChemicalModal";
-import EditChemicalModal from "./EditChemicalModal";
 import { Search, Plus, Edit, ChevronLeft, ChevronRight, Package } from "lucide-react";
 import { API_URL } from "@/config/api";
 import { useRouter } from "next/navigation";
@@ -22,7 +21,6 @@ export default function RAStaffInventory() {
   
   // Modal states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedChemical, setSelectedChemical] = useState<Chemical | null>(null);
   
   // Search and filter
@@ -109,19 +107,12 @@ export default function RAStaffInventory() {
 
   // Handler functions
   const handleEdit = (chemical: Chemical) => {
-    setSelectedChemical(chemical);
-    setIsEditModalOpen(true);
+    const chemicalBatch = batches.find(b => b.chemical_id === chemical.chemical_id);
+    if (chemicalBatch) {
+      router.push(`/RAStaffUI/RAStaffDashBoard/Features/RAStaffInventory/batch/${chemicalBatch.batch_id}`);
+    }
   };
 
-  const handleAddSuccess = () => {
-    fetchChemicals();
-    setIsAddModalOpen(false);
-  };
-
-  const handleEditSuccess = () => {
-    fetchChemicals();
-    setIsEditModalOpen(false);
-  };
 
   // Check if quantity is below threshold
   const isLowStock = (chemical: Chemical) => {
@@ -367,15 +358,6 @@ export default function RAStaffInventory() {
         onClose={() => setIsAddModalOpen(false)}
         onSuccess={handleAddSuccess}
       />
-      
-      {selectedChemical && (
-        <EditChemicalModal
-          isOpen={isEditModalOpen}
-          onClose={() => setIsEditModalOpen(false)}
-          onSuccess={handleEditSuccess}
-          chemical={selectedChemical}
-        />
-      )}
     </div>
   );
 }
