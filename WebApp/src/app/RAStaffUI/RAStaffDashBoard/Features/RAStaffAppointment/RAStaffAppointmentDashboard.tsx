@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { format } from 'date-fns';
 import jsQR from 'jsqr';
-import { Check, X, QrCode, Plus, Search, Calendar, AlertCircle } from 'lucide-react';
+import { Check, X, QrCode, Search, Calendar } from 'lucide-react';
 import { API_URL } from '@/config/api';
 import { getAuthHeader, getUserData } from '@/app/utils/authUtil';
 
@@ -41,13 +41,6 @@ export default function RAStaffAppointmentDashboard() {
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [newAppointment, setNewAppointment] = useState({
-    student_id: '',
-    department: '',
-    purpose: '',
-    date: '',
-  });
 
   const tabs: { key: TabType; label: string; color: string }[] = [
     { key: 'pending', label: 'Pending', color: 'yellow' },
@@ -296,39 +289,7 @@ export default function RAStaffAppointmentDashboard() {
     }
   };
 
-  const handleAddAppointment = async () => {
-    try {
-      const userData = getUserData();
-      const res = await fetch(`${API_URL}/appointments`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeader(),
-        },
-        body: JSON.stringify({
-          user_id: userData?.userId,
-          student_id: newAppointment.student_id,
-          department: newAppointment.department,
-          purpose: newAppointment.purpose,
-          date: newAppointment.date,
-          end_time: new Date(
-            new Date(newAppointment.date).getTime() + 2 * 60 * 60 * 1000
-          )
-            .toISOString()
-            .slice(0, 19)
-            .replace('T', ' '),
-        }),
-      });
 
-      if (!res.ok) throw new Error('Failed to add appointment');
-
-      setShowAddModal(false);
-      setNewAppointment({ student_id: '', department: '', purpose: '', date: '' });
-      fetchAllAppointmentsAndCount();
-    } catch (err) {
-      alert('Error: ' + (err instanceof Error ? err.message : 'Failed to add appointment'));
-    }
-  };
 
   const getFilteredAppointments = () => {
     let filtered = appointments;
@@ -358,13 +319,7 @@ export default function RAStaffAppointmentDashboard() {
             </h1>
             <p className="text-gray-600 mt-1">Manage student appointments and scan QR codes</p>
           </div>
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="bg-[#113F67] text-white px-4 py-2 rounded-lg hover:bg-[#0d2947] flex items-center gap-2"
-          >
-            <Plus className="w-5 h-5" />
-            Add Appointment
-          </button>
+
         </div>
       </div>
 
@@ -607,68 +562,7 @@ export default function RAStaffAppointmentDashboard() {
         </div>
       )}
 
-      {/* Add Appointment Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-8 max-w-md w-full">
-            <h2 className="text-2xl font-bold mb-6 text-[#113F67]">Add Appointment</h2>
-            <div className="space-y-4">
-              <input
-                type="text"
-                placeholder="Student ID"
-                value={newAppointment.student_id}
-                onChange={(e) =>
-                  setNewAppointment({ ...newAppointment, student_id: e.target.value })
-                }
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
-              />
-              <input
-                type="text"
-                placeholder="Department"
-                value={newAppointment.department}
-                onChange={(e) =>
-                  setNewAppointment({ ...newAppointment, department: e.target.value })
-                }
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
-              />
-              <input
-                type="text"
-                placeholder="Purpose"
-                value={newAppointment.purpose}
-                onChange={(e) =>
-                  setNewAppointment({ ...newAppointment, purpose: e.target.value })
-                }
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
-              />
-              <input
-                type="datetime-local"
-                value={newAppointment.date}
-                onChange={(e) =>
-                  setNewAppointment({
-                    ...newAppointment,
-                    date: new Date(e.target.value).toISOString().slice(0, 19).replace('T', ' '),
-                  })
-                }
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
-              />
-            </div>
-            <div className="flex gap-3 pt-6">
-              <button
-                onClick={handleAddAppointment}
-                className="flex-1 bg-[#113F67] text-white py-2 rounded-lg hover:bg-[#0d2947]"
-              >
-                Add
-              </button>
-              <button
-                onClick={() => setShowAddModal(false)}
-                className="flex-1 bg-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-400"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
     </div>
   );
 }
