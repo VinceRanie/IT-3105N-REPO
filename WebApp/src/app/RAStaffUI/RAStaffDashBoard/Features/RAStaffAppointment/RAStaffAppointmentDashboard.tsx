@@ -4,8 +4,6 @@ import { useState, useEffect, useRef } from 'react';
 import { format } from 'date-fns';
 import jsQR from 'jsqr';
 import { Check, X, QrCode, Search } from 'lucide-react';
-import { API_URL } from '@/config/api';
-import { getAuthHeader, getUserData } from '@/app/utils/authUtil';
 
 interface Appointment {
   appointment_id: number;
@@ -140,8 +138,8 @@ export default function RAStaffAppointmentDashboard() {
 
     try {
       setLoading(true);
-      const res = await fetch(`${API_URL}/appointments`, {
-        headers: getAuthHeader(),
+      const res = await fetch(`/API/appointments`, {
+        headers: { 'Content-Type': 'application/json' },
       });
       if (!res.ok) throw new Error('Failed to fetch appointments');
       const data = await res.json();
@@ -222,21 +220,27 @@ export default function RAStaffAppointmentDashboard() {
 
   const autoVerifyQR = async (token: string, appointmentId: string) => {
     try {
-      const res = await fetch(`${API_URL}/appointments/${appointmentId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeader(),
-        },
-        body: JSON.stringify({ status: 'visited' }),
+      const response = await fetch('/API/appointments/verify-qr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          qrCode: token,
+          appointmentId: appointmentId
+        }),
       });
 
-      if (!res.ok) throw new Error('Verification failed');
+      const data = await response.json();
 
-      stopCamera();
-      setShowModal(false);
-      alert('Appointment verified successfully!');
-      fetchAllAppointmentsAndCount();
+      if (response.ok) {
+        console.log('✅ Auto-verified! Student:', data.appointment.student_id);
+        alert(`✅ Appointment verified! Student: ${data.appointment.student_id}`);
+        stopCamera();
+        setShowModal(false);
+        fetchAllAppointmentsAndCount();
+      } else {
+        console.warn('⚠️ Verification failed:', data.message);
+        alert('❌ ' + (data.message || 'QR verification failed'));
+      }
     } catch (err) {
       console.error('Error:', err);
       alert('Error verifying appointment');
@@ -247,21 +251,24 @@ export default function RAStaffAppointmentDashboard() {
     if (!selectedAppointment) return;
 
     try {
-      const res = await fetch(`${API_URL}/appointments/${selectedAppointment.appointment_id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeader(),
-        },
-        body: JSON.stringify({ status: 'approved', admin_remarks: remarks }),
+      const response = await fetch(`/API/appointments/${selectedAppointment.appointment_id}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          remarks
+        }),
       });
 
-      if (!res.ok) throw new Error('Failed to approve');
-
-      setShowModal(false);
-      setRemarks('');
-      fetchAllAppointmentsAndCount();
+      if (response.ok) {
+        alert('Appointment approved! Email sent to user with QR code.');
+        fetchAllAppointmentsAndCount();
+        setShowModal(false);
+        setRemarks('');
+      } else {
+        alert('Failed to approve appointment');
+      }
     } catch (err) {
+      console.error('Error approving appointment:', err);
       alert('Error: ' + (err instanceof Error ? err.message : 'Failed to approve'));
     }
   };
@@ -270,21 +277,24 @@ export default function RAStaffAppointmentDashboard() {
     if (!selectedAppointment) return;
 
     try {
-      const res = await fetch(`${API_URL}/appointments/${selectedAppointment.appointment_id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeader(),
-        },
-        body: JSON.stringify({ status: 'denied', denial_reason: reason }),
+      const response = await fetch(`/API/appointments/${selectedAppointment.appointment_id}/deny`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          reason: reason
+        }),
       });
 
-      if (!res.ok) throw new Error('Failed to deny');
-
-      setShowModal(false);
-      setReason('');
-      fetchAllAppointmentsAndCount();
+      if (response.ok) {
+        alert('Appointment denied. Email sent to user.');
+        fetchAllAppointmentsAndCount();
+        setShowModal(false);
+        setReason('');
+      } else {
+        alert('Failed to deny appointment');
+      }
     } catch (err) {
+      console.error('Error denying appointment:', err);
       alert('Error: ' + (err instanceof Error ? err.message : 'Failed to deny'));
     }
   };
