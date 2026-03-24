@@ -113,6 +113,10 @@ export default function RAStaffInventory() {
     }
   };
 
+  const handleAddSuccess = () => {
+    fetchChemicals();
+    setIsAddModalOpen(false);
+  };
 
   // Check if quantity is below threshold
   const isLowStock = (chemical: Chemical) => {
