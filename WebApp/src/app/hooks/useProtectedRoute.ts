@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { getAuthToken, getUserRole } from '@/app/utils/authUtil';
 
 interface ProtectedRouteOptions {
-  requiredRole?: 'admin' | 'ra' | 'student';
+  requiredRole?: 'admin' | 'ra' | 'student' | 'staff';
   redirectTo?: string;
 }
 

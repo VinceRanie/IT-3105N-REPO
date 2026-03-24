@@ -34,16 +34,16 @@ export default function RAStaffProfile() {
       setProfile({
         user_id: userData.userId,
         email: userData.email,
-        first_name: userData.firstName || "",
-        last_name: userData.lastName || "",
-        department: userData.department || "",
+        first_name: "",
+        last_name: "",
+        department: "",
         role: "Staff",
         created_at: new Date().toISOString(),
       });
       setFormData({
-        first_name: userData.firstName || "",
-        last_name: userData.lastName || "",
-        department: userData.department || "",
+        first_name: "",
+        last_name: "",
+        department: "",
       });
     }
     setLoading(false);
