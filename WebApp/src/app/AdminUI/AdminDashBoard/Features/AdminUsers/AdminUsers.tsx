@@ -3,7 +3,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { API_URL } from "@/config/api";
 import { getAuthHeader, getUserData } from "@/app/utils/authUtil";
-import AdminControls from "./AdminControls";import { ChevronUp, ChevronDown } from \"lucide-react\";
+import AdminControls from "./AdminControls";
+import { ChevronUp, ChevronDown } from "lucide-react";
 interface User {
   user_id: number;
   email: string;
