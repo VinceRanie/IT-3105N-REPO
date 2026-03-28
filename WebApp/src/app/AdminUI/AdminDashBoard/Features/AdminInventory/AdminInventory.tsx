@@ -105,7 +105,7 @@ export default function AdminInventory() {
   };
 
   const getSortedData = () => {
-    if (!sortColumn) return filteredChemicals;
+    if (!sortColumn) return [...filteredChemicals].reverse();
     
     const sorted = [...filteredChemicals].sort((a, b) => {
       let aVal: any = a[sortColumn as keyof Chemical];
