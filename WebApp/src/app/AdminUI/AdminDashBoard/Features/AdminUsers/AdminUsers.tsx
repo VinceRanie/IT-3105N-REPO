@@ -86,13 +86,13 @@ export default function UserTable() {
   const filteredUsers = useMemo(() => {
     const query = search.toLowerCase();
     let filtered = users.filter((u) => {
-      const matchesRole = activeRole === \"all\" ? true : u.role?.toLowerCase() === activeRole;
+      const matchesRole = activeRole === "all" ? true : u.role?.toLowerCase() === activeRole;
       const matchesSearch =
         !query ||
         `${u.first_name} ${u.last_name}`.toLowerCase().includes(query) ||
         u.email.toLowerCase().includes(query) ||
-        (u.department || \"\").toLowerCase().includes(query) ||
-        (u.course || \"\").toLowerCase().includes(query);
+        (u.department || "").toLowerCase().includes(query) ||
+        (u.course || "").toLowerCase().includes(query);
       return matchesRole && matchesSearch;
     });
 
@@ -120,16 +120,16 @@ export default function UserTable() {
   }, [activeRole, search, users, sortColumn, sortOrder]);
 
   const SortIcon = ({ column }: { column: string }) => {
-    if (sortColumn !== column) return <div className=\"w-4 h-4\" />;
-    return sortOrder === 'asc' ? <ChevronUp className=\"w-4 h-4\" /> : <ChevronDown className=\"w-4 h-4\" />;
+    if (sortColumn !== column) return <div className="w-4 h-4" />;
+    return sortOrder === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />;
   };
 
   const SortableHeader = ({ column, label }: { column: string; label: string }) => (
     <th
-      className=\"px-4 py-3 text-left text-sm font-semibold text-white uppercase cursor-pointer hover:bg-[#0d2f4d] transition-colors\"
+      className="px-4 py-3 text-left text-sm font-semibold text-white uppercase cursor-pointer hover:bg-[#0d2f4d] transition-colors"
       onClick={() => handleSort(column)}
     >
-      <div className=\"flex items-center gap-2\">
+      <div className="flex items-center gap-2">
         {label}
         <SortIcon column={column} />
       </div>
@@ -301,11 +301,11 @@ export default function UserTable() {
             <thead className="bg-[#113F67] sticky top-0 z-10">
               <tr>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">No.</th>
-                <SortableHeader column=\"name\" label=\"Name\" />
-                <SortableHeader column=\"email\" label=\"Email\" />
-                <SortableHeader column=\"role\" label=\"Role\" />
-                <SortableHeader column=\"department\" label=\"Department\" />
-                <SortableHeader column=\"course\" label=\"Course\" />
+                <SortableHeader column="name" label="Name" />
+                <SortableHeader column="email" label="Email" />
+                <SortableHeader column="role" label="Role" />
+                <SortableHeader column="department" label="Department" />
+                <SortableHeader column="course" label="Course" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
