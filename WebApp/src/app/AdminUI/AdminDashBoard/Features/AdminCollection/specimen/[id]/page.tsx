@@ -646,7 +646,7 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
         {/* Tabs */}
         <div className="mb-6 border-b border-gray-200">
           <div className="flex gap-4">
-            {["info", "bioactivity", "biochemical", "morphology", "genome"].map((tab) => (
+            {["info", "bioactivity", "biochemical", "genome"].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -821,19 +821,6 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
                 ) : (
                   <p className="text-gray-500 text-sm">No biochemical data available yet.</p>
                 )}
-              </div>
-            )}
-
-            {activeTab === "morphology" && (
-              <div className="bg-white shadow rounded-xl p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold">Morphology Data</h2>
-                  <button className="flex items-center gap-2 px-3 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600">
-                    <Plus className="w-4 h-4" />
-                    Add Data
-                  </button>
-                </div>
-                <p className="text-gray-500 text-sm">No morphology data available yet.</p>
               </div>
             )}
 

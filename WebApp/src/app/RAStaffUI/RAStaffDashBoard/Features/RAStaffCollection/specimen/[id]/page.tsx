@@ -599,7 +599,7 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
         {/* Tabs */}
         <div className="mb-6 border-b border-gray-200">
           <div className="flex gap-4">
-            {["info", "bioactivity", "biochemical", "morphology", "genome"].map((tab) => (
+            {["info", "bioactivity", "biochemical", "genome"].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -774,15 +774,6 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
                 ) : (
                   <p className="text-gray-500 text-sm">No biochemical data available yet.</p>
                 )}
-              </div>
-            )}
-
-            {activeTab === "morphology" && (
-              <div className="bg-white shadow rounded-xl p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold">Morphology Data</h2>
-                </div>
-                <p className="text-gray-500 text-sm">No morphology data available yet.</p>
               </div>
             )}
 
