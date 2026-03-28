@@ -29,6 +29,10 @@ export default function AdminInventory() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  // Sorting
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+
   // Fetch chemicals and batches from API
   const fetchChemicals = async () => {
     setLoading(true);
@@ -87,10 +91,11 @@ export default function AdminInventory() {
   }, [searchTerm, unitFilter, typeFilter, chemicals]);
 
   // Pagination logic
+  const sortedChemicals = getSortedData();
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = filteredChemicals.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(filteredChemicals.length / itemsPerPage);
+  const currentItems = sortedChemicals.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(sortedChemicals.length / itemsPerPage);
 
   // Get unique units for filter
   const uniqueUnits = Array.from(new Set(chemicals.map((c) => c.unit)));
@@ -125,6 +130,57 @@ export default function AdminInventory() {
   const isLowStock = (chemical: Chemical) => {
     return chemical.quantity <= chemical.threshold;
   };
+
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortOrder('asc');
+    }
+  };
+
+  const getSortedData = () => {
+    if (!sortColumn) return filteredChemicals;
+    
+    const sorted = [...filteredChemicals].sort((a, b) => {
+      let aVal: any = a[sortColumn as keyof Chemical];
+      let bVal: any = b[sortColumn as keyof Chemical];
+      
+      if (aVal == null) aVal = '';
+      if (bVal == null) bVal = '';
+      
+      if (typeof aVal === 'string') aVal = aVal.toLowerCase();
+      if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+      
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
+      }
+      
+      if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+    
+    return sorted;
+  };
+
+  const SortIcon = ({ column }: { column: string }) => {
+    if (sortColumn !== column) return <div className="w-4 h-4" />;
+    return sortOrder === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />;
+  };
+
+  const SortableHeader = ({ column, label }: { column: string; label: string }) => (
+    <th
+      className="px-6 py-3 text-left text-sm font-semibold text-white uppercase cursor-pointer hover:bg-[#0d2f4d] transition-colors"
+      onClick={() => handleSort(column)}
+    >
+      <div className="flex items-center gap-2">
+        {label}
+        <SortIcon column={column} />
+      </div>
+    </th>
+  );
 
   if (loading) {
     return (
