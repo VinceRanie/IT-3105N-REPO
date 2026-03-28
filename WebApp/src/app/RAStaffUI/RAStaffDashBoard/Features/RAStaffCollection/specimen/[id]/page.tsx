@@ -501,11 +501,33 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
         });
       }
 
+      // Footer with logo and branding
+      const logoUrl = '/UI/img/BiocellaLogo.png';
+      const logoData = await getImageBase64(logoUrl);
+      
       const pageCount = doc.getNumberOfPages();
       for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
+        
+        // Add logo to top right corner
+        if (logoData) {
+          try {
+            const logoWidth = 25;
+            const logoHeight = 15;
+            doc.addImage(logoData, 'PNG', pageWidth - margin - logoWidth, 10, logoWidth, logoHeight);
+          } catch (error) {
+            console.error("Error adding logo to PDF:", error);
+          }
+        }
+        
+        // Add footer text
         doc.setFontSize(8);
         doc.setTextColor(128);
+        doc.text(
+          `Printed by Biocella`,
+          margin,
+          doc.internal.pageSize.getHeight() - 10
+        );
         doc.text(
           `Generated on ${new Date().toLocaleString()} | Page ${i} of ${pageCount}`,
           pageWidth / 2,

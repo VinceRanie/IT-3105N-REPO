@@ -308,14 +308,37 @@ export default function SpecimenPublicView({ params, searchParams }: SpecimenPub
         });
       }
 
-      // Footer
-      yPos += 10;
-      checkPageBreak();
-      doc.setFontSize(9);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(128);
-      doc.text(`Generated: ${new Date().toLocaleString()}`, margin, yPos);
-      doc.text("BIOCELLA - Specimen Information System (Read-Only Access)", margin, yPos + 5);
+      // Footer with logo and branding
+      const logoUrl = '/UI/img/BiocellaLogo.png';
+      const logoData = await getImageBase64(logoUrl);
+      const pageCount = doc.getNumberOfPages();
+      
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        
+        // Add logo to top right corner
+        if (logoData) {
+          try {
+            const logoWidth = 25;
+            const logoHeight = 15;
+            doc.addImage(logoData, 'PNG', pageWidth - margin - logoWidth, 10, logoWidth, logoHeight);
+          } catch (error) {
+            console.error("Error adding logo to PDF:", error);
+          }
+        }
+        
+        // Add footer text
+        doc.setFontSize(8);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(128);
+        doc.text(`Printed by Biocella`, margin, doc.internal.pageSize.getHeight() - 10);
+        doc.text(
+          `Generated: ${new Date().toLocaleString()}`,
+          pageWidth / 2,
+          doc.internal.pageSize.getHeight() - 10,
+          { align: "center" }
+        );
+      }
 
       // Save PDF
       doc.save(`Specimen_${specimen.code_name}_${new Date().toISOString().split('T')[0]}.pdf`);
