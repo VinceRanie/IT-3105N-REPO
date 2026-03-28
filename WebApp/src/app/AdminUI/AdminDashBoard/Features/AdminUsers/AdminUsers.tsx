@@ -312,7 +312,7 @@ export default function UserTable() {
             <tbody className="divide-y divide-gray-200">
               {loading && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-3 text-sm text-gray-600">
+                  <td colSpan={5} className="px-4 py-3 text-sm text-gray-600">
                     Loading users...
                   </td>
                 </tr>
@@ -320,7 +320,7 @@ export default function UserTable() {
 
               {error && !loading && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-3 text-sm text-red-600">
+                  <td colSpan={5} className="px-4 py-3 text-sm text-red-600">
                     {error}
                   </td>
                 </tr>
@@ -328,7 +328,7 @@ export default function UserTable() {
 
               {!loading && !error && filteredUsers.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-3 text-sm text-gray-600">
+                  <td colSpan={5} className="px-4 py-3 text-sm text-gray-600">
                     No users found.
                   </td>
                 </tr>
