@@ -112,6 +112,12 @@ export default function CollectionTable({ specimens, onEdit, onDelete, onView }:
       let aVal: any = a[sortColumn as keyof Collection];
       let bVal: any = b[sortColumn as keyof Collection];
       
+      if (sortColumn === '_index') {
+        aVal = specimens.indexOf(a);
+        bVal = specimens.indexOf(b);
+        return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
+      }
+      
       if (sortColumn === 'project_id') {
         aVal = typeof a.project_id === 'object' ? a.project_id?.title : a.project_id;
         bVal = typeof b.project_id === 'object' ? b.project_id?.title : b.project_id;
@@ -155,9 +161,7 @@ export default function CollectionTable({ specimens, onEdit, onDelete, onView }:
           <table className="table-auto w-full">
             <thead className="bg-[#113F67] sticky top-0 z-10">
               <tr>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">
-                  No.
-                </th>
+                <SortableHeader column="_index" label="No." />
                 <SortableHeader column="code_name" label="Code" />
                 <SortableHeader column="accession_no" label="Accession No." />
                 <SortableHeader column="project_id" label="Project" />

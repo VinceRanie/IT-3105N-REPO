@@ -205,7 +205,7 @@ export default function AdminInventory() {
 
         {/* Results count */}
         <div className="mt-3 text-sm text-gray-600">
-          Showing {currentItems.length} of {filteredChemicals.length} chemicals
+          Showing {currentItems.length} of {sortedChemicals.length} chemicals
         </div>
       </div>
 
@@ -217,12 +217,12 @@ export default function AdminInventory() {
               <tr>
                 <th className="px-6 py-3 text-left text-sm font-semibold">Chem ID</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold">Batch ID</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold">Name</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold">Type</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold">Quantity</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold">Unit</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold">Location</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold">Exp. Date</th>
+                <SortableHeader column="name" label="Name" />
+                <SortableHeader column="type" label="Type" />
+                <SortableHeader column="quantity" label="Quantity" />
+                <SortableHeader column="unit" label="Unit" />
+                <SortableHeader column="location" label="Location" />
+                <SortableHeader column="expiration_date" label="Exp. Date" />
                 <th className="px-6 py-3 text-left text-sm font-semibold">Status</th>
                 <th className="px-6 py-3 text-center text-sm font-semibold">QR Code</th>
                 <th className="px-6 py-3 text-center text-sm font-semibold">Actions</th>

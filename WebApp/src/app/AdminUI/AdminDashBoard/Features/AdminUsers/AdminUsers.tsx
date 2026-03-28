@@ -99,6 +99,12 @@ export default function UserTable() {
     // Apply sorting
     if (sortColumn) {
       filtered = filtered.sort((a, b) => {
+        if (sortColumn === '_index') {
+          const aIndex = users.indexOf(a);
+          const bIndex = users.indexOf(b);
+          return sortOrder === 'asc' ? aIndex - bIndex : bIndex - aIndex;
+        }
+
         let aVal: any = a[sortColumn as keyof User];
         let bVal: any = b[sortColumn as keyof User];
 
@@ -300,7 +306,7 @@ export default function UserTable() {
           <table className="table-auto w-full relative">
             <thead className="bg-[#113F67] sticky top-0 z-10">
               <tr>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">No.</th>
+                <SortableHeader column="_index" label="No." />
                 <SortableHeader column="name" label="Name" />
                 <SortableHeader column="email" label="Email" />
                 <SortableHeader column="role" label="Role" />
