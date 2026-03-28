@@ -501,7 +501,7 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
         });
       }
 
-      // Footer with logo and branding
+      // Footer with logo on first page and branding
       const logoUrl = '/UI/img/BiocellaLogo.png';
       const logoData = await getImageBase64(logoUrl);
       
@@ -509,12 +509,12 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
       for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
         
-        // Add logo to top right corner
-        if (logoData) {
+        // Add logo to top right corner on first page only
+        if (i === 1 && logoData) {
           try {
-            const logoWidth = 25;
-            const logoHeight = 15;
-            doc.addImage(logoData, 'PNG', pageWidth - margin - logoWidth, 10, logoWidth, logoHeight);
+            const logoWidth = 30;
+            const logoHeight = 20;
+            doc.addImage(logoData, 'PNG', pageWidth - margin - logoWidth, 8, logoWidth, logoHeight);
           } catch (error) {
             console.error("Error adding logo to PDF:", error);
           }
