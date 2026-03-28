@@ -98,12 +98,10 @@ export default function UserTable() {
 
     // Apply sorting
     if (sortColumn) {
-      filtered = filtered.sort((a, b) => {
-        if (sortColumn === '_index') {
-          const aIndex = users.indexOf(a);
-          const bIndex = users.indexOf(b);
-          return sortOrder === 'asc' ? aIndex - bIndex : bIndex - aIndex;
-        }
+      if (sortColumn === '_index') {
+        filtered = sortOrder === 'asc' ? filtered : [...filtered].reverse();
+      } else {
+        filtered = filtered.sort((a, b) => {
 
         let aVal: any = a[sortColumn as keyof User];
         let bVal: any = b[sortColumn as keyof User];
@@ -119,7 +117,8 @@ export default function UserTable() {
         if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
         if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
         return 0;
-      });
+        });
+      }
     }
 
     return filtered;

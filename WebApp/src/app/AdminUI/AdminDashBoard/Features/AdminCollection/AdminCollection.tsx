@@ -108,15 +108,13 @@ export default function CollectionTable({ specimens, onEdit, onDelete, onView }:
   const getSortedData = () => {
     if (!sortColumn) return specimens;
     
+    if (sortColumn === '_index') {
+      return sortOrder === 'asc' ? specimens : [...specimens].reverse();
+    }
+    
     const sorted = [...specimens].sort((a, b) => {
       let aVal: any = a[sortColumn as keyof Collection];
       let bVal: any = b[sortColumn as keyof Collection];
-      
-      if (sortColumn === '_index') {
-        aVal = specimens.indexOf(a);
-        bVal = specimens.indexOf(b);
-        return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
-      }
       
       if (sortColumn === 'project_id') {
         aVal = typeof a.project_id === 'object' ? a.project_id?.title : a.project_id;
