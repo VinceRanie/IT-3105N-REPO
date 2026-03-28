@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { Chemical, Batch } from "./types";
 import AddChemicalModal from "./AddChemicalModal";
 import DeleteConfirmModal from "./DeleteConfirmModal";
-import { Search, Plus, Edit, Trash2, ChevronLeft, ChevronRight, Package } from "lucide-react";
+import { Search, Plus, Edit, Trash2, ChevronLeft, ChevronRight, Package, ChevronUp, ChevronDown } from "lucide-react";
 import { API_URL } from "@/config/api";
 import { useRouter } from "next/navigation";
 

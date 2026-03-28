@@ -3,8 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { API_URL } from "@/config/api";
 import { getAuthHeader, getUserData } from "@/app/utils/authUtil";
-import AdminControls from "./AdminControls";
-
+import AdminControls from "./AdminControls";import { ChevronUp, ChevronDown } from \"lucide-react\";
 interface User {
   user_id: number;
   email: string;
@@ -38,6 +37,8 @@ export default function UserTable() {
     message: string;
     onConfirm: () => void;
   } | null>(null);
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   useEffect(() => {
     setIsMounted(true);
@@ -72,19 +73,67 @@ export default function UserTable() {
     }
   }, [isMounted]);
 
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortOrder('asc');
+    }
+  };
+
   const filteredUsers = useMemo(() => {
     const query = search.toLowerCase();
-    return users.filter((u) => {
-      const matchesRole = activeRole === "all" ? true : u.role?.toLowerCase() === activeRole;
+    let filtered = users.filter((u) => {
+      const matchesRole = activeRole === \"all\" ? true : u.role?.toLowerCase() === activeRole;
       const matchesSearch =
         !query ||
         `${u.first_name} ${u.last_name}`.toLowerCase().includes(query) ||
         u.email.toLowerCase().includes(query) ||
-        (u.department || "").toLowerCase().includes(query) ||
-        (u.course || "").toLowerCase().includes(query);
+        (u.department || \"\").toLowerCase().includes(query) ||
+        (u.course || \"\").toLowerCase().includes(query);
       return matchesRole && matchesSearch;
     });
-  }, [activeRole, search, users]);
+
+    // Apply sorting
+    if (sortColumn) {
+      filtered = filtered.sort((a, b) => {
+        let aVal: any = a[sortColumn as keyof User];
+        let bVal: any = b[sortColumn as keyof User];
+
+        if (sortColumn === 'email' || sortColumn === 'department' || sortColumn === 'course' || sortColumn === 'role') {
+          aVal = (aVal || '').toString().toLowerCase();
+          bVal = (bVal || '').toString().toLowerCase();
+        } else if (sortColumn === 'name') {
+          aVal = `${a.first_name || ''} ${a.last_name || ''}`.toLowerCase();
+          bVal = `${b.first_name || ''} ${b.last_name || ''}`.toLowerCase();
+        }
+
+        if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
+        if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return filtered;
+  }, [activeRole, search, users, sortColumn, sortOrder]);
+
+  const SortIcon = ({ column }: { column: string }) => {
+    if (sortColumn !== column) return <div className=\"w-4 h-4\" />;
+    return sortOrder === 'asc' ? <ChevronUp className=\"w-4 h-4\" /> : <ChevronDown className=\"w-4 h-4\" />;
+  };
+
+  const SortableHeader = ({ column, label }: { column: string; label: string }) => (
+    <th
+      className=\"px-4 py-3 text-left text-sm font-semibold text-white uppercase cursor-pointer hover:bg-[#0d2f4d] transition-colors\"
+      onClick={() => handleSort(column)}
+    >
+      <div className=\"flex items-center gap-2\">
+        {label}
+        <SortIcon column={column} />
+      </div>
+    </th>
+  );
 
   const handleRowClick = (id: number) => {
     setSelectedUserId((prev) => (prev === id ? null : id));
@@ -251,11 +300,11 @@ export default function UserTable() {
             <thead className="bg-[#113F67] sticky top-0 z-10">
               <tr>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">No.</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">Name</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">Email</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">Role</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">Department</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">Course</th>
+                <SortableHeader column=\"name\" label=\"Name\" />
+                <SortableHeader column=\"email\" label=\"Email\" />
+                <SortableHeader column=\"role\" label=\"Role\" />
+                <SortableHeader column=\"department\" label=\"Department\" />
+                <SortableHeader column=\"course\" label=\"Course\" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
