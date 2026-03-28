@@ -161,7 +161,7 @@ export default function CollectionTable({ specimens, onEdit, onDelete, onView }:
           <table className="table-auto w-full">
             <thead className="bg-[#113F67] sticky top-0 z-10">
               <tr>
-                <SortableHeader column="_index" label="No." />
+                <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">No.</th>
                 <SortableHeader column="code_name" label="Code" />
                 <SortableHeader column="accession_no" label="Accession No." />
                 <SortableHeader column="project_id" label="Project" />

@@ -271,8 +271,8 @@ export default function AdminInventory() {
           <table className="w-full">
             <thead className="bg-[#113F67] text-white">
               <tr>
-                <th className="px-6 py-3 text-left text-sm font-semibold">Chem ID</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold">Batch ID</th>
+                <SortableHeader column="chemical_id" label="Chem ID" />
+                <SortableHeader column="batch_id" label="Batch ID" />
                 <SortableHeader column="name" label="Name" />
                 <SortableHeader column="type" label="Type" />
                 <SortableHeader column="quantity" label="Quantity" />
