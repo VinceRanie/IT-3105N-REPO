@@ -98,10 +98,7 @@ export default function UserTable() {
 
     // Apply sorting
     if (sortColumn) {
-      if (sortColumn === '_index') {
-        filtered = sortOrder === 'asc' ? filtered : [...filtered].reverse();
-      } else {
-        filtered = filtered.sort((a, b) => {
+      filtered = filtered.sort((a, b) => {
 
         let aVal: any = a[sortColumn as keyof User];
         let bVal: any = b[sortColumn as keyof User];
@@ -117,11 +114,11 @@ export default function UserTable() {
         if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
         if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
         return 0;
-        });
-      }
+      });
     }
 
-    return filtered;
+    // Show newest users first by reversing
+    return [...filtered].reverse();
   }, [activeRole, search, users, sortColumn, sortOrder]);
 
   const SortIcon = ({ column }: { column: string }) => {
@@ -305,7 +302,6 @@ export default function UserTable() {
           <table className="table-auto w-full relative">
             <thead className="bg-[#113F67] sticky top-0 z-10">
               <tr>
-                <SortableHeader column="_index" label="No." />
                 <SortableHeader column="name" label="Name" />
                 <SortableHeader column="email" label="Email" />
                 <SortableHeader column="role" label="Role" />
@@ -345,7 +341,6 @@ export default function UserTable() {
                       className="bg-white hover:bg-blue-50 transition-colors duration-150 cursor-pointer"
                       onClick={() => handleRowClick(user.user_id)}
                     >
-                      <td className="px-4 py-3 text-sm font-medium text-gray-800">{index + 1}</td>
                       <td className="px-4 py-3 text-sm font-medium text-gray-800">
                         {`${user.first_name || ""} ${user.last_name || ""}`.trim() || "Pending setup"}
                       </td>
@@ -357,7 +352,7 @@ export default function UserTable() {
 
                     {selectedUserId === user.user_id && (
                       <tr className="bg-gray-50">
-                        <td colSpan={6}>
+                        <td colSpan={5}>
                           <div className="flex flex-wrap justify-end gap-3 p-3">
                             {Object.entries(roleLabels).map(([value, label]) => (
                               <button

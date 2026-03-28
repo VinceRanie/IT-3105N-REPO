@@ -106,11 +106,8 @@ export default function CollectionTable({ specimens, onEdit, onDelete, onView }:
   };
 
   const getSortedData = () => {
-    if (!sortColumn) return specimens;
+    if (!sortColumn) return [...specimens].reverse();
     
-    if (sortColumn === '_index') {
-      return sortOrder === 'asc' ? specimens : [...specimens].reverse();
-    }
     
     const sorted = [...specimens].sort((a, b) => {
       let aVal: any = a[sortColumn as keyof Collection];
@@ -152,6 +149,9 @@ export default function CollectionTable({ specimens, onEdit, onDelete, onView }:
     </th>
   );
 
+  // Remove _index from sort logic since No. column is removed
+  const handleSort_updated = handleSort;
+
   return (
     <div className="w-full flex flex-col px-4 sm:px-6 lg:px-8 py-6">
       <div className="bg-white rounded-lg shadow-lg border border-gray-200 flex flex-col flex-1 overflow-hidden">
@@ -159,7 +159,6 @@ export default function CollectionTable({ specimens, onEdit, onDelete, onView }:
           <table className="table-auto w-full">
             <thead className="bg-[#113F67] sticky top-0 z-10">
               <tr>
-                <SortableHeader column="_index" label="No." />
                 <SortableHeader column="code_name" label="Code" />
                 <SortableHeader column="accession_no" label="Accession No." />
                 <SortableHeader column="project_id" label="Project" />
@@ -174,7 +173,7 @@ export default function CollectionTable({ specimens, onEdit, onDelete, onView }:
             <tbody className="divide-y divide-gray-200">
               {getSortedData().length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
                     No specimens found. Add your first specimen to get started.
                   </td>
                 </tr>
@@ -185,9 +184,6 @@ export default function CollectionTable({ specimens, onEdit, onDelete, onView }:
                       className="bg-white hover:bg-blue-50 transition-colors duration-150 cursor-pointer"
                       onClick={() => handleRowClick(specimen._id)}
                     >
-                      <td className="px-4 py-3 text-sm font-medium text-gray-800">
-                        {index + 1}
-                      </td>
                       <td className="px-4 py-3 text-sm text-gray-800">
                         {specimen.code_name}
                       </td>
@@ -250,7 +246,7 @@ export default function CollectionTable({ specimens, onEdit, onDelete, onView }:
 
                     {selectedId === specimen._id && (
                       <tr className="bg-gray-50">
-                        <td colSpan={8}>
+                        <td colSpan={7}>
                           <div className="p-4">
                             <h4 className="font-semibold text-gray-700 mb-2">Description:</h4>
                             <p className="text-sm text-gray-600">
