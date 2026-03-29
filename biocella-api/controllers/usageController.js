@@ -32,11 +32,20 @@ exports.create = async (req, res) => {
       });
     }
     
-    // Validate that the batch exists
-    const [batchRows] = await db.execute('SELECT batch_id FROM chemical_stock_batch WHERE batch_id = ?', [batch_id]);
+    // Validate that the batch exists and belongs to the same chemical.
+    const [batchRows] = await db.execute(
+      'SELECT batch_id, chemical_id FROM chemical_stock_batch WHERE batch_id = ?',
+      [batch_id]
+    );
     if (batchRows.length === 0) {
       return res.status(404).json({ 
         error: `Batch with ID ${batch_id} not found` 
+      });
+    }
+
+    if (Number(batchRows[0].chemical_id) !== Number(chemical_id)) {
+      return res.status(400).json({
+        error: `Batch ${batch_id} does not belong to chemical ${chemical_id}`,
       });
     }
     

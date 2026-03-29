@@ -13,6 +13,15 @@ interface EditChemicalModalProps {
   chemical: Chemical;
 }
 
+interface BatchOption {
+  batch_id: number;
+  chemical_id: number;
+  quantity: number;
+  used_quantity: number;
+  expiration_date: string | null;
+  location: string | null;
+}
+
 type EditChemicalFormData = Omit<Chemical, 'chemical_id' | 'last_updated'>;
 
 export default function EditChemicalModal({
@@ -30,6 +39,8 @@ export default function EditChemicalModal({
   });
   const [amountUsed, setAmountUsed] = useState(0);
   const [purpose, setPurpose] = useState("");
+  const [availableBatches, setAvailableBatches] = useState<BatchOption[]>([]);
+  const [selectedBatchId, setSelectedBatchId] = useState<number | "">("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,6 +54,40 @@ export default function EditChemicalModal({
       threshold: chemical.threshold,
     });
   }, [chemical]);
+
+  useEffect(() => {
+    const fetchBatches = async () => {
+      try {
+        const response = await fetch(`${API_URL}/batches`, {
+          headers: getAuthHeader(),
+        });
+        if (!response.ok) {
+          throw new Error("Failed to fetch batches");
+        }
+
+        const batches: BatchOption[] = await response.json();
+        const filteredBatches = batches.filter(
+          (batch) => batch.chemical_id === chemical.chemical_id
+        );
+
+        setAvailableBatches(filteredBatches);
+        setSelectedBatchId((prev) => {
+          if (prev && filteredBatches.some((batch) => batch.batch_id === prev)) {
+            return prev;
+          }
+          return filteredBatches.length === 1 ? filteredBatches[0].batch_id : "";
+        });
+      } catch (err) {
+        console.error("Error fetching batches:", err);
+        setAvailableBatches([]);
+        setSelectedBatchId("");
+      }
+    };
+
+    if (isOpen) {
+      fetchBatches();
+    }
+  }, [isOpen, chemical.chemical_id]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,72 +116,64 @@ export default function EditChemicalModal({
 
       console.log('Chemical updated. Amount used:', amountUsed, 'Purpose:', purpose);
 
-      // If there's usage logged, create usage log entry
+      // If there's usage logged, create usage log entry for a selected batch.
       if (amountUsed > 0 && purpose.trim()) {
-        console.log('Logging usage...');
-        // First, get the batch ID for this chemical
-        const batchResponse = await fetch(`${API_URL}/batches`, {
-          headers: getAuthHeader(),
+        if (!selectedBatchId) {
+          throw new Error("Please select the bottle/container (batch) used.");
+        }
+
+        const selectedBatch = availableBatches.find(
+          (batch) => batch.batch_id === selectedBatchId
+        );
+        if (!selectedBatch) {
+          throw new Error("Selected batch was not found for this chemical.");
+        }
+
+        const newUsedQuantity = (selectedBatch.used_quantity || 0) + amountUsed;
+        if (newUsedQuantity > selectedBatch.quantity) {
+          throw new Error("Cannot log usage greater than the selected batch quantity.");
+        }
+
+        const updateBatchResponse = await fetch(`${API_URL}/batches/${selectedBatch.batch_id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            ...getAuthHeader(),
+          },
+          body: JSON.stringify({
+            quantity: selectedBatch.quantity,
+            used_quantity: newUsedQuantity,
+            expiration_date: selectedBatch.expiration_date,
+            location: selectedBatch.location,
+          }),
         });
-        const batches = await batchResponse.json();
-        console.log('All batches:', batches);
-        const chemicalBatch = batches.find((b: { chemical_id: number }) => b.chemical_id === chemical.chemical_id);
-        console.log('Found batch for chemical:', chemicalBatch);
-        
-        if (chemicalBatch) {
-          // Update batch used_quantity
-          const newUsedQuantity = (chemicalBatch.used_quantity || 0) + amountUsed;
-          console.log('Updating batch used_quantity to:', newUsedQuantity);
-          
-          const updateBatchResponse = await fetch(`${API_URL}/batches/${chemicalBatch.batch_id}`, {
-            method: "PUT",
-            headers: {
-              "Content-Type": "application/json",
-              ...getAuthHeader(),
-            },
-            body: JSON.stringify({
-              quantity: chemicalBatch.quantity,
-              used_quantity: newUsedQuantity,
-              expiration_date: chemicalBatch.expiration_date,
-              location: chemicalBatch.location,
-            }),
-          });
 
-          if (!updateBatchResponse.ok) {
-            console.error('Failed to update batch:', await updateBatchResponse.text());
-          } else {
-            console.log('Batch updated successfully');
-          }
+        if (!updateBatchResponse.ok) {
+          const errorText = await updateBatchResponse.text();
+          throw new Error("Failed to update selected batch: " + errorText);
+        }
 
-          // Log usage
-          const usageData = {
-            chemical_id: chemical.chemical_id,
-            user_id: 3,
-            date_used: new Date().toISOString(),
-            amount_used: amountUsed,
-            purpose,
-            batch_id: chemicalBatch.batch_id,
-          };
-          console.log('Creating usage log with data:', usageData);
+        const usageData = {
+          chemical_id: chemical.chemical_id,
+          user_id: 3,
+          date_used: new Date().toISOString(),
+          amount_used: amountUsed,
+          purpose,
+          batch_id: selectedBatch.batch_id,
+        };
 
-          const usageResponse = await fetch(`${API_URL}/usage`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              ...getAuthHeader(),
-            },
-            body: JSON.stringify(usageData),
-          });
+        const usageResponse = await fetch(`${API_URL}/usage`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...getAuthHeader(),
+          },
+          body: JSON.stringify(usageData),
+        });
 
-          if (!usageResponse.ok) {
-            const errorText = await usageResponse.text();
-            console.error('Failed to log usage:', errorText);
-            throw new Error('Failed to log usage: ' + errorText);
-          } else {
-            console.log('Usage logged successfully');
-          }
-        } else {
-          console.warn('No batch found for this chemical');
+        if (!usageResponse.ok) {
+          const errorText = await usageResponse.text();
+          throw new Error("Failed to log usage: " + errorText);
         }
       } else {
         console.log('Skipping usage logging - no amount or purpose provided');
@@ -316,6 +353,32 @@ export default function EditChemicalModal({
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
                   placeholder="Enter amount used (if any)"
                 />
+              </div>
+
+              <div className="mb-3">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Bottle/Container (Batch)
+                </label>
+                <select
+                  value={selectedBatchId}
+                  onChange={(e) =>
+                    setSelectedBatchId(e.target.value ? Number(e.target.value) : "")
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                >
+                  <option value="">Select batch...</option>
+                  {availableBatches.map((batch) => {
+                    const remaining = batch.quantity - (batch.used_quantity || 0);
+                    return (
+                      <option key={batch.batch_id} value={batch.batch_id}>
+                        {`Batch #${batch.batch_id} - Remaining ${remaining}/${batch.quantity}${batch.location ? ` - ${batch.location}` : ""}`}
+                      </option>
+                    );
+                  })}
+                </select>
+                <p className="mt-1 text-xs text-gray-500">
+                  Required when logging usage to track which container was consumed.
+                </p>
               </div>
 
               {/* Purpose */}
