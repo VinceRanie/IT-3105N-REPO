@@ -102,6 +102,24 @@ export default function RAStaffInventory() {
     return chemical.quantity <= chemical.threshold;
   };
 
+  const getChemicalBatches = (chemicalId: number) =>
+    batches.filter((batch) => batch.chemical_id === chemicalId);
+
+  const getLotGroupsLabel = (chemicalId: number) => {
+    const chemicalBatches = getChemicalBatches(chemicalId);
+    if (!chemicalBatches.length) return "N/A";
+
+    const lotCounts = chemicalBatches.reduce((acc, batch) => {
+      const lot = (batch.lot_number || "NO-LOT").trim() || "NO-LOT";
+      acc[lot] = (acc[lot] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    return Object.entries(lotCounts)
+      .map(([lot, count]) => `${lot} (${count})`)
+      .join(", ");
+  };
+
   const handleSort = (column: string) => {
     if (sortColumn === column) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -270,6 +288,7 @@ export default function RAStaffInventory() {
               <tr>
                 <SortableHeader column="chemical_id" label="Chem ID" />
                 <th className="px-6 py-3 text-left text-sm font-semibold">Batch ID</th>
+                <th className="px-6 py-3 text-left text-sm font-semibold">Lot Groups</th>
                 <SortableHeader column="name" label="Name" />
                 <SortableHeader column="type" label="Type" />
                 <SortableHeader column="quantity" label="Quantity" />
@@ -284,13 +303,20 @@ export default function RAStaffInventory() {
             <tbody className="divide-y divide-gray-200">
               {currentItems.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={12} className="px-6 py-8 text-center text-gray-500">
                     No chemicals found
                   </td>
                 </tr>
               ) : (
                 currentItems.map((chemical) => {
-                  const chemicalBatch = batches.find(b => b.chemical_id === chemical.chemical_id);
+                  const chemicalBatches = getChemicalBatches(chemical.chemical_id);
+                  const chemicalBatch = chemicalBatches[0];
+                  const remainingQuantity = chemicalBatches.length
+                    ? chemicalBatches.reduce(
+                        (sum, batch) => sum + Math.max(0, batch.quantity - batch.used_quantity),
+                        0
+                      )
+                    : chemical.quantity;
                   return (
                   <tr
                     key={chemical.chemical_id}
@@ -304,6 +330,9 @@ export default function RAStaffInventory() {
                     <td className="px-6 py-4 text-sm text-gray-900 font-semibold">
                       {chemicalBatch?.batch_id || 'N/A'}
                     </td>
+                    <td className="px-6 py-4 text-sm text-gray-900">
+                      {getLotGroupsLabel(chemical.chemical_id)}
+                    </td>
                     <td className="px-6 py-4 text-sm font-medium text-gray-900">
                       {chemical.name}
                     </td>
@@ -313,7 +342,7 @@ export default function RAStaffInventory() {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">
-                      {chemicalBatch ? chemicalBatch.quantity - chemicalBatch.used_quantity : chemical.quantity}
+                      {remainingQuantity}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">
                       {chemical.unit}

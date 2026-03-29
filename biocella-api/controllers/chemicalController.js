@@ -7,8 +7,13 @@ const db = require("../config/mysql");
 exports.create = async (req, res) => {
   try {
     const { name, type, quantity, unit, threshold, expiration_date, location } = req.body;
+    const lot_number = typeof req.body.lot_number === "string" ? req.body.lot_number.trim() : "";
     
-    console.log('Creating chemical with data:', { name, type, quantity, unit, threshold, expiration_date, location });
+    console.log('Creating chemical with data:', { name, type, quantity, unit, threshold, expiration_date, location, lot_number });
+
+    if (!lot_number) {
+      return res.status(400).json({ error: "lot_number is required when creating a container" });
+    }
     
     // Create the chemical entry (master record)
     const chemicalId = await Reagent.createReagent({
@@ -27,6 +32,7 @@ exports.create = async (req, res) => {
       quantity,
       expiration_date: expiration_date || null,
       location: location || null,
+      lot_number,
       qr_code: null
     };
     

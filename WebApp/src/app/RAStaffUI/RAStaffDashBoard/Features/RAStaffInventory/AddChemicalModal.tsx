@@ -25,6 +25,7 @@ export default function AddChemicalModal({
     threshold: 0,
     expiration_date: "",
     location: "",
+    lot_number: "",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,6 +59,7 @@ export default function AddChemicalModal({
         threshold: 0,
         expiration_date: "",
         location: "",
+        lot_number: "",
       });
 
       onSuccess();
@@ -241,6 +243,25 @@ export default function AddChemicalModal({
               />
               <p className="mt-1 text-xs text-gray-500">
                 Physical location where this container is stored
+              </p>
+            </div>
+
+            {/* Lot Number */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Lot Number *
+              </label>
+              <input
+                type="text"
+                name="lot_number"
+                value={formData.lot_number}
+                onChange={handleChange}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                placeholder="e.g., AGR-2026-03"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Use the same lot number for containers from the same supplier batch.
               </p>
             </div>
           </div>

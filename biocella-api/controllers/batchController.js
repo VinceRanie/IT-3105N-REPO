@@ -14,6 +14,14 @@ exports.create = async (req, res) => {
       console.log('Converted expiration_date to:', data.expiration_date);
     }
     
+    if (typeof data.lot_number === 'string') {
+      data.lot_number = data.lot_number.trim();
+    }
+
+    if (!data.lot_number) {
+      return res.status(400).json({ error: "lot_number is required for batch tracking" });
+    }
+
     // First create the batch to get the ID
     const tempData = {
       ...data,
@@ -47,7 +55,11 @@ exports.create = async (req, res) => {
 // READ ALL
 exports.getAll = async (req, res) => {
   try {
-    const batches = await Batch.getAllBatches();
+    const filters = {
+      chemical_id: req.query.chemical_id,
+      lot_number: req.query.lot_number,
+    };
+    const batches = await Batch.getAllBatches(filters);
     res.json(batches);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -78,6 +90,10 @@ exports.update = async (req, res) => {
       console.log('Converted expiration_date to:', data.expiration_date);
     }
     
+    if (typeof data.lot_number === 'string') {
+      data.lot_number = data.lot_number.trim();
+    }
+
     const affected = await Batch.updateBatch(req.params.id, data);
     
     console.log('Batch update result - affected rows:', affected);

@@ -16,6 +16,7 @@ interface Batch {
   date_received: string;
   expiration_date: string;
   location: string;
+  lot_number?: string | null;
   qr_code: string | null;
 }
 
@@ -202,6 +203,11 @@ export default function RAStaffBatchEditPage() {
             <div>
               <label className="text-sm font-medium text-gray-600">Location</label>
               <p className="text-lg">{batch.location || 'N/A'}</p>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium text-gray-600">Lot Number</label>
+              <p className="text-lg font-semibold">{batch.lot_number || 'N/A'}</p>
             </div>
 
             <div>

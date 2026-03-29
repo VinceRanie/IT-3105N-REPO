@@ -20,6 +20,7 @@ interface BatchOption {
   used_quantity: number;
   expiration_date: string | null;
   location: string | null;
+  lot_number: string | null;
 }
 
 type EditChemicalFormData = Omit<Chemical, 'chemical_id' | 'last_updated'>;
@@ -371,7 +372,7 @@ export default function EditChemicalModal({
                     const remaining = batch.quantity - (batch.used_quantity || 0);
                     return (
                       <option key={batch.batch_id} value={batch.batch_id}>
-                        {`Batch #${batch.batch_id} - Remaining ${remaining}/${batch.quantity}${batch.location ? ` - ${batch.location}` : ""}`}
+                        {`Batch #${batch.batch_id} - Lot ${batch.lot_number || "NO-LOT"} - Remaining ${remaining}/${batch.quantity}${batch.location ? ` - ${batch.location}` : ""}`}
                       </option>
                     );
                   })}

@@ -2,21 +2,39 @@ const db = require("../config/mysql.js");
 
 // CREATE
 exports.createBatch = async (data) => {
-  const { chemical_id, quantity, expiration_date, location, qr_code } = data;
+  const { chemical_id, quantity, expiration_date, location, lot_number, qr_code } = data;
   const [result] = await db.execute(
-    "INSERT INTO chemical_stock_batch (chemical_id, quantity, used_quantity, date_received, expiration_date, location, qr_code) VALUES (?, ?, 0, NOW(), ?, ?, ?)",
-    [chemical_id, quantity, expiration_date || null, location || null, qr_code || null]
+    "INSERT INTO chemical_stock_batch (chemical_id, quantity, used_quantity, date_received, expiration_date, location, lot_number, qr_code) VALUES (?, ?, 0, NOW(), ?, ?, ?, ?)",
+    [chemical_id, quantity, expiration_date || null, location || null, lot_number || null, qr_code || null]
   );
   return result.insertId;
 };
 
 // READ ALL
-exports.getAllBatches = async () => {
+exports.getAllBatches = async (filters = {}) => {
+  const { chemical_id, lot_number } = filters;
+  const conditions = [];
+  const params = [];
+
+  if (chemical_id) {
+    conditions.push("b.chemical_id = ?");
+    params.push(chemical_id);
+  }
+
+  if (lot_number) {
+    conditions.push("b.lot_number = ?");
+    params.push(lot_number);
+  }
+
+  const whereClause = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
   const [rows] = await db.execute(`
     SELECT b.*, r.name AS chemical_name
     FROM chemical_stock_batch b
     JOIN reagents_chemicals r ON b.chemical_id = r.chemical_id
-  `);
+    ${whereClause}
+    ORDER BY b.date_received DESC, b.batch_id DESC
+  `, params);
   return rows;
 };
 
@@ -33,13 +51,13 @@ exports.getBatchById = async (id) => {
 
 // UPDATE
 exports.updateBatch = async (id, data) => {
-  const { quantity, used_quantity, expiration_date, location } = data;
-  console.log('Batch model updateBatch called with:', { id, quantity, used_quantity, expiration_date, location });
+  const { quantity, used_quantity, expiration_date, location, lot_number } = data;
+  console.log('Batch model updateBatch called with:', { id, quantity, used_quantity, expiration_date, location, lot_number });
   
   try {
     const [result] = await db.execute(
-      "UPDATE chemical_stock_batch SET quantity=?, used_quantity=?, expiration_date=?, location=? WHERE batch_id=?",
-      [quantity, used_quantity, expiration_date, location || null, id]
+      "UPDATE chemical_stock_batch SET quantity=?, used_quantity=?, expiration_date=?, location=?, lot_number=COALESCE(?, lot_number) WHERE batch_id=?",
+      [quantity, used_quantity, expiration_date, location || null, lot_number || null, id]
     );
     console.log('Batch model update SQL result:', { affectedRows: result.affectedRows, changedRows: result.changedRows });
     return result.affectedRows;
