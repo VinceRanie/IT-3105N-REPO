@@ -4,9 +4,7 @@ import { useState } from 'react';
 import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-
-// Configure API endpoint - change this to your backend URL
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+import { setAuthToken, setUserData } from '@/app/utils/authUtil';
 
 export default function LoginForm() {
   const router = useRouter();
@@ -27,8 +25,7 @@ export default function LoginForm() {
     setMessage(null); 
 
     try {
-      // Call the real backend auth endpoint
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      const response = await fetch("/API/auth/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -40,39 +37,30 @@ export default function LoginForm() {
 
       if (response.ok) {
         setMessage({ text: data.message || 'Login successful!', type: 'success' });
-        
-        // Store JWT token and user data in localStorage for authenticated requests
-        if (data.token) {
-          localStorage.setItem('authToken', data.token);
-          localStorage.setItem('userEmail', data.email || formData.email);
-          // Store userData with all available fields
-          localStorage.setItem('userData', JSON.stringify({
+
+        if (data.token && data.userId && data.email && data.role) {
+          setAuthToken(data.token);
+          setUserData({
             userId: data.userId,
-            email: data.email || formData.email,
-            role: data.role || 'student',
-            token: data.token
-          }));
+            email: data.email,
+            role: data.role,
+          });
         }
 
-        // Redirect based on user role
-        const userRole = data.role || 'student'; // Default to student if role not provided
-        
-        if (userRole === 'admin') {
+        // Redirect based on role
+        if (data.role === 'admin') {
           router.push('/AdminUI/AdminDashBoard');
-        } else if (userRole === 'staff' || userRole === 'ra' || userRole === 'RA') {
-          router.push('/RAStaffUI/RAStaffDashBoard');
+        } else if (data.role === 'student') {
+          router.push('/StudentUI/StudentDashBoard');
         } else {
-          // student or default
           router.push('/UsersUI/UsersDashBoard');
         }
-        
-        console.log('Login successful:', data);
       } else {
         setMessage({ text: data.message || 'Invalid credentials. Please try again.', type: 'error' });
       }
     } catch (error) {
       console.error('Network or unexpected error during login:', error);
-      setMessage({ text: 'Failed to connect to server. Please check your connection and try again.', type: 'error' });
+      setMessage({ text: 'An unexpected error occurred. Please try again.', type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -90,6 +78,8 @@ export default function LoginForm() {
           src="/UI/img/Laboratory.jpg"
           alt="Scientific laboratory research"
           fill
+          sizes="(max-width: 768px) 0px, 50vw"
+          priority
           className="object-cover"
         />
         <div className="absolute inset-0 bg-gradient-to-l from-transparent to-background/10" />
@@ -173,7 +163,7 @@ export default function LoginForm() {
               <button
                 type="button"
                 className="text-sm text-[#113F67] hover:text-[#0a2a4a] font-medium transition-colors cursor-pointer hover:underline"
-                onClick={() => router.push('/auth/forgot-password')}
+                onClick={() => router.push('/forgot-password')}
               >
                 Forgot password?
               </button>

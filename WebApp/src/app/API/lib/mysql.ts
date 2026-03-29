@@ -1,11 +1,21 @@
 import mysql, { RowDataPacket, ResultSetHeader } from 'mysql2/promise'
 
+const DB_HOST = process.env.DB_HOST;
+const DB_USER = process.env.DB_USER;
+const DB_PASSWORD = process.env.DB_PASSWORD;
+const DB_NAME = process.env.DB_NAME;
+const DB_PORT = process.env.DB_PORT;
+
+if (!DB_HOST || !DB_USER || !DB_PASSWORD || !DB_NAME || !DB_PORT) {
+    throw new Error('Missing required DB environment variables: DB_HOST, DB_USER, DB_PASSWORD, DB_NAME, DB_PORT');
+}
+
 const pool = mysql.createPool({
-    host: process.env.MYSQL_HOST,
-    user: process.env.MYSQL_USER,
-    password: process.env.MYSQL_PASSWORD,
-    database: process.env.MYSQL_DATABASE,
-    port: parseInt(process.env.MYSQL_PORT || '3306', 10),
+    host: DB_HOST,
+    user: DB_USER,
+    password: DB_PASSWORD,
+    database: DB_NAME,
+    port: parseInt(DB_PORT, 10),
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0
