@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Chemical, Batch } from "./types";
 import AddChemicalModal from "./AddChemicalModal";
-import { Search, Plus, Edit, ChevronLeft, ChevronRight, Package } from "lucide-react";
+import { Search, Plus, Edit, ChevronLeft, ChevronRight, Package, ChevronUp, ChevronDown } from "lucide-react";
 import { API_URL } from "@/config/api";
 import { useRouter } from "next/navigation";
 import { useProtectedRoute } from "@/app/hooks/useProtectedRoute";
@@ -31,6 +31,10 @@ export default function RAStaffInventory() {
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+
+  // Sorting
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   // Fetch chemicals and batches from API
   const fetchChemicals = async () => {
@@ -94,10 +98,11 @@ export default function RAStaffInventory() {
   }, [searchTerm, unitFilter, typeFilter, chemicals]);
 
   // Pagination logic
+  const sortedChemicals = getSortedData();
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = filteredChemicals.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(filteredChemicals.length / itemsPerPage);
+  const currentItems = sortedChemicals.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(sortedChemicals.length / itemsPerPage);
 
   // Get unique units for filter
   const uniqueUnits = Array.from(new Set(chemicals.map((c) => c.unit)));
@@ -122,6 +127,57 @@ export default function RAStaffInventory() {
   const isLowStock = (chemical: Chemical) => {
     return chemical.quantity <= chemical.threshold;
   };
+
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortOrder('asc');
+    }
+  };
+
+  const getSortedData = () => {
+    if (!sortColumn) return [...filteredChemicals].reverse();
+    
+    const sorted = [...filteredChemicals].sort((a, b) => {
+      let aVal: any = a[sortColumn as keyof Chemical];
+      let bVal: any = b[sortColumn as keyof Chemical];
+      
+      if (aVal == null) aVal = '';
+      if (bVal == null) bVal = '';
+      
+      if (typeof aVal === 'string') aVal = aVal.toLowerCase();
+      if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+      
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
+      }
+      
+      if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+    
+    return sorted;
+  };
+
+  const SortIcon = ({ column }: { column: string }) => {
+    if (sortColumn !== column) return <div className="w-4 h-4" />;
+    return sortOrder === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />;
+  };
+
+  const SortableHeader = ({ column, label }: { column: string; label: string }) => (
+    <th
+      className="px-6 py-3 text-left text-sm font-semibold text-white uppercase cursor-pointer hover:bg-[#0d2f4d] transition-colors"
+      onClick={() => handleSort(column)}
+    >
+      <div className="flex items-center gap-2">
+        {label}
+        <SortIcon column={column} />
+      </div>
+    </th>
+  );
 
   if (loading) {
     return (
@@ -202,7 +258,7 @@ export default function RAStaffInventory() {
 
         {/* Results count */}
         <div className="mt-3 text-sm text-gray-600">
-          Showing {currentItems.length} of {filteredChemicals.length} chemicals
+          Showing {currentItems.length} of {getSortedData().length} chemicals
         </div>
       </div>
 
@@ -212,12 +268,12 @@ export default function RAStaffInventory() {
           <table className="w-full">
             <thead className="bg-[#113F67] text-white">
               <tr>
-                <th className="px-6 py-3 text-left text-sm font-semibold">Chem ID</th>
+                <SortableHeader column="chemical_id" label="Chem ID" />
                 <th className="px-6 py-3 text-left text-sm font-semibold">Batch ID</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold">Name</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold">Type</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold">Quantity</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold">Unit</th>
+                <SortableHeader column="name" label="Name" />
+                <SortableHeader column="type" label="Type" />
+                <SortableHeader column="quantity" label="Quantity" />
+                <SortableHeader column="unit" label="Unit" />
                 <th className="px-6 py-3 text-left text-sm font-semibold">Location</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold">Exp. Date</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold">Status</th>

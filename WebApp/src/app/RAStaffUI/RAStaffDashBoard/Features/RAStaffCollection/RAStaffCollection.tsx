@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { API_URL } from "@/config/api";
-import { Eye, Edit } from "lucide-react";
+import { Eye, Edit, ChevronUp, ChevronDown } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 interface Collection {
@@ -67,10 +67,64 @@ export default function RAStaffCollection({ specimens, onEdit, onView }: {
   onView: (specimen: Collection) => void 
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   const handleRowClick = (id: string) => {
     setSelectedId((prev) => (prev === id ? null : id));
   };
+
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortOrder('asc');
+    }
+  };
+
+  const getSortedData = () => {
+    if (!sortColumn) return [...specimens].reverse();
+    
+    const sorted = [...specimens].sort((a, b) => {
+      let aVal: any = a[sortColumn as keyof Collection];
+      let bVal: any = b[sortColumn as keyof Collection];
+      
+      if (sortColumn === 'project_id') {
+        aVal = typeof a.project_id === 'object' ? a.project_id?.title : a.project_id;
+        bVal = typeof b.project_id === 'object' ? b.project_id?.title : b.project_id;
+      }
+      
+      if (aVal == null) aVal = '';
+      if (bVal == null) bVal = '';
+      
+      if (typeof aVal === 'string') aVal = aVal.toLowerCase();
+      if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+      
+      if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+    
+    return sorted;
+  };
+
+  const SortIcon = ({ column }: { column: string }) => {
+    if (sortColumn !== column) return <div className="w-4 h-4" />;
+    return sortOrder === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />;
+  };
+
+  const SortableHeader = ({ column, label }: { column: string; label: string }) => (
+    <th
+      className="px-4 py-3 text-left text-sm font-semibold text-white uppercase cursor-pointer hover:bg-[#0d2f4d] transition-colors"
+      onClick={() => handleSort(column)}
+    >
+      <div className="flex items-center gap-2">
+        {label}
+        <SortIcon column={column} />
+      </div>
+    </th>
+  );
 
   return (
     <div className="w-full flex flex-col px-4 sm:px-6 lg:px-8 py-6">
@@ -79,49 +133,31 @@ export default function RAStaffCollection({ specimens, onEdit, onView }: {
           <table className="table-auto w-full">
             <thead className="bg-[#113F67] sticky top-0 z-10">
               <tr>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">
-                  No.
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">
-                  Code
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">
-                  Accession No.
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">
-                  Project
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">
-                  Locale
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">
-                  Source
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">
-                  Classification
-                </th>
+                <SortableHeader column="code_name" label="Code" />
+                <SortableHeader column="accession_no" label="Accession No." />
+                <SortableHeader column="project_id" label="Project" />
+                <SortableHeader column="locale" label="Locale" />
+                <SortableHeader column="source" label="Source" />
+                <SortableHeader column="classification" label="Classification" />
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">
                   Actions
                 </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {specimens.length === 0 ? (
+              {getSortedData().length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
                     No specimens found. Add your first specimen to get started.
                   </td>
                 </tr>
               ) : (
-                specimens.map((specimen, index) => (
+                getSortedData().map((specimen, index) => (
                   <React.Fragment key={specimen._id}>
                     <tr
                       className="bg-white hover:bg-blue-50 transition-colors duration-150 cursor-pointer"
                       onClick={() => handleRowClick(specimen._id)}
                     >
-                      <td className="px-4 py-3 text-sm font-medium text-gray-800">
-                        {index + 1}
-                      </td>
                       <td className="px-4 py-3 text-sm text-gray-800">
                         {specimen.code_name}
                       </td>
