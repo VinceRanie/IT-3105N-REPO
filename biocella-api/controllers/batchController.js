@@ -1,5 +1,6 @@
 const Batch = require("../models/batchModel");
 const QRCode = require("qrcode");
+const USED_QUANTITY_ROUNDING_TOLERANCE = 0.2;
 
 const normalizeDecimal = (value) => {
   if (value === null || value === undefined || value === "") {
@@ -134,7 +135,12 @@ exports.update = async (req, res) => {
     data.used_quantity = usedQuantity;
 
     if (usedQuantity > quantity) {
-      return res.status(400).json({ error: "used_quantity cannot be greater than quantity" });
+      const overage = usedQuantity - quantity;
+      if (overage <= USED_QUANTITY_ROUNDING_TOLERANCE) {
+        data.used_quantity = quantity;
+      } else {
+        return res.status(400).json({ error: "used_quantity cannot be greater than quantity" });
+      }
     }
 
     const affected = await Batch.updateBatch(req.params.id, data);

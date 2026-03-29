@@ -31,11 +31,12 @@ export default function BatchEditPage() {
   const [saving, setSaving] = useState(false);
 
   // Usage form
-  const [amountUsed, setAmountUsed] = useState(0);
+  const [amountUsedInput, setAmountUsedInput] = useState("");
   const [usageUnit, setUsageUnit] = useState("");
   const [purpose, setPurpose] = useState("");
   const [userId, setUserId] = useState<number | null>(null);
   const [isMounted, setIsMounted] = useState(false);
+  const ROUNDING_TOLERANCE = 0.2;
 
   useEffect(() => {
     setIsMounted(true);
@@ -119,7 +120,8 @@ export default function BatchEditPage() {
     setError(null);
 
     try {
-      if (amountUsed <= 0) {
+      const amountUsed = Number.parseFloat(amountUsedInput);
+      if (!Number.isFinite(amountUsed) || amountUsed <= 0) {
         throw new Error("Amount used must be greater than 0");
       }
 
@@ -132,12 +134,15 @@ export default function BatchEditPage() {
         throw new Error("Batch quantities are invalid");
       }
 
-      // Calculate new used quantity in base unit
-      const newUsedQuantity = currentUsedQuantity + normalizedAmountUsed;
+      const remainingBeforeUse = Math.max(0, totalQuantity - currentUsedQuantity);
+      const overage = normalizedAmountUsed - remainingBeforeUse;
 
-      if (newUsedQuantity > totalQuantity) {
+      if (overage > ROUNDING_TOLERANCE) {
         throw new Error("Cannot use more than available quantity");
       }
+
+      const amountToLog = Math.min(normalizedAmountUsed, remainingBeforeUse);
+      const newUsedQuantity = currentUsedQuantity + amountToLog;
 
       // Update batch used_quantity
       const batchResponse = await fetch(`${API_URL}/batches/${batchId}`, {
@@ -163,7 +168,7 @@ export default function BatchEditPage() {
           chemical_id: batch.chemical_id,
           user_id: userId,
           date_used: new Date().toISOString(),
-          amount_used: normalizedAmountUsed,
+          amount_used: amountToLog,
           purpose,
           batch_id: batch.batch_id,
         }),
@@ -175,7 +180,7 @@ export default function BatchEditPage() {
 
       // Refresh batch data
       await fetchBatch();
-      setAmountUsed(0);
+      setAmountUsedInput("");
       setPurpose("");
       alert("Usage logged successfully!");
     } catch (err) {
@@ -306,12 +311,13 @@ export default function BatchEditPage() {
               </label>
               <input
                 type="number"
-                value={amountUsed}
-                onChange={(e) => setAmountUsed(Number(e.target.value))}
+                value={amountUsedInput}
+                onChange={(e) => setAmountUsedInput(e.target.value)}
                 required
                 min="0"
                 step="0.01"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                inputMode="decimal"
+                className="w-full px-3 py-2 text-base text-gray-900 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
                 placeholder="Enter amount used"
               />
               <div className="mt-2">
@@ -321,7 +327,7 @@ export default function BatchEditPage() {
                 <select
                   value={usageUnit || (batch.chemical_unit || "")}
                   onChange={(e) => setUsageUnit(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                  className="w-full px-3 py-2 text-base text-gray-900 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
                 >
                   {compatibleUnits.map((unit) => (
                     <option key={unit} value={unit}>{unit}</option>
@@ -342,7 +348,7 @@ export default function BatchEditPage() {
                 onChange={(e) => setPurpose(e.target.value)}
                 required
                 rows={4}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                className="w-full px-3 py-2 text-base text-gray-900 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
                 placeholder="Describe what this was used for..."
               />
             </div>
