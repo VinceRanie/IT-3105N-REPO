@@ -7,9 +7,6 @@ import Link from "next/link";
 // import { useRouter } from "next/router";
 import { useRouter } from "next/navigation";
 
-// Configure API endpoint
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
-
 export default function SignupForm() {
   const router = useRouter();
   const [formData, setFormData] = useState({
@@ -30,7 +27,7 @@ export default function SignupForm() {
     console.log("Signup attempt:", formData);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/register`, {
+      const response = await fetch("/API/auth/register", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -41,17 +38,13 @@ export default function SignupForm() {
       const data = await response.json();
 
       if (response.ok) {
-        setMessage({ text: data.message || 'Registration successful! A password setup link was sent to your email.', type: 'success' });
-        // Optionally redirect after a short delay
-        setTimeout(() => {
-          router.push('/Login');
-        }, 3000); // Redirect to login after 3 seconds
+        setMessage({ text: data.message || 'Registration successful! Check your email for the finalize setup link.', type: 'success' });
       } else {
         setMessage({ text: data.message || 'Registration failed. Please try again.', type: 'error' });
       }
     } catch (error) {
       console.error('Network or unexpected error during signup:', error);
-      setMessage({ text: 'Failed to connect to server. Please check your connection and try again.', type: 'error' });
+      setMessage({ text: 'An unexpected error occurred. Please try again.', type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -119,16 +112,7 @@ export default function SignupForm() {
                 Log in
               </Link>
             </p>
-            <p className="text-sm text-gray-600 mt-2">
-              <Link href="/signup/finalize">
-                <button
-                  onClick={() => console.log("Redirect to FinalizeSignup")}
-                  className="bg-[#113F67] hover:bg-[#0a2a4a] text-white font-medium py-2 px-4 rounded transition-colors cursor-pointer"
-                >
-                  Test FinalizeSignup
-                </button>
-              </Link>
-            </p>
+
           </div>
         </div>
       </div>
@@ -138,6 +122,7 @@ export default function SignupForm() {
           src="/UI/img/Laboratory.jpg"
           alt="Scientific laboratory research"
           fill
+          sizes="(max-width: 768px) 0px, 50vw"
           className="object-cover"
         />
         <div className="absolute inset-0 bg-gradient-to-l from-transparent to-background/10" />

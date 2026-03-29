@@ -24,6 +24,8 @@ interface UserRow extends RowDataPacket {
     user_id: number;
     email: string;
     password: string;
+    role: 'admin' | 'student' | 'faculty' | 'staff';
+    is_setup_complete: number;
     failed_login_attempts: number;
     lockout_until: Date | null;
     reset_token?: string | null;
@@ -42,7 +44,7 @@ export async function POST(req: Request) {
         }
 
         const users = await query<UserRow>(
-            'SELECT user_id, email, password, failed_login_attempts, lockout_until, role FROM user WHERE email = ?',
+            'SELECT user_id, email, password, role, is_setup_complete, failed_login_attempts, lockout_until FROM user WHERE email = ?',
             [email]
         );
 
@@ -52,6 +54,13 @@ export async function POST(req: Request) {
             return NextResponse.json(
                 {message: 'Invalid Credentials', statusCode: HttpStatus.UNAUTHORIZED},
                 {status: HttpStatus.UNAUTHORIZED}
+            );
+        }
+
+        if (user.is_setup_complete !== 1) {
+            return NextResponse.json(
+                { message: 'Account setup is not complete. Please finish registration.', statusCode: HttpStatus.FORBIDDEN },
+                { status: HttpStatus.FORBIDDEN }
             );
         }
 
@@ -73,10 +82,27 @@ export async function POST(req: Request) {
                 { userId: user.user_id, email: user.email, role: user.role}, JWT_SECRET, {expiresIn: '1h'}
             )
 
-            return NextResponse.json(
-                {message: 'Login was successful!', token: token, statusCode: HttpStatus.OK},
+            const response = NextResponse.json(
+                {
+                    message: 'Login was successful!',
+                    token,
+                    role: user.role,
+                    userId: user.user_id,
+                    email: user.email,
+                    statusCode: HttpStatus.OK
+                },
                 {status: HttpStatus.OK}
-            )
+            );
+
+            response.cookies.set('auth_token', token, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'lax',
+                path: '/',
+                maxAge: 60 * 60, // 1 hour
+            });
+
+            return response;
         }else{
             const newAttempts = user.failed_login_attempts + 1;
             let message: string = 'Invalid email or password.';
