@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 
@@ -13,7 +13,7 @@ interface ResetDetails {
   profile_photo: string;
 }
 
-export default function ForgotResetPage() {
+function ForgotResetContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token") || "";
 
@@ -185,5 +185,13 @@ export default function ForgotResetPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ForgotResetPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-[#113F67]">Loading reset page...</div>}>
+      <ForgotResetContent />
+    </Suspense>
   );
 }
