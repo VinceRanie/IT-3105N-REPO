@@ -21,9 +21,18 @@ export default function RAStaffNavbar() {
 
   const isActive = (href: string) => pathname === href
 
-  const handleLogout = () => {
-    clearAuthData()
-    router.push("/Login")
+  const handleLogout = async () => {
+    try {
+      await fetch('/API/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      })
+    } catch {
+      // Ignore network/logout endpoint errors and still clear client auth state.
+    } finally {
+      clearAuthData()
+      window.location.href = '/Login'
+    }
   }
 
   return (
