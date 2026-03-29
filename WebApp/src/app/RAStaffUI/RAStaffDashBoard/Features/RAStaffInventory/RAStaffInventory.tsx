@@ -3,9 +3,9 @@
 import { useState, useEffect } from "react";
 import { Chemical, Batch } from "./types";
 import AddChemicalModal from "./AddChemicalModal";
+import EditChemicalModal from "./EditChemicalModal";
 import { Search, Plus, Edit, ChevronLeft, ChevronRight, Package, ChevronUp, ChevronDown } from "lucide-react";
 import { API_URL } from "@/config/api";
-import { useRouter } from "next/navigation";
 import { useProtectedRoute } from "@/app/hooks/useProtectedRoute";
 import { getAuthHeader } from "@/app/utils/authUtil";
 
@@ -21,7 +21,7 @@ export default function RAStaffInventory() {
   
   // Modal states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [selectedChemical, setSelectedChemical] = useState<Chemical | null>(null);
+  const [editingChemical, setEditingChemical] = useState<Chemical | null>(null);
   
   // Search and filter
   const [searchTerm, setSearchTerm] = useState("");
@@ -164,19 +164,19 @@ export default function RAStaffInventory() {
   const uniqueUnits = Array.from(new Set(chemicals.map((c) => c.unit)));
   const uniqueTypes = Array.from(new Set(chemicals.map((c) => c.type)));
 
-  const router = useRouter();
-
   // Handler functions
   const handleEdit = (chemical: Chemical) => {
-    const chemicalBatch = batches.find(b => b.chemical_id === chemical.chemical_id);
-    if (chemicalBatch) {
-      router.push(`/RAStaffUI/RAStaffDashBoard/Features/RAStaffInventory/batch/${chemicalBatch.batch_id}`);
-    }
+    setEditingChemical(chemical);
   };
 
   const handleAddSuccess = () => {
     fetchChemicals();
     setIsAddModalOpen(false);
+  };
+
+  const handleEditSuccess = () => {
+    fetchChemicals();
+    setEditingChemical(null);
   };
 
   if (loading) {
@@ -418,6 +418,15 @@ export default function RAStaffInventory() {
         onClose={() => setIsAddModalOpen(false)}
         onSuccess={handleAddSuccess}
       />
+
+      {editingChemical && (
+        <EditChemicalModal
+          isOpen={!!editingChemical}
+          onClose={() => setEditingChemical(null)}
+          onSuccess={handleEditSuccess}
+          chemical={editingChemical}
+        />
+      )}
     </div>
   );
 }

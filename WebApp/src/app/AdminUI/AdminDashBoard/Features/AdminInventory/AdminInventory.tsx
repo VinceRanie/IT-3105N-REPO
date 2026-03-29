@@ -3,10 +3,10 @@
 import { useState, useEffect } from "react";
 import { Chemical, Batch } from "./types";
 import AddChemicalModal from "./AddChemicalModal";
+import EditChemicalModal from "./EditChemicalModal";
 import DeleteConfirmModal from "./DeleteConfirmModal";
 import { Search, Plus, Edit, Trash2, ChevronLeft, ChevronRight, Package, ChevronUp, ChevronDown } from "lucide-react";
 import { API_URL } from "@/config/api";
-import { useRouter } from "next/navigation";
 
 export default function AdminInventory() {
   const [chemicals, setChemicals] = useState<Chemical[]>([]);
@@ -19,6 +19,7 @@ export default function AdminInventory() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedChemical, setSelectedChemical] = useState<Chemical | null>(null);
+  const [editingChemical, setEditingChemical] = useState<Chemical | null>(null);
   
   // Search and filter
   const [searchTerm, setSearchTerm] = useState("");
@@ -140,14 +141,9 @@ export default function AdminInventory() {
   const uniqueUnits = Array.from(new Set(chemicals.map((c) => c.unit)));
   const uniqueTypes = Array.from(new Set(chemicals.map((c) => c.type)));
 
-  const router = useRouter();
-
   // Handler functions
   const handleEdit = (chemical: Chemical) => {
-    const chemicalBatch = batches.find(b => b.chemical_id === chemical.chemical_id);
-    if (chemicalBatch) {
-      router.push(`/AdminUI/AdminDashBoard/Features/AdminInventory/batch/${chemicalBatch.batch_id}`);
-    }
+    setEditingChemical(chemical);
   };
 
   const handleDelete = (chemical: Chemical) => {
@@ -163,6 +159,11 @@ export default function AdminInventory() {
   const handleDeleteSuccess = () => {
     fetchChemicals();
     setIsDeleteModalOpen(false);
+  };
+
+  const handleEditSuccess = () => {
+    fetchChemicals();
+    setEditingChemical(null);
   };
 
   const SortIcon = ({ column }: { column: string }) => {
@@ -428,6 +429,15 @@ export default function AdminInventory() {
         onClose={() => setIsAddModalOpen(false)}
         onSuccess={handleAddSuccess}
       />
+
+      {editingChemical && (
+        <EditChemicalModal
+          isOpen={!!editingChemical}
+          onClose={() => setEditingChemical(null)}
+          onSuccess={handleEditSuccess}
+          chemical={editingChemical}
+        />
+      )}
       
       {selectedChemical && (
         <DeleteConfirmModal
