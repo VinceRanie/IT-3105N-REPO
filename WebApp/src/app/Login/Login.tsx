@@ -6,6 +6,8 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { setAuthToken, setUserData } from '@/app/utils/authUtil';
 
+const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || 'https://22102959.dcism.org/biocella-api').replace(/\/$/, '');
+
 export default function LoginForm() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
@@ -25,7 +27,7 @@ export default function LoginForm() {
     setMessage(null); 
 
     try {
-      const response = await fetch("/API/auth/login", {
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
