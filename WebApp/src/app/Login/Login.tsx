@@ -8,6 +8,14 @@ import { setAuthToken, setUserData } from '@/app/utils/authUtil';
 
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || 'https://22102959.dcism.org/biocella-api').replace(/\/$/, '');
 
+const setAuthCookie = (token: string) => {
+  if (typeof window === 'undefined') return;
+
+  const isHttps = window.location.protocol === 'https:';
+  const secureFlag = isHttps ? '; Secure' : '';
+  document.cookie = `auth_token=${encodeURIComponent(token)}; Path=/; Max-Age=3600; SameSite=Lax${secureFlag}`;
+};
+
 export default function LoginForm() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
@@ -42,6 +50,7 @@ export default function LoginForm() {
 
         if (data.token && data.userId && data.email && data.role) {
           setAuthToken(data.token);
+          setAuthCookie(data.token);
           setUserData({
             userId: data.userId,
             email: data.email,
