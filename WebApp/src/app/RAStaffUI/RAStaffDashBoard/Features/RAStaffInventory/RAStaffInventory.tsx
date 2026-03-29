@@ -99,24 +99,34 @@ export default function RAStaffInventory() {
 
   // Check if quantity is below threshold
   const isLowStock = (chemical: Chemical) => {
-    return chemical.quantity <= chemical.threshold;
+    return getRemainingQuantity(chemical.chemical_id) <= chemical.threshold;
   };
 
   const getChemicalBatches = (chemicalId: number) =>
     batches.filter((batch) => batch.chemical_id === chemicalId);
 
-  const getLotGroupsLabel = (chemicalId: number) => {
+  const getRemainingQuantity = (chemicalId: number) => {
     const chemicalBatches = getChemicalBatches(chemicalId);
+    if (!chemicalBatches.length) return 0;
+    return chemicalBatches.reduce(
+      (sum, batch) => sum + Math.max(0, batch.quantity - batch.used_quantity),
+      0
+    );
+  };
+
+  const getLotGroupsLabel = (chemical: Chemical) => {
+    const chemicalBatches = getChemicalBatches(chemical.chemical_id);
     if (!chemicalBatches.length) return "N/A";
 
-    const lotCounts = chemicalBatches.reduce((acc, batch) => {
+    const lotTotals = chemicalBatches.reduce((acc, batch) => {
       const lot = (batch.lot_number || "NO-LOT").trim() || "NO-LOT";
-      acc[lot] = (acc[lot] || 0) + 1;
+      const remaining = Math.max(0, batch.quantity - batch.used_quantity);
+      acc[lot] = (acc[lot] || 0) + remaining;
       return acc;
     }, {} as Record<string, number>);
 
-    return Object.entries(lotCounts)
-      .map(([lot, count]) => `${lot} (${count})`)
+    return Object.entries(lotTotals)
+      .map(([lot, total]) => `${lot}: ${total} ${chemical.unit}`)
       .join(", ");
   };
 
@@ -331,7 +341,7 @@ export default function RAStaffInventory() {
                       {chemicalBatch?.batch_id || 'N/A'}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">
-                      {getLotGroupsLabel(chemical.chemical_id)}
+                      {getLotGroupsLabel(chemical)}
                     </td>
                     <td className="px-6 py-4 text-sm font-medium text-gray-900">
                       {chemical.name}
@@ -356,7 +366,7 @@ export default function RAStaffInventory() {
                     <td className="px-6 py-4 text-sm">
                       {isLowStock(chemical) ? (
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                          Low Stock
+                          Low Stocks
                         </span>
                       ) : (
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">

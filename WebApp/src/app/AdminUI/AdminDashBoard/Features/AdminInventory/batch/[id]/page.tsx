@@ -10,6 +10,7 @@ interface Batch {
   batch_id: number;
   chemical_id: number;
   chemical_name?: string;
+  chemical_unit?: string;
   quantity: number;
   used_quantity: number;
   date_received: string;
@@ -31,6 +32,7 @@ export default function BatchEditPage() {
 
   // Usage form
   const [amountUsed, setAmountUsed] = useState(0);
+  const [usageUnit, setUsageUnit] = useState("");
   const [purpose, setPurpose] = useState("");
   const [userId, setUserId] = useState<number | null>(null);
   const [isMounted, setIsMounted] = useState(false);
@@ -57,12 +59,48 @@ export default function BatchEditPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMounted, batchId, userId]);
 
+  const normalizeUnit = (unit: string) => unit.toLowerCase().replace("μ", "u");
+
+  const getCompatibleUnits = (baseUnit: string) => {
+    const normalizedBase = normalizeUnit(baseUnit);
+    if (["kg", "g", "mg"].includes(normalizedBase)) {
+      return ["kg", "g", "mg"];
+    }
+    if (["l", "ml", "ul"].includes(normalizedBase)) {
+      return ["L", "mL", "uL"];
+    }
+    return [baseUnit || "unit"];
+  };
+
+  const convertToBaseUnit = (amount: number, fromUnit: string, baseUnit: string) => {
+    const normalizedFrom = normalizeUnit(fromUnit);
+    const normalizedBase = normalizeUnit(baseUnit);
+
+    const massFactors: Record<string, number> = { kg: 1000, g: 1, mg: 0.001 };
+    const volumeFactors: Record<string, number> = { l: 1000, ml: 1, ul: 0.001 };
+
+    if (normalizedFrom in massFactors && normalizedBase in massFactors) {
+      return (amount * massFactors[normalizedFrom]) / massFactors[normalizedBase];
+    }
+
+    if (normalizedFrom in volumeFactors && normalizedBase in volumeFactors) {
+      return (amount * volumeFactors[normalizedFrom]) / volumeFactors[normalizedBase];
+    }
+
+    if (normalizedFrom === normalizedBase) {
+      return amount;
+    }
+
+    throw new Error(`Cannot convert from ${fromUnit} to ${baseUnit}`);
+  };
+
   const fetchBatch = async () => {
     try {
       const response = await fetch(`${API_URL}/batches/${batchId}`);
       if (!response.ok) throw new Error("Failed to fetch batch");
       const data = await response.json();
       setBatch(data);
+      setUsageUnit(data.chemical_unit || "");
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
@@ -81,8 +119,15 @@ export default function BatchEditPage() {
     setError(null);
 
     try {
-      // Calculate new used quantity
-      const newUsedQuantity = batch.used_quantity + amountUsed;
+      if (amountUsed <= 0) {
+        throw new Error("Amount used must be greater than 0");
+      }
+
+      const baseUnit = batch.chemical_unit || "";
+      const normalizedAmountUsed = convertToBaseUnit(amountUsed, usageUnit || baseUnit, baseUnit);
+
+      // Calculate new used quantity in base unit
+      const newUsedQuantity = batch.used_quantity + normalizedAmountUsed;
 
       if (newUsedQuantity > batch.quantity) {
         throw new Error("Cannot use more than available quantity");
@@ -112,7 +157,7 @@ export default function BatchEditPage() {
           chemical_id: batch.chemical_id,
           user_id: userId,
           date_used: new Date().toISOString(),
-          amount_used: amountUsed,
+          amount_used: normalizedAmountUsed,
           purpose,
           batch_id: batch.batch_id,
         }),
@@ -161,6 +206,7 @@ export default function BatchEditPage() {
 
   const remainingQuantity = batch.quantity - batch.used_quantity;
   const percentageUsed = (batch.used_quantity / batch.quantity) * 100;
+  const compatibleUnits = getCompatibleUnits(batch.chemical_unit || "");
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
@@ -212,17 +258,17 @@ export default function BatchEditPage() {
 
             <div className="border-t pt-3">
               <label className="text-sm font-medium text-gray-600">Total Quantity</label>
-              <p className="text-lg font-semibold">{batch.quantity}</p>
+              <p className="text-lg font-semibold">{batch.quantity} {batch.chemical_unit || ""}</p>
             </div>
 
             <div>
               <label className="text-sm font-medium text-gray-600">Used Quantity</label>
-              <p className="text-lg font-semibold text-red-600">{batch.used_quantity}</p>
+              <p className="text-lg font-semibold text-red-600">{batch.used_quantity} {batch.chemical_unit || ""}</p>
             </div>
 
             <div>
               <label className="text-sm font-medium text-gray-600">Remaining</label>
-              <p className="text-2xl font-bold text-green-600">{remainingQuantity}</p>
+              <p className="text-2xl font-bold text-green-600">{remainingQuantity} {batch.chemical_unit || ""}</p>
             </div>
 
             {/* Progress Bar */}
@@ -256,12 +302,26 @@ export default function BatchEditPage() {
                 onChange={(e) => setAmountUsed(Number(e.target.value))}
                 required
                 min="0"
-                max={remainingQuantity}
+                step="0.01"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
                 placeholder="Enter amount used"
               />
+              <div className="mt-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Usage Unit
+                </label>
+                <select
+                  value={usageUnit || (batch.chemical_unit || "")}
+                  onChange={(e) => setUsageUnit(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                >
+                  {compatibleUnits.map((unit) => (
+                    <option key={unit} value={unit}>{unit}</option>
+                  ))}
+                </select>
+              </div>
               <p className="mt-1 text-xs text-gray-500">
-                Maximum: {remainingQuantity} remaining
+                Remaining: {remainingQuantity} {batch.chemical_unit || ""}
               </p>
             </div>
 

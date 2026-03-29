@@ -13,7 +13,7 @@ exports.createBatch = async (data) => {
 // READ ALL
 exports.getAllBatches = async (filters = {}) => {
   const { chemical_id, lot_number } = filters;
-  const conditions = [];
+  const conditions = ["b.deleted_at IS NULL"];
   const params = [];
 
   if (chemical_id) {
@@ -29,7 +29,7 @@ exports.getAllBatches = async (filters = {}) => {
   const whereClause = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
   const [rows] = await db.execute(`
-    SELECT b.*, r.name AS chemical_name
+    SELECT b.*, r.name AS chemical_name, r.unit AS chemical_unit, r.threshold AS chemical_threshold
     FROM chemical_stock_batch b
     JOIN reagents_chemicals r ON b.chemical_id = r.chemical_id
     ${whereClause}
@@ -41,7 +41,7 @@ exports.getAllBatches = async (filters = {}) => {
 // READ ONE
 exports.getBatchById = async (id) => {
   const [rows] = await db.execute(`
-    SELECT b.*, r.name AS chemical_name
+    SELECT b.*, r.name AS chemical_name, r.unit AS chemical_unit, r.threshold AS chemical_threshold
     FROM chemical_stock_batch b
     JOIN reagents_chemicals r ON b.chemical_id = r.chemical_id
     WHERE b.batch_id = ?
@@ -56,8 +56,8 @@ exports.updateBatch = async (id, data) => {
   
   try {
     const [result] = await db.execute(
-      "UPDATE chemical_stock_batch SET quantity=?, used_quantity=?, expiration_date=?, location=?, lot_number=COALESCE(?, lot_number) WHERE batch_id=?",
-      [quantity, used_quantity, expiration_date, location || null, lot_number || null, id]
+      "UPDATE chemical_stock_batch SET quantity=?, used_quantity=?, expiration_date=?, location=?, lot_number=COALESCE(?, lot_number), deleted_at=CASE WHEN ? >= ? THEN NOW() ELSE NULL END WHERE batch_id=?",
+      [quantity, used_quantity, expiration_date, location || null, lot_number || null, used_quantity, quantity, id]
     );
     console.log('Batch model update SQL result:', { affectedRows: result.affectedRows, changedRows: result.changedRows });
     return result.affectedRows;

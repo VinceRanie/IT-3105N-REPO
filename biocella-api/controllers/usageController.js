@@ -34,7 +34,7 @@ exports.create = async (req, res) => {
     
     // Validate that the batch exists and belongs to the same chemical.
     const [batchRows] = await db.execute(
-      'SELECT batch_id, chemical_id FROM chemical_stock_batch WHERE batch_id = ?',
+      'SELECT batch_id, chemical_id, deleted_at FROM chemical_stock_batch WHERE batch_id = ?',
       [batch_id]
     );
     if (batchRows.length === 0) {
@@ -46,6 +46,12 @@ exports.create = async (req, res) => {
     if (Number(batchRows[0].chemical_id) !== Number(chemical_id)) {
       return res.status(400).json({
         error: `Batch ${batch_id} does not belong to chemical ${chemical_id}`,
+      });
+    }
+
+    if (batchRows[0].deleted_at) {
+      return res.status(400).json({
+        error: `Batch ${batch_id} is fully consumed and can no longer be used`,
       });
     }
     
