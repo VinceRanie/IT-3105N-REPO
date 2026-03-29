@@ -40,6 +40,7 @@ export default function AdminAppointmentDashboard() {
   const [lastVerifiedQR, setLastVerifiedQR] = useState('');
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [cameraFacingMode, setCameraFacingMode] = useState<'environment' | 'user'>('environment');
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const tabs: { key: TabType; label: string; color: string }[] = [
@@ -425,19 +426,36 @@ export default function AdminAppointmentDashboard() {
     setLastVerifiedQR('');
   };
 
-  const startCamera = async () => {
+  const startCamera = async (preferredMode: 'environment' | 'user' = cameraFacingMode) => {
     try {
       console.log('📷 Requesting camera access...');
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { 
-          facingMode: 'environment',
-          width: { ideal: 1280 }, 
-          height: { ideal: 720 } 
-        },
-        audio: false
-      });
+      let stream: MediaStream;
+      let modeInUse: 'environment' | 'user' = preferredMode;
+
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: preferredMode },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          },
+          audio: false
+        });
+      } catch (firstError) {
+        const fallbackMode = preferredMode === 'environment' ? 'user' : 'environment';
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: fallbackMode },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          },
+          audio: false
+        });
+        modeInUse = fallbackMode;
+      }
       
       console.log('✅ Camera stream obtained:', stream.getTracks());
+      setCameraFacingMode(modeInUse);
       
       // Set both state at once to trigger re-render and then the effect
       setCameraStream(stream);
@@ -449,6 +467,12 @@ export default function AdminAppointmentDashboard() {
       alert(`Unable to access camera: ${errorMsg}`);
       setCameraActive(false);
     }
+  };
+
+  const switchCamera = async () => {
+    const nextMode = cameraFacingMode === 'environment' ? 'user' : 'environment';
+    stopCamera();
+    await startCamera(nextMode);
   };
 
   const scanQRCode = () => {
@@ -775,7 +799,7 @@ export default function AdminAppointmentDashboard() {
                 {!cameraActive ? (
                   <div className="space-y-3">
                     <button
-                      onClick={startCamera}
+                      onClick={() => startCamera()}
                       className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white px-4 py-3 rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all font-semibold flex items-center justify-center gap-2"
                     >
                       📷 Start Camera Scanner
@@ -793,9 +817,9 @@ export default function AdminAppointmentDashboard() {
                   <div className="space-y-3">
                     <div className="text-sm text-amber-700 bg-amber-50 p-3 rounded-lg flex items-start gap-2">
                       <span>👁️</span>
-                      <span>Point camera at QR code. It will scan automatically.</span>
+                      <span>Point your camera at the QR code inside the frame. Detection runs automatically.</span>
                     </div>
-                    <div className="w-full bg-black rounded-lg overflow-hidden flex items-center justify-center" style={{ aspectRatio: '4/3' }}>
+                    <div className="relative w-full bg-black rounded-lg overflow-hidden flex items-center justify-center" style={{ aspectRatio: '4/3' }}>
                       <video
                         ref={videoRef}
                         autoPlay={true}
@@ -812,17 +836,35 @@ export default function AdminAppointmentDashboard() {
                         onLoadedMetadata={() => console.log('📊 Video onLoadedMetadata fired')}
                         onCanPlay={() => console.log('▶️ Video onCanPlay fired')}
                       />
+
+                      <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                        <div className="relative w-[72%] h-[58%] border-2 border-white/70 rounded-2xl shadow-[0_0_0_200vmax_rgba(0,0,0,0.2)]">
+                          <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-cyan-300 rounded-tl-xl" />
+                          <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-cyan-300 rounded-tr-xl" />
+                          <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-cyan-300 rounded-bl-xl" />
+                          <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-cyan-300 rounded-br-xl" />
+                          <div className="absolute left-3 right-3 top-1/2 h-0.5 bg-cyan-300/80 animate-pulse" />
+                        </div>
+                      </div>
                     </div>
                     <canvas
                       ref={canvasRef}
                       style={{ display: 'none' }}
                     />
-                    <button
-                      onClick={stopCamera}
-                      className="w-full bg-gray-400 text-white px-4 py-2 rounded-lg hover:bg-gray-500 transition-colors font-semibold"
-                    >
-                      ✕ Stop Camera
-                    </button>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={switchCamera}
+                        className="w-full bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors font-semibold"
+                      >
+                        🔄 Switch Camera
+                      </button>
+                      <button
+                        onClick={stopCamera}
+                        className="w-full bg-gray-400 text-white px-4 py-2 rounded-lg hover:bg-gray-500 transition-colors font-semibold"
+                      >
+                        ✕ Stop Camera
+                      </button>
+                    </div>
                   </div>
                 )}
                 <input
