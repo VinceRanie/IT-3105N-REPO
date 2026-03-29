@@ -131,11 +131,17 @@ export default function RAStaffBatchEditPage() {
 
       const baseUnit = batch.chemical_unit || "";
       const normalizedAmountUsed = convertToBaseUnit(amountUsed, usageUnit || baseUnit, baseUnit);
+      const currentUsedQuantity = Number(batch.used_quantity);
+      const totalQuantity = Number(batch.quantity);
+
+      if (!Number.isFinite(currentUsedQuantity) || !Number.isFinite(totalQuantity)) {
+        throw new Error("Batch quantities are invalid");
+      }
 
       // Calculate new used quantity in base unit
-      const newUsedQuantity = batch.used_quantity + normalizedAmountUsed;
+      const newUsedQuantity = currentUsedQuantity + normalizedAmountUsed;
 
-      if (newUsedQuantity > batch.quantity) {
+      if (newUsedQuantity > totalQuantity) {
         throw new Error("Cannot use more than available quantity");
       }
 
@@ -216,8 +222,10 @@ export default function RAStaffBatchEditPage() {
     );
   }
 
-  const remainingQuantity = batch.quantity - batch.used_quantity;
-  const percentageUsed = (batch.used_quantity / batch.quantity) * 100;
+  const quantityValue = Number(batch.quantity) || 0;
+  const usedQuantityValue = Number(batch.used_quantity) || 0;
+  const remainingQuantity = Math.max(0, quantityValue - usedQuantityValue);
+  const percentageUsed = quantityValue > 0 ? (usedQuantityValue / quantityValue) * 100 : 0;
   const compatibleUnits = getCompatibleUnits(batch.chemical_unit || "");
 
   return (

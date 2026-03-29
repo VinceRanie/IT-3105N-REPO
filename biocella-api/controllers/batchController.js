@@ -1,6 +1,25 @@
 const Batch = require("../models/batchModel");
 const QRCode = require("qrcode");
 
+const normalizeDecimal = (value) => {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : NaN;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const parsed = Number.parseFloat(trimmed);
+    return Number.isFinite(parsed) ? parsed : NaN;
+  }
+
+  return NaN;
+};
+
 // CREATE
 exports.create = async (req, res) => {
   try {
@@ -21,6 +40,12 @@ exports.create = async (req, res) => {
     if (!data.lot_number) {
       return res.status(400).json({ error: "lot_number is required for batch tracking" });
     }
+
+    const quantity = normalizeDecimal(data.quantity);
+    if (!Number.isFinite(quantity) || quantity < 0) {
+      return res.status(400).json({ error: "Invalid quantity" });
+    }
+    data.quantity = quantity;
 
     // First create the batch to get the ID
     const tempData = {
@@ -92,6 +117,24 @@ exports.update = async (req, res) => {
     
     if (typeof data.lot_number === 'string') {
       data.lot_number = data.lot_number.trim();
+    }
+
+    const quantity = normalizeDecimal(data.quantity);
+    const usedQuantity = normalizeDecimal(data.used_quantity);
+
+    if (!Number.isFinite(quantity) || quantity < 0) {
+      return res.status(400).json({ error: "Invalid quantity" });
+    }
+
+    if (!Number.isFinite(usedQuantity) || usedQuantity < 0) {
+      return res.status(400).json({ error: "Invalid used_quantity" });
+    }
+
+    data.quantity = quantity;
+    data.used_quantity = usedQuantity;
+
+    if (usedQuantity > quantity) {
+      return res.status(400).json({ error: "used_quantity cannot be greater than quantity" });
     }
 
     const affected = await Batch.updateBatch(req.params.id, data);
