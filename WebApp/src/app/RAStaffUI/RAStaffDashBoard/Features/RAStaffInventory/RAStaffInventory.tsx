@@ -390,7 +390,11 @@ export default function RAStaffInventory() {
                     <td className="px-6 py-4 text-sm text-center">
                       <div className="flex justify-center gap-2">
                         <button
-                          onClick={() => window.location.href = `/RAStaffUI/RAStaffDashBoard/Features/RAStaffInventory/batches/${chemical.chemical_id}`}
+                          onClick={() => {
+                            if (chemicalBatch) {
+                              window.location.href = `/RAStaffUI/RAStaffDashBoard/Features/RAStaffInventory/batch/${chemicalBatch.batch_id}`;
+                            }
+                          }}
                           className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
                           title="View Batches"
                         >
