@@ -31,7 +31,7 @@ interface UserRow extends RowDataPacket {
     reset_token?: string | null;
 }
 
-const JWT_SECRET = process.env.JWT_TOKEN as string;
+const getJwtSecret = () => process.env.JWT_TOKEN || process.env.JWT_SECRET;
 
 export async function POST(req: Request) {
     try {
@@ -40,6 +40,17 @@ export async function POST(req: Request) {
             return NextResponse.json(
                 {message: 'Email and Password are required.', statusCode: HttpStatus.BAD_REQUEST},
                 {status: HttpStatus.BAD_REQUEST}
+            );
+        }
+
+        const jwtSecret = getJwtSecret();
+        if (!jwtSecret) {
+            return NextResponse.json(
+                {
+                    message: 'Authentication service is not configured.',
+                    statusCode: HttpStatus.INTERNAL_SERVER_ERROR
+                },
+                { status: HttpStatus.INTERNAL_SERVER_ERROR }
             );
         }
 
@@ -79,7 +90,7 @@ export async function POST(req: Request) {
             );
 
             const token = jwt.sign(
-                { userId: user.user_id, email: user.email, role: user.role}, JWT_SECRET, {expiresIn: '1h'}
+                { userId: user.user_id, email: user.email, role: user.role}, jwtSecret, {expiresIn: '1h'}
             )
 
             const response = NextResponse.json(
