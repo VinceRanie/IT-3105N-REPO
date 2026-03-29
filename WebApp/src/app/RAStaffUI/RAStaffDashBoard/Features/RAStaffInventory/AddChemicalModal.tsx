@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
 import { ChemicalFormData } from "./types";
 import { API_URL } from "@/config/api";
@@ -10,6 +10,17 @@ interface AddChemicalModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+}
+
+interface ExistingChemical {
+  chemical_id: number;
+  name: string;
+  type: string;
+}
+
+interface ExistingBatch {
+  chemical_id: number;
+  lot_number?: string | null;
 }
 
 export default function AddChemicalModal({
@@ -29,6 +40,78 @@ export default function AddChemicalModal({
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [customType, setCustomType] = useState("");
+  const [existingChemicals, setExistingChemicals] = useState<ExistingChemical[]>([]);
+  const [existingBatches, setExistingBatches] = useState<ExistingBatch[]>([]);
+
+  useEffect(() => {
+    const fetchLotSuggestions = async () => {
+      try {
+        const [chemicalsRes, batchesRes] = await Promise.all([
+          fetch(`${API_URL}/chemicals`, {
+            headers: getAuthHeader(),
+          }),
+          fetch(`${API_URL}/batches`, {
+            headers: getAuthHeader(),
+          }),
+        ]);
+
+        if (!chemicalsRes.ok || !batchesRes.ok) {
+          return;
+        }
+
+        const chemicalsData = await chemicalsRes.json();
+        const batchesData = await batchesRes.json();
+        setExistingChemicals(chemicalsData);
+        setExistingBatches(batchesData);
+      } catch {
+        setExistingChemicals([]);
+        setExistingBatches([]);
+      }
+    };
+
+    if (isOpen) {
+      fetchLotSuggestions();
+    }
+  }, [isOpen]);
+
+  const resolvedType = useMemo(() => {
+    return formData.type === "Other" ? customType.trim() : formData.type;
+  }, [formData.type, customType]);
+
+  const lotSuggestions = useMemo(() => {
+    const normalizedName = formData.name.trim().toLowerCase();
+    const normalizedType = resolvedType.trim().toLowerCase();
+
+    if (!normalizedName || !normalizedType) {
+      return [];
+    }
+
+    const matchedChemicalIds = existingChemicals
+      .filter(
+        (chemical) =>
+          chemical.name.trim().toLowerCase() === normalizedName &&
+          chemical.type.trim().toLowerCase() === normalizedType
+      )
+      .map((chemical) => chemical.chemical_id);
+
+    if (!matchedChemicalIds.length) {
+      return [];
+    }
+
+    const suggestionSet = new Set(
+      existingBatches
+        .filter(
+          (batch) =>
+            matchedChemicalIds.includes(batch.chemical_id) &&
+            !!batch.lot_number &&
+            batch.lot_number.trim() !== ""
+        )
+        .map((batch) => batch.lot_number!.trim())
+    );
+
+    return Array.from(suggestionSet).sort((a, b) => a.localeCompare(b));
+  }, [existingChemicals, existingBatches, formData.name, resolvedType]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,13 +119,27 @@ export default function AddChemicalModal({
     setError(null);
 
     try {
+      if (formData.type === "Other" && !customType.trim()) {
+        throw new Error("Please specify the custom chemical type.");
+      }
+
+      if (!formData.lot_number.trim()) {
+        throw new Error("Lot Number is required.");
+      }
+
+      const payload = {
+        ...formData,
+        type: resolvedType,
+        lot_number: formData.lot_number.trim(),
+      };
+
       const response = await fetch(`${API_URL}/chemicals`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           ...getAuthHeader(),
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -61,6 +158,7 @@ export default function AddChemicalModal({
         location: "",
         lot_number: "",
       });
+      setCustomType("");
 
       onSuccess();
     } catch (err) {
@@ -74,9 +172,21 @@ export default function AddChemicalModal({
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
+    const parsedQuantity = Number.parseFloat(value);
+    const parsedThreshold = Number(value);
+
     setFormData((prev) => ({
       ...prev,
-      [name]: name === "quantity" || name === "threshold" ? Number(value) : value,
+      [name]:
+        name === "quantity"
+          ? Number.isNaN(parsedQuantity)
+            ? 0
+            : parsedQuantity
+          : name === "threshold"
+          ? Number.isNaN(parsedThreshold)
+            ? 0
+            : parsedThreshold
+          : value,
     }));
   };
 
@@ -150,6 +260,22 @@ export default function AddChemicalModal({
               </select>
             </div>
 
+            {formData.type === "Other" && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Custom Type *
+                </label>
+                <input
+                  type="text"
+                  value={customType}
+                  onChange={(e) => setCustomType(e.target.value)}
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                  placeholder="Enter custom type"
+                />
+              </div>
+            )}
+
             {/* Quantity */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -162,6 +288,7 @@ export default function AddChemicalModal({
                 onChange={handleChange}
                 required
                 min="0"
+                step="0.01"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
                 placeholder="Enter quantity"
               />
@@ -253,6 +380,7 @@ export default function AddChemicalModal({
               </label>
               <input
                 type="text"
+                list="ra-lot-number-options"
                 name="lot_number"
                 value={formData.lot_number}
                 onChange={handleChange}
@@ -260,8 +388,13 @@ export default function AddChemicalModal({
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
                 placeholder="e.g., AGR-2026-03"
               />
+              <datalist id="ra-lot-number-options">
+                {lotSuggestions.map((lot) => (
+                  <option key={lot} value={lot} />
+                ))}
+              </datalist>
               <p className="mt-1 text-xs text-gray-500">
-                Use the same lot number for containers from the same supplier batch.
+                Suggestions are based on current name and type. You can also type a new lot number.
               </p>
             </div>
           </div>
