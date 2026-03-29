@@ -5,6 +5,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Menu, X } from "lucide-react"
 import Image from "next/image"
+import { clearAuthData } from "@/app/utils/authUtil"
 
 const navigation = [
   { name: "Collection", href: "/UsersUI/UsersDashBoard/Features/UserCollection" },
@@ -18,6 +19,20 @@ export default function Navbar() {
   const pathname = usePathname() 
 
   const isActive = (href: string) => pathname === href
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/API/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      })
+    } catch {
+      // Ignore network/logout endpoint errors and still clear client auth state.
+    } finally {
+      clearAuthData()
+      window.location.href = '/Login'
+    }
+  }
 
   return (
     <nav className="sticky top-0 z-50 bg-white shadow-lg mb-1 opacity-90">
@@ -79,7 +94,7 @@ export default function Navbar() {
                   </Link>
                   <button
                     className="w-full text-left block px-4 py-2 text-sm text-gray-700 hover:bg-red-600 hover:text-white"
-                    onClick={() => alert("Logging out...")}
+                    onClick={handleLogout}
                   >
                     Logout
                   </button>
@@ -140,7 +155,7 @@ export default function Navbar() {
                   My Profile
                 </Link>
                 <button
-                  onClick={() => alert("Logging out...")}
+                  onClick={handleLogout}
                   className="w-full text-left block px-3 py-2 text-sm text-gray-700 rounded-md hover:bg-red-600 hover:text-white"
                 >
                   Logout
