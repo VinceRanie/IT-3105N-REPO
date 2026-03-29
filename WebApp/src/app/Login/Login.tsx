@@ -49,12 +49,17 @@ export default function LoginForm() {
           });
         }
 
+        const normalizedRole = (data.role || '').toString().trim().toLowerCase();
+
         // Redirect based on role
-        if (data.role === 'admin') {
+        if (normalizedRole === 'admin') {
           router.push('/AdminUI/AdminDashBoard');
-        } else if (data.role === 'student') {
-          router.push('/StudentUI/StudentDashBoard');
+        } else if (normalizedRole === 'ra' || normalizedRole === 'staff') {
+          router.push('/RAStaffUI/RAStaffDashBoard');
+        } else if (normalizedRole === 'student' || normalizedRole === 'faculty') {
+          router.push('/UsersUI/UsersDashBoard');
         } else {
+          // Unknown or missing role falls back to general user dashboard.
           router.push('/UsersUI/UsersDashBoard');
         }
       } else {
