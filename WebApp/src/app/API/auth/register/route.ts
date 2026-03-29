@@ -1,162 +1,28 @@
-export const runtime = "nodejs";
-
 import { NextResponse } from "next/server";
-import { v4 as uuidv4 } from "uuid";
-import { RowDataPacket, ResultSetHeader } from "mysql2";
-import { query } from "../../lib/mysql";
-import { createGmailTransporter, getGmailUser } from "../../lib/email";
-import { isValidUscEmail } from "../../lib/validation";
-
-interface RegisterRequestBody {
-  email: string;
-}
-
-interface RegisterSucessResponse {
-  message: string;
-  userId: number;
-  email: string;
-}
-
-interface UserRow extends RowDataPacket {
-  user_id: number;
-  email: string;
-  is_setup_complete?: number;
-  password?: string;
-  failed_login_attempts?: number;
-  lockout_until?: Date | null;
-  reset_token?: string | null;
-  reset_token_expires?: Date | null;
-}
-
-const HttpStatus = {
-  OK: 200,
-  CREATED: 201,
-  BAD_REQUEST: 400,
-  UNAUTHORIZED: 401,
-  FORBIDDEN: 403,
-  NOT_FOUND: 404,
-  METHOD_NOT_ALLOWED: 405,
-  CONFLICT: 409,
-  INTERNAL_SERVER_ERROR: 500,
-};
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || "https://22102959.dcism.org/biocella-api";
 
 export async function POST(req: Request) {
   try {
-    const { email }: RegisterRequestBody = await req.json();
-
-    if (!email || typeof email !== "string" || !isValidUscEmail(email)) {
-      return NextResponse.json(
-        {
-          message: "Invalid email format or not USC email.",
-          statusCode: HttpStatus.BAD_REQUEST,
-        },
-        { status: HttpStatus.BAD_REQUEST }
-      );
-    }
-
-    const existingUsers = await query<UserRow>(
-      "SELECT user_id, email, is_setup_complete FROM user WHERE email = ?",
-      [email]
-    );
-
-    const resetToken = uuidv4();
-    const tokenExpiry = new Date(Date.now() + 1 * 60 * 60 * 1000);
-
-    let userId: number;
-    if (existingUsers.length > 0) {
-      const existingUser = existingUsers[0];
-
-      // Only block sign-up when the account is already fully set up.
-      if (existingUser.is_setup_complete === 1) {
-        return NextResponse.json(
-          { message: "User already exists.", statusCode: HttpStatus.CONFLICT },
-          { status: HttpStatus.CONFLICT }
-        );
-      }
-
-      await query<ResultSetHeader>(
-        `
-        UPDATE user
-        SET reset_token = ?, reset_token_expires = ?
-        WHERE user_id = ?
-        `,
-        [resetToken, tokenExpiry, existingUser.user_id]
-      );
-
-      userId = existingUser.user_id;
-    } else {
-      const insertResultArray = await query<ResultSetHeader>(
-        `
-        INSERT INTO user (
-          email,
-          reset_token,
-          reset_token_expires,
-          role
-        ) VALUES (?, ?, ?, ?)
-        `,
-        [email, resetToken, tokenExpiry, "student"]
-      );
-
-      userId = insertResultArray[0].insertId;
-    }
-
-    const transporter = await createGmailTransporter();
-
-    await transporter.sendMail({
-      from: `"BIOCELLA" <${getGmailUser()}>`,
-      to: email,
-      subject: "Finalize Your BIOCELLA Account Setup",
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #113F67;">Welcome to BIOCELLA!</h2>
-          <p>Hi there,</p>
-          <p>Thank you for registering with your USC email. To complete your account setup, click the button below:</p>
-          <div style="text-align: center; margin: 30px 0;">
-            <a href="${process.env.NEXT_PUBLIC_APP_BASE_URL}/signup/finalize?token=${resetToken}"
-               style="background-color: #113F67; color: white; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
-              Finalize Setup
-            </a>
-          </div>
-          <p>You will be asked to sign in with your Google account (<strong>${email}</strong>) to verify your identity. Your name and profile photo will be fetched automatically.</p>
-          <p><strong>This link will expire in 1 hour.</strong></p>
-          <p>If you did not register for this service, please ignore this email.</p>
-          <p>Sincerely,<br/><strong>BIOCELLA Team</strong></p>
-        </div>
-      `,
+    const body = await req.json();
+    const response = await fetch(`${API_BASE_URL}/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
     });
 
-    return NextResponse.json<RegisterSucessResponse>(
-      {
-        message:
-          "Finalize setup link sent! Check your email.",
-        userId,
-        email,
-      },
-      { status: HttpStatus.CREATED }
-    );
+    const data = await response.json();
+    return NextResponse.json(data, { status: response.status });
   } catch (error: unknown) {
-    console.error("Registration Error:", error);
-
-    const errorMessage =
-      error instanceof Error ? error.message : "Internal Server Error";
+    console.error("Registration proxy error:", error);
 
     return NextResponse.json(
-      {
-        message: "An unexpected error occurred during registration.",
-        error: errorMessage,
-        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-      },
-      { status: HttpStatus.INTERNAL_SERVER_ERROR }
+      { message: "An unexpected error occurred during registration." },
+      { status: 500 }
     );
   }
 }
 
 export async function GET() {
-  return NextResponse.json(
-    {
-      message: "Method not allowed.",
-      statusCode: HttpStatus.METHOD_NOT_ALLOWED,
-    },
-    { status: HttpStatus.METHOD_NOT_ALLOWED }
-  );
+  return NextResponse.json({ message: "Method not allowed." }, { status: 405 });
 }

@@ -1,13 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { RowDataPacket } from "mysql2";
-import { query } from "@/app/API/lib/mysql";
-
-interface UserRow extends RowDataPacket {
-  user_id: number;
-  email: string;
-  is_setup_complete: number;
-  reset_token_expires: Date | null;
-}
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || "https://22102959.dcism.org/biocella-api";
 
 export async function GET(request: NextRequest) {
   try {
@@ -21,30 +14,21 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Look up user by reset_token
-    const users = await query<UserRow>(
-      "SELECT user_id, email, is_setup_complete, reset_token_expires FROM user WHERE reset_token = ?",
-      [token]
-    );
+    const response = await fetch(`${API_BASE_URL}/auth/get-user-by-token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    });
 
-    const user = users[0];
-
-    if (!user) {
+    const data = await response.json();
+    if (!response.ok || !data?.user) {
       return NextResponse.json(
-        { message: "Invalid or expired token." },
-        { status: 401 }
+        { message: data?.message || "Invalid or expired token." },
+        { status: response.status || 401 }
       );
     }
 
-    // Check if token has expired
-    if (user.reset_token_expires && new Date() > new Date(user.reset_token_expires)) {
-      return NextResponse.json(
-        { message: "This link has expired. Please register again." },
-        { status: 401 }
-      );
-    }
-
-    // Check if user already completed setup
+    const user = data.user;
     if (user.is_setup_complete === 1) {
       return NextResponse.json(
         { message: "Account setup is already complete. Please log in." },
