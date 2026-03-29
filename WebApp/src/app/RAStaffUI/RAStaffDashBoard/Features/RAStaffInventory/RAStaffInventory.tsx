@@ -97,32 +97,6 @@ export default function RAStaffInventory() {
     setCurrentPage(1); // Reset to first page on filter change
   }, [searchTerm, unitFilter, typeFilter, chemicals]);
 
-  // Pagination logic
-  const sortedChemicals = getSortedData();
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = sortedChemicals.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(sortedChemicals.length / itemsPerPage);
-
-  // Get unique units for filter
-  const uniqueUnits = Array.from(new Set(chemicals.map((c) => c.unit)));
-  const uniqueTypes = Array.from(new Set(chemicals.map((c) => c.type)));
-
-  const router = useRouter();
-
-  // Handler functions
-  const handleEdit = (chemical: Chemical) => {
-    const chemicalBatch = batches.find(b => b.chemical_id === chemical.chemical_id);
-    if (chemicalBatch) {
-      router.push(`/RAStaffUI/RAStaffDashBoard/Features/RAStaffInventory/batch/${chemicalBatch.batch_id}`);
-    }
-  };
-
-  const handleAddSuccess = () => {
-    fetchChemicals();
-    setIsAddModalOpen(false);
-  };
-
   // Check if quantity is below threshold
   const isLowStock = (chemical: Chemical) => {
     return chemical.quantity <= chemical.threshold;
@@ -178,6 +152,32 @@ export default function RAStaffInventory() {
       </div>
     </th>
   );
+
+  // Pagination logic
+  const sortedChemicals = getSortedData();
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = sortedChemicals.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(sortedChemicals.length / itemsPerPage);
+
+  // Get unique units for filter
+  const uniqueUnits = Array.from(new Set(chemicals.map((c) => c.unit)));
+  const uniqueTypes = Array.from(new Set(chemicals.map((c) => c.type)));
+
+  const router = useRouter();
+
+  // Handler functions
+  const handleEdit = (chemical: Chemical) => {
+    const chemicalBatch = batches.find(b => b.chemical_id === chemical.chemical_id);
+    if (chemicalBatch) {
+      router.push(`/RAStaffUI/RAStaffDashBoard/Features/RAStaffInventory/batch/${chemicalBatch.batch_id}`);
+    }
+  };
+
+  const handleAddSuccess = () => {
+    fetchChemicals();
+    setIsAddModalOpen(false);
+  };
 
   if (loading) {
     return (
