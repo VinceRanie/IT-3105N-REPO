@@ -190,7 +190,6 @@ function ForgotResetContent() {
 
 export default function ForgotResetPage() {
   return (
-<<<<<<< HEAD
     <Suspense
       fallback={
         <div className="min-h-screen flex items-center justify-center bg-white">
@@ -201,9 +200,6 @@ export default function ForgotResetPage() {
         </div>
       }
     >
-=======
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-[#113F67]">Loading reset page...</div>}>
->>>>>>> 8a3b51ec4e71dc248b9fbd71f91b8d7dcecc46c9
       <ForgotResetContent />
     </Suspense>
   );
