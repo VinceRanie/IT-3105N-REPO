@@ -2,10 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 
 const JWT_TOKEN = process.env.JWT_TOKEN;
-if (!JWT_TOKEN) {
-  throw new Error("Missing JWT_TOKEN");
-}
-const JWT_SECRET = new TextEncoder().encode(JWT_TOKEN);
+const JWT_SECRET = JWT_TOKEN ? new TextEncoder().encode(JWT_TOKEN) : null;
 
 const roleAccess: Record<string, string[]> = {
   "/AdminUI": ["admin"],
@@ -52,6 +49,13 @@ export async function proxy(request: NextRequest) {
       return redirectToLogin(request);
     }
     return NextResponse.next();
+  }
+
+  if (!JWT_SECRET) {
+    const response = matchedPath
+      ? redirectToLogin(request)
+      : NextResponse.next();
+    return clearAuthCookie(response);
   }
 
   try {

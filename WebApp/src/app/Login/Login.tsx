@@ -6,6 +6,16 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { setAuthToken, setUserData } from '@/app/utils/authUtil';
 
+const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || 'https://22102959.dcism.org/biocella-api').replace(/\/$/, '');
+
+const setAuthCookie = (token: string) => {
+  if (typeof window === 'undefined') return;
+
+  const isHttps = window.location.protocol === 'https:';
+  const secureFlag = isHttps ? '; Secure' : '';
+  document.cookie = `auth_token=${encodeURIComponent(token)}; Path=/; Max-Age=3600; SameSite=Lax${secureFlag}`;
+};
+
 export default function LoginForm() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
@@ -25,7 +35,7 @@ export default function LoginForm() {
     setMessage(null); 
 
     try {
-      const response = await fetch("/API/auth/login", {
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -40,6 +50,7 @@ export default function LoginForm() {
 
         if (data.token && data.userId && data.email && data.role) {
           setAuthToken(data.token);
+          setAuthCookie(data.token);
           setUserData({
             userId: data.userId,
             email: data.email,
@@ -47,12 +58,17 @@ export default function LoginForm() {
           });
         }
 
+        const normalizedRole = (data.role || '').toString().trim().toLowerCase();
+
         // Redirect based on role
-        if (data.role === 'admin') {
+        if (normalizedRole === 'admin') {
           router.push('/AdminUI/AdminDashBoard');
-        } else if (data.role === 'student') {
-          router.push('/StudentUI/StudentDashBoard');
+        } else if (normalizedRole === 'ra' || normalizedRole === 'staff') {
+          router.push('/RAStaffUI/RAStaffDashBoard');
+        } else if (normalizedRole === 'student' || normalizedRole === 'faculty') {
+          router.push('/UsersUI/UsersDashBoard');
         } else {
+          // Unknown or missing role falls back to general user dashboard.
           router.push('/UsersUI/UsersDashBoard');
         }
       } else {

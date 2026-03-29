@@ -37,6 +37,7 @@ export default function RAStaffAppointmentDashboard() {
   const [lastVerifiedQR, setLastVerifiedQR] = useState('');
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [cameraFacingMode, setCameraFacingMode] = useState<'environment' | 'user'>('environment');
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -196,17 +197,46 @@ export default function RAStaffAppointmentDashboard() {
     processFrame();
   };
 
-  const startCamera = async () => {
+  const startCamera = async (preferredMode: 'environment' | 'user' = cameraFacingMode) => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' },
-      });
+      let stream: MediaStream;
+      let modeInUse: 'environment' | 'user' = preferredMode;
+
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: preferredMode },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+          audio: false,
+        });
+      } catch (firstError) {
+        const fallbackMode = preferredMode === 'environment' ? 'user' : 'environment';
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: fallbackMode },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+          audio: false,
+        });
+        modeInUse = fallbackMode;
+      }
+
       setCameraStream(stream);
+      setCameraFacingMode(modeInUse);
       setCameraActive(true);
     } catch (err) {
       console.error('Camera error:', err);
       alert('Unable to access camera. Please check permissions.');
     }
+  };
+
+  const switchCamera = async () => {
+    const nextMode = cameraFacingMode === 'environment' ? 'user' : 'environment';
+    stopCamera();
+    await startCamera(nextMode);
   };
 
   const stopCamera = () => {
@@ -593,7 +623,7 @@ export default function RAStaffAppointmentDashboard() {
                 {!cameraActive ? (
                   <div className="space-y-4">
                     <button
-                      onClick={startCamera}
+                      onClick={() => startCamera()}
                       className="w-full bg-blue-600 text-white px-4 py-3 rounded-md hover:bg-blue-700 transition-colors font-semibold"
                     >
                       📷 Start Camera
@@ -634,6 +664,16 @@ export default function RAStaffAppointmentDashboard() {
                           left: 0,
                         }}
                       />
+
+                      <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                        <div className="relative w-[72%] h-[58%] border-2 border-white/70 rounded-2xl shadow-[0_0_0_200vmax_rgba(0,0,0,0.2)]">
+                          <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-cyan-300 rounded-tl-xl" />
+                          <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-cyan-300 rounded-tr-xl" />
+                          <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-cyan-300 rounded-bl-xl" />
+                          <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-cyan-300 rounded-br-xl" />
+                          <div className="absolute left-3 right-3 top-1/2 h-0.5 bg-cyan-300/80 animate-pulse" />
+                        </div>
+                      </div>
                     </div>
                     <canvas ref={canvasRef} style={{ display: 'none' }} />
                     {qrInput && (
@@ -641,12 +681,20 @@ export default function RAStaffAppointmentDashboard() {
                         ✓ QR Code detected: {qrInput.substring(0, 50)}...
                       </div>
                     )}
-                    <button
-                      onClick={stopCamera}
-                      className="w-full bg-gray-400 text-white px-4 py-2 rounded-md hover:bg-gray-500 transition-colors font-semibold"
-                    >
-                      ✕ Stop Camera
-                    </button>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={switchCamera}
+                        className="w-full bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors font-semibold"
+                      >
+                        🔄 Switch Camera
+                      </button>
+                      <button
+                        onClick={stopCamera}
+                        className="w-full bg-gray-400 text-white px-4 py-2 rounded-md hover:bg-gray-500 transition-colors font-semibold"
+                      >
+                        ✕ Stop Camera
+                      </button>
+                    </div>
                   </div>
                 )}
               </>

@@ -76,6 +76,9 @@ export const clearAuthData = (): void => {
     localStorage.removeItem('authToken');
     localStorage.removeItem('userData');
     localStorage.removeItem('userEmail');
+    const isHttps = window.location.protocol === 'https:';
+    const secureFlag = isHttps ? '; Secure' : '';
+    document.cookie = `auth_token=; Path=/; Max-Age=0; SameSite=Lax${secureFlag}`;
   }
 };
 
