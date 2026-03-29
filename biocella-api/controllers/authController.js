@@ -196,6 +196,73 @@ exports.register = async (req, res) => {
   }
 };
 
+// FORGOT PASSWORD
+exports.forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email || typeof email !== "string") {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        message: "Valid email is required.",
+        statusCode: HttpStatus.BAD_REQUEST,
+      });
+    }
+
+    const user = await authModel.getUserByEmail(email);
+
+    // Return a generic response to avoid exposing whether an email exists.
+    if (!user) {
+      return res.status(HttpStatus.OK).json({
+        message: "If an account exists, a reset link has been sent to your email.",
+        statusCode: HttpStatus.OK,
+      });
+    }
+
+    const resetToken = uuidv4();
+    await authModel.setResetToken(user.user_id, resetToken);
+
+    try {
+      await sendEmail({
+        to: email,
+        subject: "Reset your BIOCELLA password",
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #113F67;">Password Reset Request</h2>
+            <p>We received a request to reset your BIOCELLA password.</p>
+            <p>Click the button below to continue:</p>
+            <p>
+              <a href="${APP_BASE_URL}/forgot-password/reset?token=${resetToken}"
+                 style="display: inline-block; padding: 10px 20px; background-color: #113F67; color: white; text-decoration: none; border-radius: 5px;">
+                Reset Password
+              </a>
+            </p>
+            <p style="color: #666; font-size: 12px;">
+              Or copy and paste this link in your browser:<br>
+              ${APP_BASE_URL}/forgot-password/reset?token=${resetToken}
+            </p>
+            <p>If you did not request this, you can safely ignore this email.</p>
+            <p>Sincerely,<br>BIOCELLA Team</p>
+          </div>
+        `,
+      });
+    } catch (emailError) {
+      console.error("Forgot password email error:", emailError);
+    }
+
+    return res.status(HttpStatus.OK).json({
+      message: "If an account exists, a reset link has been sent to your email.",
+      statusCode: HttpStatus.OK,
+    });
+  } catch (error) {
+    console.error("Forgot Password Error:", error);
+    return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+      message: "An unexpected error occurred during forgot password.",
+      error: error.message || error,
+      statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+    });
+  }
+};
+
 // ADMIN INVITE (bypass USC email restriction, custom role)
 exports.adminInvite = async (req, res) => {
   try {
@@ -427,6 +494,8 @@ exports.getUserByToken = async (req, res) => {
         department: user.department,
         course: user.course,
         role: user.role,
+        is_setup_complete: user.is_setup_complete || 0,
+        profile_photo: user.profile_photo || null,
       },
       statusCode: HttpStatus.OK,
     });

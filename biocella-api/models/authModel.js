@@ -79,6 +79,14 @@ exports.incrementFailedLoginAttempts = async (userId, newAttempts, lockoutTime =
   );
 };
 
+// UPDATE - Set reset token
+exports.setResetToken = async (userId, resetToken) => {
+  await db.execute(
+    "UPDATE user SET reset_token = ? WHERE user_id = ?",
+    [resetToken, userId]
+  );
+};
+
 // UPDATE - Role change (cannot promote/demote admins)
 exports.updateUserRole = async (userId, role) => {
   if (!ALLOWED_ROLES.includes(role)) {
