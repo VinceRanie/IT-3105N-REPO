@@ -88,13 +88,7 @@ export default function ForgotPasswordPage() {
       </div>
 
       <div className="relative hidden md:block">
-        <Image
-          src="/UI/img/Laboratory.jpg"
-          alt="Scientific laboratory research"
-          fill
-          sizes="(max-width: 768px) 0px, 50vw"
-          className="object-cover"
-        />
+        <Image src="/UI/img/Laboratory.jpg" alt="Scientific laboratory research" fill className="object-cover" />
         <div className="absolute inset-0 bg-gradient-to-l from-transparent to-background/10" />
       </div>
     </div>

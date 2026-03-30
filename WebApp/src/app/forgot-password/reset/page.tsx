@@ -95,13 +95,7 @@ function ForgotResetContent() {
   return (
     <div className="min-h-screen grid grid-cols-1 md:grid-cols-2 bg-white">
       <div className="relative hidden md:block">
-        <Image
-          src="/UI/img/Laboratory.jpg"
-          alt="Laboratory Background"
-          fill
-          sizes="(max-width: 768px) 0px, 50vw"
-          className="object-cover"
-        />
+        <Image src="/UI/img/Laboratory.jpg" alt="Laboratory Background" fill className="object-cover" />
         <div className="absolute inset-0 bg-gradient-to-r from-transparent to-white/70" />
       </div>
 
