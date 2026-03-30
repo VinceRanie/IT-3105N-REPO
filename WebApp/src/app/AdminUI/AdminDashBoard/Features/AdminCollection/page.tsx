@@ -74,6 +74,7 @@ export default function AdminCollectionPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "unpublished" | "published">("all");
   
   // Modal states
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
@@ -241,8 +242,14 @@ export default function AdminCollectionPage() {
 
   // Filter specimens based on search query
   const filteredSpecimens = specimens.filter((specimen: any) => {
+    const matchesStatus =
+      statusFilter === "all" ||
+      (specimen.publish_status || "unpublished") === statusFilter;
+
+    if (!matchesStatus) return false;
+
     if (!searchQuery) return true;
-    
+
     const query = searchQuery.toLowerCase();
     return (
       specimen.code_name?.toLowerCase().includes(query) ||
@@ -279,6 +286,8 @@ export default function AdminCollectionPage() {
         }}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
+        statusFilter={statusFilter}
+        onStatusFilterChange={setStatusFilter}
       />
       
       <AdminCollection

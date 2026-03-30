@@ -8,9 +8,18 @@ interface AdminControlsProps {
   onAddSpecimen: () => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
+  statusFilter: "all" | "unpublished" | "published";
+  onStatusFilterChange: (status: "all" | "unpublished" | "published") => void;
 }
 
-export default function AdminControls({ onAddProject, onAddSpecimen, searchQuery, onSearchChange }: AdminControlsProps) {
+export default function AdminControls({
+  onAddProject,
+  onAddSpecimen,
+  searchQuery,
+  onSearchChange,
+  statusFilter,
+  onStatusFilterChange,
+}: AdminControlsProps) {
   return (
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4">
       {/* Left group: Title */}
@@ -47,6 +56,17 @@ export default function AdminControls({ onAddProject, onAddSpecimen, searchQuery
           className="shadow-md transition-colors w-full sm:w-80 h-9 text-sm text-[#113F67] rounded-lg border border-gray-300 px-3 py-1 focus:outline-none focus:ring-2 focus:ring-[#113F67]"
           placeholder="Search by code, name, or project..."
         />
+
+        <select
+          value={statusFilter}
+          onChange={(e) => onStatusFilterChange(e.target.value as "all" | "unpublished" | "published")}
+          className="shadow-md transition-colors w-full sm:w-44 h-9 text-sm text-[#113F67] rounded-lg border border-gray-300 px-3 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+          aria-label="Filter by publish status"
+        >
+          <option value="all">All</option>
+          <option value="unpublished">Unpublished</option>
+          <option value="published">Published</option>
+        </select>
       </div>
     </div>
   );
