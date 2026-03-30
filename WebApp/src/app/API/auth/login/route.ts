@@ -11,11 +11,25 @@ export async function POST(req: Request) {
             body: JSON.stringify(body),
         });
 
-        const data = await backendResponse.json();
+        const raw = await backendResponse.text();
+        let data: Record<string, unknown> = {};
+
+        try {
+            data = raw ? JSON.parse(raw) : {};
+        } catch {
+            const isVercelProtection = raw.includes("Authentication Required") || raw.includes("Vercel Authentication");
+            data = {
+                message: isVercelProtection
+                    ? "Request blocked by Vercel deployment protection. Sign in to Vercel or disable protection for this deployment."
+                    : "Upstream service returned a non-JSON response.",
+            };
+        }
+
         const response = NextResponse.json(data, { status: backendResponse.status });
 
-        if (backendResponse.ok && data?.token) {
-            response.cookies.set("auth_token", data.token, {
+        const token = typeof data?.token === "string" ? data.token : null;
+        if (backendResponse.ok && token) {
+            response.cookies.set("auth_token", token, {
                 httpOnly: true,
                 secure: process.env.NODE_ENV === "production",
                 sameSite: "lax",
