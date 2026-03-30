@@ -26,7 +26,8 @@ app.use(cors({
     'http://localhost:3002', 
     'http://localhost:3000',
     'https://it-3105-n-repo-98sx.vercel.app',
-    'https://it-3105-n-repo-sqsf.vercel.app'
+    'https://it-3105-n-repo-sqsf.vercel.app',
+    'https://biocella-frontend.vercel.app'
   ],
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   credentials: true
