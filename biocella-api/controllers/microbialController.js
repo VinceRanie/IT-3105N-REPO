@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
 const AdmZip = require('adm-zip');
+const db = require('../config/mysql');
 
 // CREATE
 exports.createMicrobial = async (req, res) => {
@@ -110,6 +111,64 @@ exports.getMicrobials = async (req, res) => {
     res.json(microbials);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch microbial info' });
+  }
+};
+
+// PUBLIC HOMEPAGE STATS
+exports.getPublicStats = async (_req, res) => {
+  try {
+    const [studentRows] = await db.execute(
+      "SELECT COUNT(*) AS count FROM user WHERE role = 'student'"
+    );
+
+    const totalSpecimens = await MicrobialInfo.countDocuments();
+
+    const specimenTypesRaw = await MicrobialInfo.aggregate([
+      {
+        $project: {
+          specimenType: {
+            $trim: {
+              input: {
+                $ifNull: ['$classification', 'Unknown'],
+              },
+            },
+          },
+        },
+      },
+      {
+        $addFields: {
+          specimenType: {
+            $cond: [{ $eq: ['$specimenType', ''] }, 'Unknown', '$specimenType'],
+          },
+        },
+      },
+      {
+        $group: {
+          _id: '$specimenType',
+          count: { $sum: 1 },
+        },
+      },
+      {
+        $sort: {
+          count: -1,
+          _id: 1,
+        },
+      },
+    ]);
+
+    const specimenTypes = specimenTypesRaw.map((item) => ({
+      type: item._id,
+      count: item.count,
+    }));
+
+    res.json({
+      carolinianCount: Number(studentRows?.[0]?.count || 0),
+      totalSpecimens,
+      specimenTypes,
+    });
+  } catch (err) {
+    console.error('Failed to fetch public stats:', err);
+    res.status(500).json({ error: 'Failed to fetch public stats' });
   }
 };
 
