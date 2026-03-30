@@ -20,6 +20,7 @@ const HttpStatus = {
   BAD_REQUEST: 400,
   UNAUTHORIZED: 401,
   CONFLICT: 409,
+  SERVICE_UNAVAILABLE: 503,
   INTERNAL_SERVER_ERROR: 500,
 };
 
@@ -27,6 +28,14 @@ const JWT_SECRET = process.env.JWT_TOKEN || "your-secret-key-change-in-productio
 const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_BASE_URL || "http://localhost:3000";
 const RESET_LINK_TTL_MS = 60 * 60 * 1000; // 1 hour
 const RESET_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+const didEmailSend = (result) => {
+  if (!result) return false;
+  if (result.error) return false;
+  if (!result.messageId) return false;
+  if (result.messageId === "SKIPPED_NO_CONFIG") return false;
+  return true;
+};
 
 // LOGIN
 exports.login = async (req, res) => {
@@ -155,13 +164,13 @@ exports.register = async (req, res) => {
       });
     }
 
-    // Create reset token and insert user
+    // Prepare reset token; create user only after email delivery succeeds.
     const resetToken = uuidv4();
-    const userId = await authModel.createUser(email, resetToken);
 
     // Send email with verification link
+    let emailResult;
     try {
-      await sendEmail({
+      emailResult = await sendEmail({
         to: email,
         subject: "Finalize Your BIOCELLA Account Setup",
         html: `
@@ -182,13 +191,18 @@ exports.register = async (req, res) => {
           </div>
         `,
       });
-
-      console.log(`Registration email sent to ${email}`);
     } catch (emailError) {
       console.error("Email sending error:", emailError);
-      // Don't fail the registration if email fails, but log the error
-      // In production, you might want to retry or queue the email
     }
+
+    if (!didEmailSend(emailResult)) {
+      return res.status(HttpStatus.SERVICE_UNAVAILABLE).json({
+        message: "Registration could not be completed because finalize email was not sent. Please try again later.",
+        statusCode: HttpStatus.SERVICE_UNAVAILABLE,
+      });
+    }
+
+    const userId = await authModel.createUser(email, resetToken);
 
     return res.status(HttpStatus.CREATED).json({
       message: "User registered successfully. A password setup link has been sent to your email.",
@@ -249,8 +263,9 @@ exports.forgotPassword = async (req, res) => {
     const tokenExpiry = new Date(Date.now() + RESET_LINK_TTL_MS);
     await authModel.setResetToken(user.user_id, resetToken, tokenExpiry);
 
+    let emailResult;
     try {
-      await sendEmail({
+      emailResult = await sendEmail({
         to: email,
         subject: "Reset Your BIOCELLA Password",
         html: `
@@ -271,6 +286,13 @@ exports.forgotPassword = async (req, res) => {
       });
     } catch (emailError) {
       console.error("Forgot password email error:", emailError);
+    }
+
+    if (!didEmailSend(emailResult)) {
+      return res.status(HttpStatus.SERVICE_UNAVAILABLE).json({
+        message: "If an account exists, we could not send the reset email right now. Please try again later.",
+        statusCode: HttpStatus.SERVICE_UNAVAILABLE,
+      });
     }
 
     return res.status(HttpStatus.OK).json({
@@ -316,10 +338,10 @@ exports.adminInvite = async (req, res) => {
     }
 
     const resetToken = uuidv4();
-    const userId = await authModel.createUserByAdmin(email, resetToken, normalizedRole);
 
+    let emailResult;
     try {
-      await sendEmail({
+      emailResult = await sendEmail({
         to: email,
         subject: "Set your password to access BIOCELLA",
         html: `
@@ -342,6 +364,15 @@ exports.adminInvite = async (req, res) => {
     } catch (emailError) {
       console.error("Admin invite email error:", emailError);
     }
+
+    if (!didEmailSend(emailResult)) {
+      return res.status(HttpStatus.SERVICE_UNAVAILABLE).json({
+        message: "Invitation could not be completed because setup email was not sent. Please try again later.",
+        statusCode: HttpStatus.SERVICE_UNAVAILABLE,
+      });
+    }
+
+    const userId = await authModel.createUserByAdmin(email, resetToken, normalizedRole);
 
     return res.status(HttpStatus.CREATED).json({
       message: "User invited successfully. A password setup link has been sent to the email.",
