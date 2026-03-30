@@ -59,10 +59,10 @@ function ForgotResetContent() {
       return;
     }
 
-    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{6,}$/;
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
     if (!passwordRegex.test(password)) {
       setMessage({
-        text: "Password must be at least 6 characters with at least one uppercase, one lowercase, and one number.",
+        text: "Password must be at least 8 characters with at least one uppercase, one lowercase, and one number.",
         type: "error",
       });
       return;

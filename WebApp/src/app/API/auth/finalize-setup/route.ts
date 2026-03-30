@@ -1,102 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
-import { query } from "@/app/API/lib/mysql";
-import { RowDataPacket } from "mysql2";
-
-interface UserByTokenRow extends RowDataPacket {
-  user_id: number;
-  email: string;
-  is_setup_complete: number;
-  reset_token_expires: Date | null;
-}
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || "https://22102959.dcism.org/biocella-api";
 
 export async function POST(request: NextRequest) {
   try {
-    const {
-      token,
-      email,
-      first_name,
-      last_name,
-      profile_photo,
-      department,
-      course,
-      password,
-      retypePassword,
-    } =
-      await request.json();
+    const body = await request.json();
+    const response = await fetch(`${API_BASE_URL}/auth/finalize-setup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
 
-    if (!token || !email || !first_name || !last_name || !department || !course || !password || !retypePassword) {
-      return NextResponse.json({ message: "Missing required fields" }, { status: 400 });
-    }
-
-    const users = await query<UserByTokenRow>(
-      "SELECT user_id, email, is_setup_complete, reset_token_expires FROM user WHERE reset_token = ?",
-      [token]
-    );
-
-    const user = users[0];
-    if (!user) {
-      return NextResponse.json({ message: "Invalid or expired token." }, { status: 401 });
-    }
-
-    if (user.reset_token_expires && new Date() > new Date(user.reset_token_expires)) {
-      return NextResponse.json({ message: "This setup link has expired." }, { status: 401 });
-    }
-
-    if (user.is_setup_complete === 1) {
-      return NextResponse.json({ message: "Account setup is already complete. Please log in." }, { status: 409 });
-    }
-
-    if (user.email.toLowerCase() !== String(email).toLowerCase()) {
-      return NextResponse.json({ message: "Email does not match this setup token." }, { status: 400 });
-    }
-
-    if (password !== retypePassword) {
-      return NextResponse.json({ message: "Passwords do not match" }, { status: 400 });
-    }
-
-    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{6,}$/;
-    if (!passwordRegex.test(password)) {
-      return NextResponse.json(
-        {
-          message:
-            "Password must be at least 6 characters long and contain at least one uppercase, one lowercase, and one number.",
-        },
-        { status: 400 }
-      );
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    await query(
-      `UPDATE user
-        SET first_name = ?,
-            last_name = ?,
-            profile_photo = ?,
-            department = ?,
-            course = ?,
-            password = ?,
-            is_setup_complete = 1,
-            reset_token = NULL,
-            reset_token_expires = NULL
-        WHERE user_id = ?`,
-      [
-        first_name,
-        last_name,
-        profile_photo || null,
-        department,
-        course,
-        hashedPassword,
-        user.user_id,
-      ]
-    );
-
-    return NextResponse.json(
-      { message: "Signup finalized successfully" },
-      { status: 200 }
-    );
+    const data = await response.json();
+    return NextResponse.json(data, { status: response.status });
   } catch (error) {
-    console.error("Finalize signup error:", error);
+    console.error("Finalize setup proxy error:", error);
     return NextResponse.json({ message: "Internal server error" }, { status: 500 });
   }
 }
