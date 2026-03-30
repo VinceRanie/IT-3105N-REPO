@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, QrCode, Download, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
 import Image from "next/image";
 import jsPDF from "jspdf";
+import { getUserRole } from "@/app/utils/authUtil";
 
 interface SpecimenDetailProps {
   params: Promise<{
@@ -35,7 +36,8 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
     try {
       setLoading(true);
       console.log("Fetching specimen with ID:", resolvedParams.id);
-      const response = await fetch(`${API_URL}/microbials/${resolvedParams.id}`);
+      const role = getUserRole() || 'student';
+      const response = await fetch(`${API_URL}/microbials/${resolvedParams.id}?role=${encodeURIComponent(role)}`);
       if (response.ok) {
         const data = await response.json();
         setSpecimen(data);

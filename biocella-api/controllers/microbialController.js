@@ -7,6 +7,47 @@ const axios = require('axios');
 const AdmZip = require('adm-zip');
 const db = require('../config/mysql');
 
+const PUBLISH_STATUSES = new Set(['published', 'unpublished']);
+const PRIVILEGED_ROLES = new Set(['admin', 'staff']);
+
+const normalizeRole = (role) => {
+  if (!role) return '';
+  const normalized = String(role).trim().toLowerCase();
+  return normalized === 'ra' ? 'staff' : normalized;
+};
+
+const normalizePublishStatus = (status, fallback = 'unpublished') => {
+  const normalized = String(status || '').trim().toLowerCase();
+  return PUBLISH_STATUSES.has(normalized) ? normalized : fallback;
+};
+
+const canViewUnpublished = (req) => {
+  const roleFromQuery = req.query?.role;
+  const roleFromHeader = req.headers?.['x-user-role'];
+  const normalized = normalizeRole(roleFromQuery || roleFromHeader);
+  return PRIVILEGED_ROLES.has(normalized);
+};
+
+const publishedFilter = {
+  $or: [
+    { publish_status: 'published' },
+    { publish_status: { $exists: false } }
+  ]
+};
+
+const buildVisibilityFilter = (req) => {
+  const requestedStatus = normalizePublishStatus(req.query?.status, '');
+
+  if (canViewUnpublished(req)) {
+    if (PUBLISH_STATUSES.has(requestedStatus)) {
+      return { publish_status: requestedStatus };
+    }
+    return {};
+  }
+
+  return publishedFilter;
+};
+
 // CREATE
 exports.createMicrobial = async (req, res) => {
   try {
@@ -40,7 +81,8 @@ exports.createMicrobial = async (req, res) => {
       image_url: image_url,
       fasta_file: fasta_file,
       fasta_sequence: fasta_sequence,
-      accession_no: providedAccession || extractedAccession || req.body.accession_no
+      accession_no: providedAccession || extractedAccession || req.body.accession_no,
+      publish_status: normalizePublishStatus(req.body.publish_status, 'unpublished')
     };
 
     // Parse JSON fields if they're strings (from multipart form data)
@@ -107,7 +149,8 @@ const generateSpecimenQRCode = async (specimenId) => {
 // READ ALL
 exports.getMicrobials = async (req, res) => {
   try {
-    const microbials = await MicrobialInfo.find().populate('project_id');
+    const filter = buildVisibilityFilter(req);
+    const microbials = await MicrobialInfo.find(filter).populate('project_id');
     res.json(microbials);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch microbial info' });
@@ -121,9 +164,12 @@ exports.getPublicStats = async (_req, res) => {
       "SELECT COUNT(*) AS count FROM user WHERE role = 'student'"
     );
 
-    const totalSpecimens = await MicrobialInfo.countDocuments();
+    const totalSpecimens = await MicrobialInfo.countDocuments(publishedFilter);
 
     const specimenTypesRaw = await MicrobialInfo.aggregate([
+      {
+        $match: publishedFilter,
+      },
       {
         $project: {
           specimenType: {
@@ -177,6 +223,12 @@ exports.getMicrobialById = async (req, res) => {
   try {
     const microbial = await MicrobialInfo.findById(req.params.id).populate('project_id');
     if (!microbial) return res.status(404).json({ error: 'Not found' });
+
+    const status = normalizePublishStatus(microbial.publish_status, 'published');
+    if (status === 'unpublished' && !canViewUnpublished(req)) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
     res.json(microbial);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch microbial info' });
@@ -239,6 +291,10 @@ exports.updateMicrobial = async (req, res) => {
         }
       }
     });
+
+    if (Object.prototype.hasOwnProperty.call(updateData, 'publish_status')) {
+      updateData.publish_status = normalizePublishStatus(updateData.publish_status, 'unpublished');
+    }
     
     // Update timestamp
     updateData.updated_at = Date.now();

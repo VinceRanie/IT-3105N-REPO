@@ -7,6 +7,7 @@ import AdminControls from "./AdminControls";
 import ProjectModal from "./ProjectModal";
 import SpecimenModal from "./SpecimenModal";
 import { useRouter } from "next/navigation";
+import { getUserRole } from "@/app/utils/authUtil";
 
 interface Project {
   _id: string;
@@ -18,6 +19,7 @@ interface Project {
 
 interface Specimen {
   _id: string;
+  publish_status?: 'published' | 'unpublished';
   code_name: string;
   classification: string;
   source: string;
@@ -99,7 +101,8 @@ export default function AdminCollectionPage() {
   const fetchSpecimens = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_URL}/microbials`);
+      const role = getUserRole() || 'student';
+      const response = await fetch(`${API_URL}/microbials?role=${encodeURIComponent(role)}`);
       if (response.ok) {
         const data = await response.json();
         console.log("Fetched specimens:", data);

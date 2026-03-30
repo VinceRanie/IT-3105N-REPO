@@ -27,6 +27,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
     // Required fields
     project_id: "",
     code_name: "",
+    publish_status: "unpublished",
     classification: "",
     source: "",
     date_accessed: "",
@@ -74,6 +75,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
       setFormData({
         project_id: specimen.project_id?._id || specimen.project_id || "",
         code_name: specimen.code_name || "",
+        publish_status: specimen.publish_status || "unpublished",
         classification: specimen.classification || "",
         source: specimen.source || "",
         date_accessed: specimen.date_accessed ? specimen.date_accessed.split('T')[0] : "",
@@ -108,6 +110,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
       setFormData({
         project_id: "",
         code_name: "",
+        publish_status: "unpublished",
         classification: "",
         source: "",
         date_accessed: "",
@@ -401,6 +404,21 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
                   <option value="Protozoa">Protozoa</option>
                   <option value="Mixed">Mixed</option>
                   <option value="Other">Other</option>
+                </select>
+              </div>
+
+              {/* Publish Status */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Publish Status
+                </label>
+                <select
+                  value={formData.publish_status}
+                  onChange={(e) => setFormData({ ...formData, publish_status: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                >
+                  <option value="unpublished">Unpublished</option>
+                  <option value="published">Published</option>
                 </select>
               </div>
 

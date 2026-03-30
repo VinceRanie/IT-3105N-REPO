@@ -20,6 +20,7 @@ interface Project {
 
 interface Specimen {
   _id: string;
+  publish_status?: 'published' | 'unpublished';
   code_name: string;
   classification: string;
   source: string;
@@ -106,7 +107,7 @@ export default function RAStaffCollectionPage() {
   const fetchSpecimens = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_URL}/microbials`, {
+      const response = await fetch(`${API_URL}/microbials?role=staff`, {
         headers: getAuthHeader(),
       });
       if (response.ok) {
@@ -209,6 +210,29 @@ export default function RAStaffCollectionPage() {
     setIsSpecimenModalOpen(true);
   };
 
+  const handleTogglePublish = async (specimen: Specimen) => {
+    try {
+      const nextStatus = specimen.publish_status === 'published' ? 'unpublished' : 'published';
+      const payload = new FormData();
+      payload.append('publish_status', nextStatus);
+
+      const response = await fetch(`${API_URL}/microbials/${specimen._id}`, {
+        method: 'PUT',
+        headers: getAuthHeader(),
+        body: payload,
+      });
+
+      if (response.ok) {
+        await fetchSpecimens();
+      } else {
+        alert('Failed to update publish status');
+      }
+    } catch (error) {
+      console.error('Error updating publish status:', error);
+      alert('Error updating publish status');
+    }
+  };
+
   // Filter specimens based on search query
   const filteredSpecimens = specimens.filter((specimen: any) => {
     if (!searchQuery) return true;
@@ -255,6 +279,7 @@ export default function RAStaffCollectionPage() {
         specimens={filteredSpecimens}
         onEdit={handleEditSpecimen}
         onView={handleViewSpecimen}
+        onTogglePublish={handleTogglePublish}
       />
 
       <ProjectModal

@@ -69,6 +69,11 @@ const microbialInfoSchema = new Schema({
   custom_fields: { type: Schema.Types.Mixed },
   
   // Metadata
+  publish_status: {
+    type: String,
+    enum: ['published', 'unpublished'],
+    default: 'unpublished'
+  },
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now }
 }, { strict: false }); // Allow dynamic fields

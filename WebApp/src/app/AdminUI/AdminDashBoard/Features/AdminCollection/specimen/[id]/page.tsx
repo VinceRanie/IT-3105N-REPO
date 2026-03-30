@@ -38,7 +38,7 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
     try {
       setLoading(true);
       console.log("Fetching specimen with ID:", resolvedParams.id);
-      const response = await fetch(`${API_URL}/microbials/${resolvedParams.id}`);
+      const response = await fetch(`${API_URL}/microbials/${resolvedParams.id}?role=admin`);
       if (response.ok) {
         const data = await response.json();
         setSpecimen(data);
