@@ -62,7 +62,7 @@ interface Collection {
   custom_fields?: Record<string, string>;
 }
 
-export default function RAStaffCollection({ specimens, onEdit, onView }: { 
+export default function RAStaffCollection({ specimens, onEdit, onView, onTogglePublish }: { 
   specimens: Collection[], 
   onEdit: (specimen: Collection) => void,
   onView: (specimen: Collection) => void,

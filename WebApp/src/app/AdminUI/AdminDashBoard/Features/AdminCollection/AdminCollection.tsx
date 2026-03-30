@@ -83,7 +83,7 @@ const sampleCollections_backup = [
   },
 ];
 
-export default function CollectionTable({ specimens, onEdit, onDelete, onView }: { 
+export default function CollectionTable({ specimens, onEdit, onDelete, onView, onTogglePublish }: { 
   specimens: Collection[], 
   onEdit: (specimen: Collection) => void,
   onDelete: (id: string) => void,
