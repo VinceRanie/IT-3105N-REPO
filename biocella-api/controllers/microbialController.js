@@ -30,12 +30,16 @@ exports.createMicrobial = async (req, res) => {
       }
     }
 
+    const extractedAccession = extractAccessionFromFasta(fasta_sequence);
+    const providedAccession = (req.body.accession_no || '').trim();
+
     // Prepare specimen data
     const specimenData = {
       ...req.body,
       image_url: image_url,
       fasta_file: fasta_file,
-      fasta_sequence: fasta_sequence
+      fasta_sequence: fasta_sequence,
+      accession_no: providedAccession || extractedAccession || req.body.accession_no
     };
 
     // Parse JSON fields if they're strings (from multipart form data)
@@ -156,6 +160,12 @@ exports.updateMicrobial = async (req, res) => {
         // Read new FASTA file content
         const fastaPath = path.join(__dirname, '..', updateData.fasta_file);
         updateData.fasta_sequence = fs.readFileSync(fastaPath, 'utf8');
+
+        const extractedAccession = extractAccessionFromFasta(updateData.fasta_sequence);
+        const providedAccession = (updateData.accession_no || '').trim();
+        if (!providedAccession && extractedAccession) {
+          updateData.accession_no = extractedAccession;
+        }
       }
     }
 
@@ -282,7 +292,7 @@ exports.submitBlast = async (req, res) => {
     const params = new URLSearchParams();
     params.append('CMD', 'Put');
     params.append('PROGRAM', fastaValidation.blastProgram);
-    params.append('DATABASE', fastaValidation.seqType === 'protein' ? 'nr' : 'nt');
+    params.append('DATABASE', fastaValidation.blastDatabase);
     params.append('QUERY', cleanedFasta);
     params.append('EMAIL', EMAIL);
     params.append('TOOL', TOOL);
@@ -292,7 +302,7 @@ exports.submitBlast = async (req, res) => {
     
     console.log(`🔬 BLAST Parameters:`);
     console.log(`  - Program: ${fastaValidation.blastProgram.toUpperCase()}`);
-    console.log(`  - Database: ${fastaValidation.seqType === 'protein' ? 'nr (Non-redundant)' : 'nt (Nucleotide)'}`);
+    console.log(`  - Database: ${fastaValidation.blastDatabase}`);
     console.log(`  - Sequence Type: ${fastaValidation.seqType.toUpperCase()}`);
 
     let submitRes;
@@ -387,7 +397,7 @@ exports.submitBlast = async (req, res) => {
       fastaValidation: {
         sequence_type: fastaValidation.seqType.toUpperCase(),
         blast_program: fastaValidation.blastProgram.toUpperCase(),
-        database: fastaValidation.seqType === 'protein' ? 'nr (Non-redundant)' : 'nt (Nucleotide)',
+        database: fastaValidation.blastDatabase,
         original_length: microbial.fasta_sequence.length,
         cleaned_length: cleanedFasta.length,
         warnings: fastaValidation.warnings,
@@ -728,12 +738,11 @@ function selectBlastProgram(queryType, options = {}) {
     }
   } else {
     // nucleotide query
-    if (searchProteinDb && searchNucleotideDb) {
-      return { program: 'blastx', database: 'nr', description: 'Translated nucleotide query vs protein database' };
+    // Prefer blastn/nt for typical FASTA uploads to maximize NCBI compatibility.
+    if (searchNucleotideDb) {
+      return { program: 'blastn', database: 'nt', description: 'Nucleotide query vs nucleotide database' };
     } else if (searchProteinDb) {
       return { program: 'blastx', database: 'nr', description: 'Translated nucleotide query vs protein database' };
-    } else if (searchNucleotideDb) {
-      return { program: 'blastn', database: 'nt', description: 'Nucleotide query vs nucleotide database' };
     }
   }
   
@@ -896,6 +905,41 @@ function validateAndCleanFasta(fastaSequence) {
   }
   
   return result;
+}
+
+// Extract accession IDs from FASTA headers when present.
+function extractAccessionFromFasta(fastaSequence) {
+  if (!fastaSequence || typeof fastaSequence !== 'string') {
+    return '';
+  }
+
+  const lines = fastaSequence.split(/\r?\n/);
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line.startsWith('>')) {
+      continue;
+    }
+
+    const header = line.slice(1).trim();
+    if (!header) {
+      continue;
+    }
+
+    // NCBI-style pipe headers: gi|...|ref|NC_000913.3| or gb|MN908947.3|
+    const pipeTokens = header.split('|').map(t => t.trim()).filter(Boolean);
+    const pipeAccession = pipeTokens.find(token => /^[A-Z]{1,4}_[A-Z0-9]+(?:\.[0-9]+)?$/i.test(token) || /^[A-Z]{1,3}[0-9]{5,}(?:\.[0-9]+)?$/i.test(token));
+    if (pipeAccession) {
+      return pipeAccession.toUpperCase();
+    }
+
+    // Generic first-token accession in FASTA header.
+    const firstToken = header.split(/\s+/)[0] || '';
+    if (/^[A-Z]{1,4}_[A-Z0-9]+(?:\.[0-9]+)?$/i.test(firstToken) || /^[A-Z]{1,3}[0-9]{5,}(?:\.[0-9]+)?$/i.test(firstToken)) {
+      return firstToken.toUpperCase();
+    }
+  }
+
+  return '';
 }
 
 // Helper function to parse BLAST JSON results

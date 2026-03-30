@@ -159,7 +159,49 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
     const file = e.target.files?.[0];
     if (file) {
       setFastaFile(file);
+
+      file.text().then((text) => {
+        const extractedAccession = extractAccessionFromFasta(text);
+        if (extractedAccession) {
+          setFormData((prev) => ({
+            ...prev,
+            accession_no: prev.accession_no?.trim() ? prev.accession_no : extractedAccession
+          }));
+        }
+      }).catch(() => {
+        // Ignore parse errors; backend still validates FASTA on submit.
+      });
     }
+  };
+
+  const extractAccessionFromFasta = (fastaContent: string): string => {
+    if (!fastaContent) return "";
+
+    const lines = fastaContent.split(/\r?\n/);
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line.startsWith(">")) continue;
+
+      const header = line.slice(1).trim();
+      if (!header) continue;
+
+      const pipeTokens = header.split("|").map(token => token.trim()).filter(Boolean);
+      const fromPipe = pipeTokens.find((token) =>
+        /^[A-Z]{1,4}_[A-Z0-9]+(?:\.[0-9]+)?$/i.test(token) ||
+        /^[A-Z]{1,3}[0-9]{5,}(?:\.[0-9]+)?$/i.test(token)
+      );
+      if (fromPipe) return fromPipe.toUpperCase();
+
+      const firstToken = header.split(/\s+/)[0] || "";
+      if (
+        /^[A-Z]{1,4}_[A-Z0-9]+(?:\.[0-9]+)?$/i.test(firstToken) ||
+        /^[A-Z]{1,3}[0-9]{5,}(?:\.[0-9]+)?$/i.test(firstToken)
+      ) {
+        return firstToken.toUpperCase();
+      }
+    }
+
+    return "";
   };
 
   const handleBiochemicalChange = (test: string, value: string) => {
@@ -501,7 +543,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
                   <div className="flex items-center gap-4">
                     <input
                       type="file"
-                      accept=".fasta,.fa,.txt"
+                      accept=".fasta,.fa,.fna,.ffn,.faa,.frn,.fas,.fsa,.seq,.txt,text/plain,application/octet-stream"
                       onChange={handleFastaChange}
                       className="flex-1 text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                     />
@@ -512,6 +554,9 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
                   {specimen && specimen.fasta_file && !fastaFile && (
                     <p className="mt-1 text-sm text-gray-500">Current: {specimen.fasta_file.split('/').pop()}</p>
                   )}
+                  <p className="mt-1 text-xs text-gray-500">
+                    Supports common NCBI FASTA formats for nucleotide/protein sequences. If an accession is present in the header, it will auto-fill below.
+                  </p>
                 </div>
 
                 {/* BLAST Button */}
