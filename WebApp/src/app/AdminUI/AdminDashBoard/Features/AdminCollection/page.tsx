@@ -13,7 +13,7 @@ interface Project {
   title: string;
   code: string;
   classification: string;
-  user_id: number;
+  user_id?: number | string;
 }
 
 interface Specimen {
