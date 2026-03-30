@@ -4,17 +4,6 @@ import { useState } from 'react';
 import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { setAuthToken, setUserData } from '@/app/utils/authUtil';
-
-const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || 'https://22102959.dcism.org/biocella-api').replace(/\/$/, '');
-
-const setAuthCookie = (token: string) => {
-  if (typeof window === 'undefined') return;
-
-  const isHttps = window.location.protocol === 'https:';
-  const secureFlag = isHttps ? '; Secure' : '';
-  document.cookie = `auth_token=${encodeURIComponent(token)}; Path=/; Max-Age=3600; SameSite=Lax${secureFlag}`;
-};
 
 export default function LoginForm() {
   const router = useRouter();
@@ -35,7 +24,7 @@ export default function LoginForm() {
     setMessage(null); 
 
     try {
-      const response = await fetch(`/API/auth/login`, {
+      const response = await fetch("/API/auth/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -48,27 +37,14 @@ export default function LoginForm() {
       if (response.ok) {
         setMessage({ text: data.message || 'Login successful!', type: 'success' });
 
-        if (data.token && data.userId && data.email && data.role) {
-          setAuthToken(data.token);
-          setAuthCookie(data.token);
-          setUserData({
-            userId: data.userId,
-            email: data.email,
-            role: data.role,
-          });
-        }
-
-        const normalizedRole = (data.role || '').toString().trim().toLowerCase();
-
         // Redirect based on role
-        if (normalizedRole === 'admin') {
+        if (data.role === 'admin') {
           router.push('/AdminUI/AdminDashBoard');
-        } else if (normalizedRole === 'ra' || normalizedRole === 'staff') {
-          router.push('/RAStaffUI/RAStaffDashBoard');
-        } else if (normalizedRole === 'student' || normalizedRole === 'faculty') {
+        } else if (data.role === 'student' || data.role === 'faculty') {
           router.push('/UsersUI/UsersDashBoard');
+        } else if (data.role === 'ra' || data.role === 'staff') {
+          router.push('/RAStaffUI/RAStaffDashBoard');
         } else {
-          // Unknown or missing role falls back to general user dashboard.
           router.push('/UsersUI/UsersDashBoard');
         }
       } else {
@@ -94,8 +70,6 @@ export default function LoginForm() {
           src="/UI/img/Laboratory.jpg"
           alt="Scientific laboratory research"
           fill
-          sizes="(max-width: 768px) 0px, 50vw"
-          priority
           className="object-cover"
         />
         <div className="absolute inset-0 bg-gradient-to-l from-transparent to-background/10" />

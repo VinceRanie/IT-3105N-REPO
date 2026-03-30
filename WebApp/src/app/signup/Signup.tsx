@@ -122,7 +122,6 @@ export default function SignupForm() {
           src="/UI/img/Laboratory.jpg"
           alt="Scientific laboratory research"
           fill
-          sizes="(max-width: 768px) 0px, 50vw"
           className="object-cover"
         />
         <div className="absolute inset-0 bg-gradient-to-l from-transparent to-background/10" />
