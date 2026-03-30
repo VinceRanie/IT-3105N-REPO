@@ -35,7 +35,7 @@ export async function proxy(request: NextRequest) {
   const pathnameLower = pathname.toLowerCase();
 
   // Normalize common lowercase URL typed in browser to the actual route casing.
-  if (pathnameLower === "/adminui/admindashboard") {
+  if (pathname === "/adminui/admindashboard") {
     return NextResponse.redirect(
       new URL("/AdminUI/AdminDashBoard", request.url)
     );

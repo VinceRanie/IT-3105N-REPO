@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { API_URL } from "@/config/api";
 import Navbar from "../UI Components/Nav";
 import Form from "../UI Components/Form";
 import AboutUs from "../UI Components/About";
@@ -32,7 +31,7 @@ export default function Homepage() {
     useEffect(() => {
         const fetchHomepageStats = async () => {
             try {
-                const response = await fetch(`${API_URL}/microbials/public/stats`);
+                const response = await fetch("/API/home/stats", { cache: "no-store" });
                 const data = await response.json();
 
                 if (!response.ok) {
