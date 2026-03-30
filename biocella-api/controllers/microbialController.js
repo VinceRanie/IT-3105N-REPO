@@ -697,24 +697,42 @@ exports.getBlastResults = async (req, res) => {
 function detectSequenceType(sequence) {
   // Extract just the sequence part (remove headers and whitespace)
   const seqLines = sequence.split(/\n/).filter(line => !line.startsWith('>') && line.trim().length > 0);
-  const seqContent = seqLines.join('').toUpperCase();
+  const seqContent = seqLines.join('').toUpperCase().replace(/\s+/g, '');
   
   if (seqContent.length === 0) return null;
-  
-  // Count character types
-  const proteinOnly = /[EFIPQZ]/gi; // Amino acids only in proteins
-  const nucleotidesOnly = /[U]/gi;  // U is only in RNA
-  
-  const proteinCount = (seqContent.match(proteinOnly) || []).length;
-  const nucleotidesCount = (seqContent.match(/[ATGCN]/gi) || []).length;
-  const totalValidChars = (seqContent.match(/[ATGCNRYSWKMBDHVEFIPQZ\-\*U]/gi) || []).length;
-  
-  // If we find protein-only amino acids, it's a protein sequence
-  if (proteinCount > totalValidChars * 0.05) { // More than 5% protein-specific
+
+  const nucleotideSet = new Set(['A', 'T', 'G', 'C', 'U', 'R', 'Y', 'S', 'W', 'K', 'M', 'B', 'D', 'H', 'V', 'N', '-', '.']);
+  // Include ambiguous/rare amino acids that NCBI BLAST can accept.
+  const proteinSet = new Set(['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y', 'B', 'Z', 'X', 'J', 'O', 'U', '*', '-']);
+
+  let proteinOnlyCount = 0;
+  let nucleotideLikeCount = 0;
+  let proteinLikeCount = 0;
+
+  for (const ch of seqContent) {
+    const isNucleotide = nucleotideSet.has(ch);
+    const isProtein = proteinSet.has(ch);
+
+    if (isNucleotide) nucleotideLikeCount++;
+    if (isProtein) proteinLikeCount++;
+    if (isProtein && !isNucleotide) proteinOnlyCount++;
+  }
+
+  // Any true amino-acid-only symbols (e.g., E, F, I, L, P, Q, Z, X, J, O, *) indicate protein input.
+  if (proteinOnlyCount > 0) {
     return 'protein';
   }
-  
-  // Otherwise assume nucleotide
+
+  // Strong nucleotide signal defaults to nucleotide.
+  if (nucleotideLikeCount >= seqContent.length * 0.9) {
+    return 'nucleotide';
+  }
+
+  // Fallback: if more protein-like than nucleotide-like symbols, treat as protein.
+  if (proteinLikeCount > nucleotideLikeCount) {
+    return 'protein';
+  }
+
   return 'nucleotide';
 }
 
@@ -778,6 +796,10 @@ function validateAndCleanFasta(fastaSequence) {
   
   // Detect sequence type BEFORE cleaning
   const detectedType = detectSequenceType(cleaned);
+  if (!detectedType) {
+    result.errors.push('Unable to detect sequence type from FASTA content');
+    return result;
+  }
   result.seqType = detectedType;
   
   // Select appropriate BLAST program
@@ -809,13 +831,14 @@ function validateAndCleanFasta(fastaSequence) {
   // Separate headers from sequence
   const processedLines = [];
   let inSequence = false;
-  let sequenceOnly = '';
+  let currentEntryLength = 0;
+  let totalSequenceLength = 0;
   
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     
     if (line.startsWith('>')) {
-      if (inSequence && sequenceOnly.length === 0) {
+      if (inSequence && currentEntryLength === 0) {
         result.warnings.push(`Header at line ${i + 1} found with no sequence before it`);
       }
       
@@ -823,7 +846,7 @@ function validateAndCleanFasta(fastaSequence) {
       if (line.length > 1) {
         processedLines.push(line);
         inSequence = true;
-        sequenceOnly = '';
+        currentEntryLength = 0;
       } else {
         result.errors.push(`Invalid header at line ${i + 1}: header is too short`);
       }
@@ -843,8 +866,8 @@ function validateAndCleanFasta(fastaSequence) {
       
       let validPattern;
       if (result.seqType === 'protein' || isProteinLine) {
-        // Protein: Allow standard amino acids
-        validPattern = /[ACDEFGHIKLMNPQRSTVWYX\*\-]/gi;
+        // Protein: Allow standard plus ambiguous/rare amino acid symbols.
+        validPattern = /[ACDEFGHIKLMNPQRSTVWYBXZJOU\*\-]/gi;
       } else {
         // Nucleotide: Allow IUPAC codes
         validPattern = /[ATGCNRYSWKMBDHVU\-]/gi;
@@ -865,25 +888,26 @@ function validateAndCleanFasta(fastaSequence) {
         for (let j = 0; j < cleanedSeq.length; j += 60) {
           processedLines.push(cleanedSeq.substring(j, j + 60));
         }
-        sequenceOnly += cleanedSeq;
+        currentEntryLength += cleanedSeq.length;
+        totalSequenceLength += cleanedSeq.length;
       }
     }
   }
   
   // Final validation
-  if (sequenceOnly.length === 0) {
+  if (totalSequenceLength === 0) {
     result.errors.push('No valid sequence data found after cleaning');
     return result;
   }
   
   const minLength = result.seqType === 'protein' ? 20 : 30;
-  if (sequenceOnly.length < minLength) {
-    result.errors.push(`Sequence is too short (${sequenceOnly.length} ${result.seqType}). Minimum ${minLength} required for BLAST.`);
+  if (totalSequenceLength < minLength) {
+    result.errors.push(`Sequence is too short (${totalSequenceLength} ${result.seqType}). Minimum ${minLength} required for BLAST.`);
     return result;
   }
   
-  if (sequenceOnly.length > 5000000) {
-    result.warnings.push(`Sequence is very long (${sequenceOnly.length} characters). BLAST may take longer to process.`);
+  if (totalSequenceLength > 5000000) {
+    result.warnings.push(`Sequence is very long (${totalSequenceLength} characters). BLAST may take longer to process.`);
   }
   
   // Reconstruct cleaned FASTA
@@ -895,7 +919,7 @@ function validateAndCleanFasta(fastaSequence) {
   console.log(`  - BLAST program: ${result.blastProgram.toUpperCase()}`);
   console.log(`  - Database: ${result.blastDatabase.toUpperCase()} (${result.blastDatabase === 'nr' ? 'Non-redundant protein' : 'Nucleotide collection'})`);
   console.log('  - Original length:', fastaSequence.length);
-  console.log('  - Cleaned sequence length:', sequenceOnly.length);
+  console.log('  - Cleaned sequence length:', totalSequenceLength);
   console.log('  - Warnings:', result.warnings.length);
   console.log('  - Errors:', result.errors.length);
   console.log('  - Changes made:', result.changes.length);
