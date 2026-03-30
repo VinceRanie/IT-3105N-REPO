@@ -25,7 +25,7 @@ const HttpStatus = {
 };
 
 const JWT_SECRET = process.env.JWT_TOKEN || "your-secret-key-change-in-production";
-const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_BASE_URL || "http://localhost:3000";
+const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_BASE_URL || "https://it-3105-n-repo-sqsf.vercel.app";
 const RESET_LINK_TTL_MS = 60 * 60 * 1000; // 1 hour
 const RESET_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
