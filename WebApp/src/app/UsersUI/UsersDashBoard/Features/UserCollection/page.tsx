@@ -69,6 +69,11 @@ interface Specimen {
   custom_fields?: Record<string, string>;
 }
 
+const isVisibleToUsers = (specimen: Specimen) => {
+  const status = String(specimen.publish_status || "published").trim().toLowerCase();
+  return status === "published";
+};
+
 export default function AdminCollectionPage() {
   const [specimens, setSpecimens] = useState<Specimen[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -103,9 +108,8 @@ export default function AdminCollectionPage() {
       const response = await fetch(`${API_URL}/microbials`);
       if (response.ok) {
         const data = await response.json();
-        console.log("Fetched specimens:", data);
-        console.log("First specimen _id:", data[0]?._id);
-        setSpecimens(data);
+        const safeData = Array.isArray(data) ? data.filter(isVisibleToUsers) : [];
+        setSpecimens(safeData);
       } else {
         console.error("Failed to fetch specimens:", response.status);
       }
