@@ -123,6 +123,18 @@ export default function AddChemicalModal({
         throw new Error("Please specify the custom chemical type.");
       }
 
+      if (!Number.isFinite(formData.quantity) || formData.quantity <= 0) {
+        throw new Error("Quantity must be greater than 0.");
+      }
+
+      if (!Number.isFinite(formData.threshold) || formData.threshold < 0) {
+        throw new Error("Threshold must be 0 or greater.");
+      }
+
+      if (formData.threshold >= formData.quantity) {
+        throw new Error("Threshold must be less than quantity.");
+      }
+
       if (!formData.lot_number.trim()) {
         throw new Error("Lot Number is required.");
       }
@@ -287,7 +299,7 @@ export default function AddChemicalModal({
                 value={formData.quantity}
                 onChange={handleChange}
                 required
-                min="0"
+                min="0.01"
                 step="0.01"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
                 placeholder="Enter quantity"
@@ -329,11 +341,13 @@ export default function AddChemicalModal({
                 onChange={handleChange}
                 required
                 min="0"
+                max={formData.quantity > 0 ? formData.quantity - 0.01 : undefined}
+                step="0.01"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
                 placeholder="Enter threshold"
               />
               <p className="mt-1 text-xs text-gray-500">
-                Alert when quantity falls below this value
+                Must be less than the quantity
               </p>
             </div>
 

@@ -8,20 +8,34 @@ exports.create = async (req, res) => {
   try {
     const { name, type, quantity, unit, threshold, expiration_date, location } = req.body;
     const lot_number = typeof req.body.lot_number === "string" ? req.body.lot_number.trim() : "";
+    const parsedQuantity = Number(quantity);
+    const parsedThreshold = Number(threshold);
     
     console.log('Creating chemical with data:', { name, type, quantity, unit, threshold, expiration_date, location, lot_number });
 
     if (!lot_number) {
       return res.status(400).json({ error: "lot_number is required when creating a container" });
     }
+
+    if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
+      return res.status(400).json({ error: "quantity must be greater than 0" });
+    }
+
+    if (!Number.isFinite(parsedThreshold) || parsedThreshold < 0) {
+      return res.status(400).json({ error: "threshold must be 0 or greater" });
+    }
+
+    if (parsedThreshold >= parsedQuantity) {
+      return res.status(400).json({ error: "threshold must be less than quantity" });
+    }
     
     // Create the chemical entry (master record)
     const chemicalId = await Reagent.createReagent({
       name,
       type,
-      quantity,
+      quantity: parsedQuantity,
       unit,
-      threshold
+      threshold: parsedThreshold
     });
     
     console.log('Chemical created with ID:', chemicalId);
@@ -29,7 +43,7 @@ exports.create = async (req, res) => {
     // Create the batch entry (physical container)
     const batchData = {
       chemical_id: chemicalId,
-      quantity,
+      quantity: parsedQuantity,
       expiration_date: expiration_date || null,
       location: location || null,
       lot_number,
