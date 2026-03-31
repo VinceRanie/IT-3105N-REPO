@@ -71,46 +71,33 @@ const getClassification = (item: MicrobialItem) => {
   return typeRaw.length > 0 ? typeRaw : "Unknown";
 };
 
-const fetchHomepageStats = async (apiBaseUrl: string): Promise<HomepageStats | null> => {
-  const allMicrobialsResponse = await fetch(`${apiBaseUrl}/microbials?role=staff`, {
-    cache: "no-store",
-  });
+const fetchJson = async (url: string) => {
+  try {
+    const response = await fetch(url, { cache: "no-store" });
+    if (!response.ok) {
+      return null;
+    }
 
-  if (!allMicrobialsResponse.ok) {
+    return await tryParseJson(response);
+  } catch {
     return null;
   }
+};
 
-  const allMicrobialsData = await tryParseJson(allMicrobialsResponse);
+const fetchHomepageStats = async (apiBaseUrl: string): Promise<HomepageStats | null> => {
+  const allMicrobialsData = await fetchJson(`${apiBaseUrl}/microbials?role=staff`);
   if (!Array.isArray(allMicrobialsData)) {
     return null;
   }
 
-  const publishedMicrobialsResponse = await fetch(`${apiBaseUrl}/microbials?role=staff&publish_status=published`, {
-    cache: "no-store",
-  });
-
-  if (!publishedMicrobialsResponse.ok) {
-    return null;
-  }
-
-  const publishedMicrobialsData = await tryParseJson(publishedMicrobialsResponse);
-  if (!Array.isArray(publishedMicrobialsData)) {
-    return null;
-  }
-
-  const usersResponse = await fetch(`${apiBaseUrl}/auth/users`, {
-    cache: "no-store",
-  });
-
-  if (!usersResponse.ok) {
-    return null;
-  }
-
-  const usersData = await tryParseJson(usersResponse);
+  const publishedMicrobialsData = await fetchJson(`${apiBaseUrl}/microbials?role=staff&publish_status=published`);
+  const usersData = await fetchJson(`${apiBaseUrl}/auth/users`);
   const users = Array.isArray(usersData?.users) ? usersData.users : [];
 
   const allMicrobials = allMicrobialsData as MicrobialItem[];
-  const publishedMicrobials = publishedMicrobialsData as MicrobialItem[];
+  const publishedMicrobials = Array.isArray(publishedMicrobialsData)
+    ? (publishedMicrobialsData as MicrobialItem[])
+    : allMicrobials.filter(isPublished);
 
   const studentUsers = users.filter((user: { role?: string | null }) => {
     return String(user?.role || "").trim().toLowerCase() === "student";
@@ -152,8 +139,7 @@ export async function GET() {
         collectionCategories: 0,
         specimenTypes: [],
         error: "Failed to fetch homepage stats",
-      },
-      { status: 502 }
+      }
     );
   } catch {
     return NextResponse.json(
