@@ -11,9 +11,10 @@ type SpecimenTypeStat = {
 type CollectionsProps = {
   specimenTypes?: SpecimenTypeStat[];
   totalSpecimens?: number;
+  collectionCategories?: number;
 };
 
-export default function Collections({ specimenTypes = [], totalSpecimens = 0 }: CollectionsProps) {
+export default function Collections({ specimenTypes = [], totalSpecimens = 0, collectionCategories = 0 }: CollectionsProps) {
     const colors = ["blue", "green", "cyan", "amber", "purple", "red"] as const;
 
     const collections = specimenTypes.map((item, index) => ({
@@ -104,7 +105,7 @@ export default function Collections({ specimenTypes = [], totalSpecimens = 0 }: 
                 <div className="text-gray-600">Total Specimens</div>
               </div>
               <div>
-                <div className="text-3xl font-bold text-[#113F67] mb-2">{collections.length}</div>
+                <div className="text-3xl font-bold text-[#113F67] mb-2">{collectionCategories.toLocaleString()}</div>
                 <div className="text-gray-600">Collection Categories</div>
               </div>
               <div>

@@ -14,8 +14,10 @@ type SpecimenTypeStat = {
 };
 
 type HomepageStats = {
+  publishedSpecimens: number;
   carolinianCount: number;
   totalSpecimens: number;
+  collectionCategories: number;
   specimenTypes: SpecimenTypeStat[];
 };
 
@@ -64,44 +66,66 @@ const tryParseJson = async (response: Response) => {
   }
 };
 
+const getClassification = (item: MicrobialItem) => {
+  const typeRaw = (item.classification || "Unknown").toString().trim();
+  return typeRaw.length > 0 ? typeRaw : "Unknown";
+};
+
 const fetchHomepageStats = async (apiBaseUrl: string): Promise<HomepageStats | null> => {
-  const statsResponse = await fetch(`${apiBaseUrl}/microbials/public/stats`, {
+  const allMicrobialsResponse = await fetch(`${apiBaseUrl}/microbials?role=staff`, {
     cache: "no-store",
   });
 
-  if (statsResponse.ok) {
-    const statsData = await tryParseJson(statsResponse);
-
-    if (statsData) {
-      return {
-        carolinianCount: Number(statsData?.carolinianCount || 0),
-        totalSpecimens: Number(statsData?.totalSpecimens || 0),
-        specimenTypes: Array.isArray(statsData?.specimenTypes) ? statsData.specimenTypes : [],
-      };
-    }
+  if (!allMicrobialsResponse.ok) {
+    return null;
   }
 
-  // Fallback for production backends that do not yet expose /microbials/public/stats.
-  const microbialResponse = await fetch(`${apiBaseUrl}/microbials`, {
+  const allMicrobialsData = await tryParseJson(allMicrobialsResponse);
+  if (!Array.isArray(allMicrobialsData)) {
+    return null;
+  }
+
+  const publishedMicrobialsResponse = await fetch(`${apiBaseUrl}/microbials?role=staff&publish_status=published`, {
     cache: "no-store",
   });
 
-  if (!microbialResponse.ok) {
+  if (!publishedMicrobialsResponse.ok) {
     return null;
   }
 
-  const microbialData = await tryParseJson(microbialResponse);
-  if (!Array.isArray(microbialData)) {
+  const publishedMicrobialsData = await tryParseJson(publishedMicrobialsResponse);
+  if (!Array.isArray(publishedMicrobialsData)) {
     return null;
   }
 
-  const microbials = microbialData as MicrobialItem[];
-  const publishedMicrobials = microbials.filter(isPublished);
+  const usersResponse = await fetch(`${apiBaseUrl}/auth/users`, {
+    cache: "no-store",
+  });
+
+  if (!usersResponse.ok) {
+    return null;
+  }
+
+  const usersData = await tryParseJson(usersResponse);
+  const users = Array.isArray(usersData?.users) ? usersData.users : [];
+
+  const allMicrobials = allMicrobialsData as MicrobialItem[];
+  const publishedMicrobials = publishedMicrobialsData as MicrobialItem[];
+
+  const studentUsers = users.filter((user: { role?: string | null }) => {
+    return String(user?.role || "").trim().toLowerCase() === "student";
+  });
+
+  const allSpecimenTypes = toSpecimenTypeStats(
+    allMicrobials.map((item) => ({ ...item, classification: getClassification(item) }))
+  );
 
   return {
-    carolinianCount: 0,
-    totalSpecimens: publishedMicrobials.length,
-    specimenTypes: toSpecimenTypeStats(publishedMicrobials),
+    publishedSpecimens: publishedMicrobials.filter(isPublished).length,
+    carolinianCount: studentUsers.length,
+    totalSpecimens: allMicrobials.length,
+    collectionCategories: allSpecimenTypes.length,
+    specimenTypes: allSpecimenTypes,
   };
 };
 
@@ -122,8 +146,10 @@ export async function GET() {
 
     return NextResponse.json(
       {
+        publishedSpecimens: 0,
         carolinianCount: 0,
         totalSpecimens: 0,
+        collectionCategories: 0,
         specimenTypes: [],
         error: "Failed to fetch homepage stats",
       },

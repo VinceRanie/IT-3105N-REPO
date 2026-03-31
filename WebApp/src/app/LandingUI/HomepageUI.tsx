@@ -14,14 +14,18 @@ type SpecimenTypeStat = {
 };
 
 type HomepageStats = {
+    publishedSpecimens: number;
     carolinianCount: number;
     totalSpecimens: number;
+    collectionCategories: number;
     specimenTypes: SpecimenTypeStat[];
 };
 
 const defaultStats: HomepageStats = {
+    publishedSpecimens: 0,
     carolinianCount: 0,
     totalSpecimens: 0,
+    collectionCategories: 0,
     specimenTypes: [],
 };
 
@@ -39,8 +43,10 @@ export default function Homepage() {
                 }
 
                 setStats({
+                    publishedSpecimens: Number(data?.publishedSpecimens || 0),
                     carolinianCount: Number(data?.carolinianCount || 0),
                     totalSpecimens: Number(data?.totalSpecimens || 0),
+                    collectionCategories: Number(data?.collectionCategories || 0),
                     specimenTypes: Array.isArray(data?.specimenTypes) ? data.specimenTypes : [],
                 });
             } catch {
@@ -56,11 +62,12 @@ export default function Homepage() {
             <Navbar />
             <Form />
             <AboutUs
-                totalSpecimens={stats.totalSpecimens}
+                totalSpecimens={stats.publishedSpecimens}
                 carolinianCount={stats.carolinianCount}
             />
             <Collections
                 totalSpecimens={stats.totalSpecimens}
+                collectionCategories={stats.collectionCategories}
                 specimenTypes={stats.specimenTypes}
             />
             <Features />
