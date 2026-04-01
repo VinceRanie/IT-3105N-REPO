@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
 import { ChemicalFormData } from "./types";
 import { API_URL } from "@/config/api";
-import { getAuthHeader } from "@/app/utils/authUtil";
 
 interface AddChemicalModalProps {
   isOpen: boolean;
@@ -48,12 +47,8 @@ export default function AddChemicalModal({
     const fetchLotSuggestions = async () => {
       try {
         const [chemicalsRes, batchesRes] = await Promise.all([
-          fetch(`${API_URL}/chemicals`, {
-            headers: getAuthHeader(),
-          }),
-          fetch(`${API_URL}/batches`, {
-            headers: getAuthHeader(),
-          }),
+          fetch(`${API_URL}/chemicals`),
+          fetch(`${API_URL}/batches`),
         ]);
 
         if (!chemicalsRes.ok || !batchesRes.ok) {
@@ -149,7 +144,6 @@ export default function AddChemicalModal({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...getAuthHeader(),
         },
         body: JSON.stringify(payload),
       });
@@ -394,7 +388,7 @@ export default function AddChemicalModal({
               </label>
               <input
                 type="text"
-                list="ra-lot-number-options"
+                list="admin-lot-number-options"
                 name="lot_number"
                 value={formData.lot_number}
                 onChange={handleChange}
@@ -402,7 +396,7 @@ export default function AddChemicalModal({
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
                 placeholder="e.g., AGR-2026-03"
               />
-              <datalist id="ra-lot-number-options">
+              <datalist id="admin-lot-number-options">
                 {lotSuggestions.map((lot) => (
                   <option key={lot} value={lot} />
                 ))}
