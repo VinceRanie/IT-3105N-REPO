@@ -3,6 +3,12 @@ const Batch = require("../models/batchModel");
 const QRCode = require("qrcode");
 const db = require("../config/mysql");
 
+const toNumber = (value) => {
+  if (value === null || value === undefined || value === "") return NaN;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : NaN;
+};
+
 // CREATE
 exports.create = async (req, res) => {
   try {
@@ -106,8 +112,71 @@ exports.getById = async (req, res) => {
 // UPDATE
 exports.update = async (req, res) => {
   try {
-    const affected = await Reagent.updateReagent(req.params.id, req.body);
+    const parsedQuantity = toNumber(req.body.quantity);
+
+    if (!Number.isFinite(parsedQuantity) || parsedQuantity < 0) {
+      return res.status(400).json({ error: "quantity must be 0 or greater" });
+    }
+
+    const affected = await Reagent.updateReagent(req.params.id, {
+      ...req.body,
+      quantity: parsedQuantity,
+    });
     if (!affected) return res.status(404).json({ message: "Chemical not found" });
+
+    // Keep batch-backed inventory totals consistent with edited master quantity.
+    const batches = await Batch.getAllBatches({ chemical_id: req.params.id });
+
+    if (batches.length) {
+      const getRemaining = (batch) => {
+        const qty = toNumber(batch.quantity);
+        const used = toNumber(batch.used_quantity);
+        return Math.max(0, qty - used);
+      };
+
+      const currentRemaining = batches.reduce((sum, batch) => sum + getRemaining(batch), 0);
+      let delta = parsedQuantity - currentRemaining;
+
+      if (Math.abs(delta) > 0.000001) {
+        if (delta > 0) {
+          const latestBatch = batches[0];
+          const qty = toNumber(latestBatch.quantity);
+          const used = toNumber(latestBatch.used_quantity);
+
+          await Batch.updateBatch(latestBatch.batch_id, {
+            quantity: qty + delta,
+            used_quantity: used,
+            expiration_date: latestBatch.expiration_date || null,
+            location: latestBatch.location || null,
+            lot_number: latestBatch.lot_number || null,
+          });
+        } else {
+          let toReduce = Math.abs(delta);
+
+          for (const batch of batches) {
+            if (toReduce <= 0) break;
+
+            const qty = toNumber(batch.quantity);
+            const used = toNumber(batch.used_quantity);
+            const available = Math.max(0, qty - used);
+            const reduction = Math.min(available, toReduce);
+
+            if (reduction <= 0) continue;
+
+            await Batch.updateBatch(batch.batch_id, {
+              quantity: qty - reduction,
+              used_quantity: used,
+              expiration_date: batch.expiration_date || null,
+              location: batch.location || null,
+              lot_number: batch.lot_number || null,
+            });
+
+            toReduce -= reduction;
+          }
+        }
+      }
+    }
+
     res.json({ message: "Chemical updated" });
   } catch (err) {
     res.status(500).json({ error: err.message });

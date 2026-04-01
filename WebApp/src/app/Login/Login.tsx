@@ -204,6 +204,14 @@ export default function LoginForm() {
 
           {/* Sign Up Link */}
           <div className="text-center pt-4 border-t border-gray-200">
+            <button
+              type="button"
+              className="text-sm text-[#113F67] hover:text-[#0a2a4a] font-medium transition-colors cursor-pointer hover:underline"
+              onClick={() => router.push('/')}
+            >
+              Back to Homepage
+            </button>
+            <p className="text-sm text-gray-400 mt-2">or</p>
             <p className="text-sm text-gray-600">
               Don&apos;t have an account?{' '}
 
