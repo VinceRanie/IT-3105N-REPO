@@ -25,15 +25,24 @@ const HttpStatus = {
 };
 
 const JWT_SECRET = process.env.JWT_TOKEN || "your-secret-key-change-in-production";
-const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_BASE_URL || "https://it-3105-n-repo-sqsf.vercel.app";
+const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_BASE_URL || "http://localhost:3000";
 const RESET_LINK_TTL_MS = 60 * 60 * 1000; // 1 hour
 const RESET_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
-const didEmailSend = (result) => {
+const didEmailSend = (result, expectedRecipient = "") => {
   if (!result) return false;
   if (result.error) return false;
   if (!result.messageId) return false;
   if (result.messageId === "SKIPPED_NO_CONFIG") return false;
+  const accepted = Array.isArray(result.accepted)
+    ? result.accepted.map((value) => String(value).toLowerCase())
+    : [];
+  const rejected = Array.isArray(result.rejected) ? result.rejected : [];
+
+  if (rejected.length > 0) return false;
+  if (expectedRecipient) {
+    return accepted.includes(String(expectedRecipient).toLowerCase());
+  }
   return true;
 };
 
@@ -166,6 +175,7 @@ exports.register = async (req, res) => {
 
     // Prepare reset token; create user only after email delivery succeeds.
     const resetToken = uuidv4();
+    const tokenExpiry = new Date(Date.now() + RESET_LINK_TTL_MS);
 
     // Send email with verification link
     let emailResult;
@@ -195,14 +205,14 @@ exports.register = async (req, res) => {
       console.error("Email sending error:", emailError);
     }
 
-    if (!didEmailSend(emailResult)) {
+    if (!didEmailSend(emailResult, email)) {
       return res.status(HttpStatus.SERVICE_UNAVAILABLE).json({
         message: "Registration could not be completed because finalize email was not sent. Please try again later.",
         statusCode: HttpStatus.SERVICE_UNAVAILABLE,
       });
     }
 
-    const userId = await authModel.createUser(email, resetToken);
+    const userId = await authModel.createUser(email, resetToken, tokenExpiry);
 
     return res.status(HttpStatus.CREATED).json({
       message: "User registered successfully. A password setup link has been sent to your email.",
@@ -288,7 +298,7 @@ exports.forgotPassword = async (req, res) => {
       console.error("Forgot password email error:", emailError);
     }
 
-    if (!didEmailSend(emailResult)) {
+    if (!didEmailSend(emailResult, email)) {
       return res.status(HttpStatus.SERVICE_UNAVAILABLE).json({
         message: "If an account exists, we could not send the reset email right now. Please try again later.",
         statusCode: HttpStatus.SERVICE_UNAVAILABLE,
@@ -338,6 +348,7 @@ exports.adminInvite = async (req, res) => {
     }
 
     const resetToken = uuidv4();
+    const tokenExpiry = new Date(Date.now() + RESET_LINK_TTL_MS);
 
     let emailResult;
     try {
@@ -365,14 +376,14 @@ exports.adminInvite = async (req, res) => {
       console.error("Admin invite email error:", emailError);
     }
 
-    if (!didEmailSend(emailResult)) {
+    if (!didEmailSend(emailResult, email)) {
       return res.status(HttpStatus.SERVICE_UNAVAILABLE).json({
         message: "Invitation could not be completed because setup email was not sent. Please try again later.",
         statusCode: HttpStatus.SERVICE_UNAVAILABLE,
       });
     }
 
-    const userId = await authModel.createUserByAdmin(email, resetToken, normalizedRole);
+    const userId = await authModel.createUserByAdmin(email, resetToken, normalizedRole, tokenExpiry);
 
     return res.status(HttpStatus.CREATED).json({
       message: "User invited successfully. A password setup link has been sent to the email.",
@@ -468,7 +479,7 @@ exports.resetPassword = async (req, res) => {
 // FINALIZE SETUP
 exports.finalizeSetup = async (req, res) => {
   try {
-    const { token, email, first_name, last_name, department, course, password, retypePassword } = req.body;
+    const { token, email, first_name, last_name, profile_photo, department, course, password, retypePassword } = req.body;
 
     // Validate required fields
     if (!token || !email || !first_name || !last_name || !department || !course || !password || !retypePassword) {
@@ -521,7 +532,15 @@ exports.finalizeSetup = async (req, res) => {
     const hashedPassword = await authModel.hashPassword(password);
 
     // Update user with profile information
-    await authModel.finalizeUserSetup(userByToken.user_id, first_name, last_name, department, course, hashedPassword);
+    await authModel.finalizeUserSetup(
+      userByToken.user_id,
+      first_name,
+      last_name,
+      profile_photo || null,
+      department,
+      course,
+      hashedPassword
+    );
 
     return res.status(HttpStatus.OK).json({
       message: "Signup finalized successfully.",

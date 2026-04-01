@@ -11,7 +11,20 @@ export async function POST(req:Request) {
             body: JSON.stringify(body),
         });
 
-        const data = await response.json();
+        const raw = await response.text();
+        let data: Record<string, unknown> = {};
+
+        try {
+            data = raw ? JSON.parse(raw) : {};
+        } catch {
+            const isVercelProtection = raw.includes("Authentication Required") || raw.includes("Vercel Authentication");
+            data = {
+                message: isVercelProtection
+                    ? "Request blocked by Vercel deployment protection. Sign in to Vercel or disable protection for this deployment."
+                    : "Upstream service returned a non-JSON response.",
+            };
+        }
+
         return NextResponse.json(data, { status: response.status });
     } catch (error: unknown){
         console.error("Password reset proxy error", error);

@@ -5,23 +5,23 @@ const bcrypt = require("bcryptjs");
 const ALLOWED_ROLES = ["student", "faculty", "staff"];
 
 // CREATE - Register new user
-exports.createUser = async (email, resetToken) => {
+exports.createUser = async (email, resetToken, resetTokenExpires = null) => {
   const [result] = await db.execute(
-    "INSERT INTO user (email, reset_token, first_name, last_name, role) VALUES (?, ?, ?, ?, ?)",
-    [email, resetToken, "", "", "student"]
+    "INSERT INTO user (email, reset_token, reset_token_expires, first_name, last_name, role) VALUES (?, ?, ?, ?, ?, ?)",
+    [email, resetToken, resetTokenExpires, "", "", "student"]
   );
   return result.insertId;
 };
 
 // CREATE - Admin-invited user (allows non-USC emails and custom role)
-exports.createUserByAdmin = async (email, resetToken, role = "student") => {
+exports.createUserByAdmin = async (email, resetToken, role = "student", resetTokenExpires = null) => {
   if (!ALLOWED_ROLES.includes(role)) {
     throw new Error("Invalid role");
   }
 
   const [result] = await db.execute(
-    "INSERT INTO user (email, reset_token, first_name, last_name, role) VALUES (?, ?, ?, ?, ?)",
-    [email, resetToken, "", "", role]
+    "INSERT INTO user (email, reset_token, reset_token_expires, first_name, last_name, role) VALUES (?, ?, ?, ?, ?, ?)",
+    [email, resetToken, resetTokenExpires, "", "", role]
   );
   return result.insertId;
 };
@@ -38,7 +38,7 @@ exports.getUserByEmail = async (email) => {
 // READ - Get user by reset token
 exports.getUserByResetToken = async (token) => {
   const [rows] = await db.execute(
-    "SELECT user_id, email, password, reset_token, reset_token_expires, first_name, last_name, department, course, role FROM user WHERE reset_token = ?",
+    "SELECT user_id, email, password, reset_token, reset_token_expires, first_name, last_name, profile_photo, department, course, role, is_setup_complete FROM user WHERE reset_token = ?",
     [token]
   );
   return rows[0] || null;
@@ -109,12 +109,12 @@ exports.setPassword = async (userId, hashedPassword, nextResetAllowedAt = null) 
 };
 
 // UPDATE - Finalize user setup
-exports.finalizeUserSetup = async (userId, firstName, lastName, department, course, hashedPassword) => {
+exports.finalizeUserSetup = async (userId, firstName, lastName, profilePhoto, department, course, hashedPassword) => {
   await db.execute(
     `UPDATE user 
-     SET first_name = ?, last_name = ?, department = ?, course = ?, password = ?, is_setup_complete = 1, reset_token = NULL 
+     SET first_name = ?, last_name = ?, profile_photo = ?, department = ?, course = ?, password = ?, is_setup_complete = 1, reset_token = NULL, reset_token_expires = NULL
      WHERE user_id = ?`,
-    [firstName, lastName, department, course, hashedPassword, userId]
+    [firstName, lastName, profilePhoto, department, course, hashedPassword, userId]
   );
 };
 

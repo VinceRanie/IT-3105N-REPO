@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import { setAuthToken, setUserData } from '@/app/utils/authUtil';
 
 export default function LoginForm() {
   const router = useRouter();
@@ -35,6 +36,15 @@ export default function LoginForm() {
       const data = await response.json();
 
       if (response.ok) {
+        if (data?.token && data?.userId && data?.email && data?.role) {
+          setAuthToken(data.token);
+          setUserData({
+            userId: data.userId,
+            email: data.email,
+            role: data.role,
+          });
+        }
+
         setMessage({ text: data.message || 'Login successful!', type: 'success' });
 
         // Redirect based on role

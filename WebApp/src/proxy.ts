@@ -29,6 +29,25 @@ const getDashboardPath = (role: string) => {
   return "/RAStaffUI/RAStaffDashBoard";
 };
 
+const decodeJwtPayloadRole = (token: string): string | undefined => {
+  try {
+    const [, payload] = token.split(".");
+    if (!payload) return undefined;
+
+    const normalizedPayload = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const padding = normalizedPayload.length % 4;
+    const paddedPayload = padding
+      ? normalizedPayload + "=".repeat(4 - padding)
+      : normalizedPayload;
+
+    const decoded = atob(paddedPayload);
+    const parsed = JSON.parse(decoded) as { role?: string };
+    return parsed?.role ? normalizeRole(parsed.role) : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -52,10 +71,20 @@ export async function proxy(request: NextRequest) {
   }
 
   if (!JWT_SECRET) {
-    const response = matchedPath
-      ? redirectToLogin(request)
-      : NextResponse.next();
-    return clearAuthCookie(response);
+    const fallbackRole = decodeJwtPayloadRole(token);
+
+    if (isAuthPage && fallbackRole) {
+      return NextResponse.redirect(new URL(getDashboardPath(fallbackRole), request.url));
+    }
+
+    if (matchedPath) {
+      const allowedRoles = roleAccess[matchedPath];
+      if (!fallbackRole || !allowedRoles.includes(fallbackRole)) {
+        return redirectToLogin(request);
+      }
+    }
+
+    return NextResponse.next();
   }
 
   try {
