@@ -25,7 +25,7 @@ const getDashboardPath = (role: string) => {
   const normalizedRole = normalizeRole(role);
   if (normalizedRole === "admin") return "/AdminUI/AdminDashBoard";
   if (normalizedRole === "student" || normalizedRole === "faculty") {
-    return "/UsersUI/UsersDashBoard";
+    return "/UsersUI/UsersDashBoard/Features/UserCollection";
   }
   return "/RAStaffUI/RAStaffDashBoard";
 };

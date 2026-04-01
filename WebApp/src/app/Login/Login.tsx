@@ -66,10 +66,10 @@ export default function LoginForm() {
         } else if (normalizedRole === 'ra' || normalizedRole === 'staff') {
           router.push('/RAStaffUI/RAStaffDashBoard');
         } else if (normalizedRole === 'student' || normalizedRole === 'faculty') {
-          router.push('/UsersUI/UsersDashBoard');
+          router.push('/UsersUI/UsersDashBoard/Features/UserCollection');
         } else {
           // Unknown or missing role falls back to general user dashboard.
-          router.push('/UsersUI/UsersDashBoard');
+          router.push('/UsersUI/UsersDashBoard/Features/UserCollection');
         }
       } else {
         setMessage({ text: data.message || 'Invalid credentials. Please try again.', type: 'error' });
