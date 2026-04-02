@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { setAuthToken, setUserData } from '@/app/utils/authUtil';
+import { setAuthToken, setUserData, redirectByRole } from '@/app/utils/authUtil';
 
 export default function LoginForm() {
   const router = useRouter();
@@ -48,16 +48,7 @@ export default function LoginForm() {
         setMessage({ text: data.message || 'Login successful!', type: 'success' });
 
         // Redirect based on role
-        const normalizedRole = (data.role || '').toLowerCase();
-        if (normalizedRole === 'admin') {
-          router.push('/AdminUI/AdminDashBoard');
-        } else if (normalizedRole === 'ra' || normalizedRole === 'staff') {
-          router.push('/RAStaffUI/RAStaffDashBoard');
-        } else if (normalizedRole === 'student' || normalizedRole === 'faculty') {
-          router.push('/UsersUI/UsersDashBoard/Features/UserCollection');
-        } else {
-          router.push('/UsersUI/UsersDashBoard/Features/UserCollection');
-        }
+        redirectByRole(router, data.role);
       } else {
         setMessage({ text: data.message || 'Invalid credentials. Please try again.', type: 'error' });
       }
