@@ -46,7 +46,10 @@ export default function ProjectsPage() {
     try {
       const response = await fetch(`${API_URL}/microbials`);
       if (response.ok) {
-        const specimens = await response.json();
+        const specimensRaw = await response.json();
+        const specimens = Array.isArray(specimensRaw)
+          ? specimensRaw.filter((specimen: any) => String(specimen?.publish_status || "published").trim().toLowerCase() === "published")
+          : [];
         const counts: Record<string, number> = {};
         
         specimens.forEach((specimen: any) => {

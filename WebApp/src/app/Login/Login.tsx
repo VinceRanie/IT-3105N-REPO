@@ -50,12 +50,22 @@ export default function LoginForm() {
         // Redirect based on role
         if (data.role === 'admin') {
           router.push('/AdminUI/AdminDashBoard');
+<<<<<<< HEAD
         } else if (data.role === 'student' || data.role === 'faculty') {
           router.push('/UsersUI/UsersDashBoard');
         } else if (data.role === 'ra' || data.role === 'staff') {
           router.push('/RAStaffUI/RAStaffDashBoard');
         } else {
           router.push('/UsersUI/UsersDashBoard');
+=======
+        } else if (normalizedRole === 'ra' || normalizedRole === 'staff') {
+          router.push('/RAStaffUI/RAStaffDashBoard');
+        } else if (normalizedRole === 'student' || normalizedRole === 'faculty') {
+          router.push('/UsersUI/UsersDashBoard/Features/UserCollection');
+        } else {
+          // Unknown or missing role falls back to general user dashboard.
+          router.push('/UsersUI/UsersDashBoard/Features/UserCollection');
+>>>>>>> aa0777106ab39acaff36feb8eaf5d076477453af
         }
       } else {
         setMessage({ text: data.message || 'Invalid credentials. Please try again.', type: 'error' });
@@ -188,6 +198,14 @@ export default function LoginForm() {
 
           {/* Sign Up Link */}
           <div className="text-center pt-4 border-t border-gray-200">
+            <button
+              type="button"
+              className="text-sm text-[#113F67] hover:text-[#0a2a4a] font-medium transition-colors cursor-pointer hover:underline"
+              onClick={() => router.push('/')}
+            >
+              Back to Homepage
+            </button>
+            <p className="text-sm text-gray-400 mt-2">or</p>
             <p className="text-sm text-gray-600">
               Don&apos;t have an account?{' '}
 

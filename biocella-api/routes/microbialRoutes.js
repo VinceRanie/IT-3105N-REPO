@@ -11,6 +11,7 @@ const uploadFields = upload.fields([
 
 router.post('/', uploadFields, microbialController.createMicrobial);
 router.get('/', microbialController.getMicrobials);
+router.get('/public/stats', microbialController.getPublicStats);
 router.get('/:id', microbialController.getMicrobialById);
 router.put('/:id', uploadFields, microbialController.updateMicrobial);
 router.delete('/:id', microbialController.deleteMicrobial);

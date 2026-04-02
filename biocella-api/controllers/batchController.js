@@ -1,5 +1,25 @@
 const Batch = require("../models/batchModel");
 const QRCode = require("qrcode");
+const USED_QUANTITY_ROUNDING_TOLERANCE = 0.2;
+
+const normalizeDecimal = (value) => {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : NaN;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const parsed = Number.parseFloat(trimmed);
+    return Number.isFinite(parsed) ? parsed : NaN;
+  }
+
+  return NaN;
+};
 
 // CREATE
 exports.create = async (req, res) => {
@@ -14,6 +34,20 @@ exports.create = async (req, res) => {
       console.log('Converted expiration_date to:', data.expiration_date);
     }
     
+    if (typeof data.lot_number === 'string') {
+      data.lot_number = data.lot_number.trim();
+    }
+
+    if (!data.lot_number) {
+      return res.status(400).json({ error: "lot_number is required for batch tracking" });
+    }
+
+    const quantity = normalizeDecimal(data.quantity);
+    if (!Number.isFinite(quantity) || quantity < 0) {
+      return res.status(400).json({ error: "Invalid quantity" });
+    }
+    data.quantity = quantity;
+
     // First create the batch to get the ID
     const tempData = {
       ...data,
@@ -47,7 +81,11 @@ exports.create = async (req, res) => {
 // READ ALL
 exports.getAll = async (req, res) => {
   try {
-    const batches = await Batch.getAllBatches();
+    const filters = {
+      chemical_id: req.query.chemical_id,
+      lot_number: req.query.lot_number,
+    };
+    const batches = await Batch.getAllBatches(filters);
     res.json(batches);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -78,6 +116,33 @@ exports.update = async (req, res) => {
       console.log('Converted expiration_date to:', data.expiration_date);
     }
     
+    if (typeof data.lot_number === 'string') {
+      data.lot_number = data.lot_number.trim();
+    }
+
+    const quantity = normalizeDecimal(data.quantity);
+    const usedQuantity = normalizeDecimal(data.used_quantity);
+
+    if (!Number.isFinite(quantity) || quantity < 0) {
+      return res.status(400).json({ error: "Invalid quantity" });
+    }
+
+    if (!Number.isFinite(usedQuantity) || usedQuantity < 0) {
+      return res.status(400).json({ error: "Invalid used_quantity" });
+    }
+
+    data.quantity = quantity;
+    data.used_quantity = usedQuantity;
+
+    if (usedQuantity > quantity) {
+      const overage = usedQuantity - quantity;
+      if (overage <= USED_QUANTITY_ROUNDING_TOLERANCE) {
+        data.used_quantity = quantity;
+      } else {
+        return res.status(400).json({ error: "used_quantity cannot be greater than quantity" });
+      }
+    }
+
     const affected = await Batch.updateBatch(req.params.id, data);
     
     console.log('Batch update result - affected rows:', affected);

@@ -2,7 +2,12 @@
 import { motion } from "framer-motion";
 import Image from "next/image";
 
-export default function AboutUs() {
+type AboutUsProps = {
+  totalSpecimens?: number;
+  carolinianCount?: number;
+};
+
+export default function AboutUs({ totalSpecimens = 0, carolinianCount = 0 }: AboutUsProps) {
     return (
       <motion.section 
       initial={{ opacity: 0, y: 20 }}
@@ -30,11 +35,11 @@ export default function AboutUs() {
   
               <div className="grid grid-cols-2 gap-4 pt-4">
                 <div className="text-center p-4 bg-white rounded-lg shadow-sm">
-                  <div className="text-2xl font-bold text-[#113F67]">500+</div>
+                  <div className="text-2xl font-bold text-[#113F67]">{totalSpecimens.toLocaleString()}</div>
                   <div className="text-sm text-gray-600">Specimen Studied</div>
                 </div>
                 <div className="text-center p-4 bg-white rounded-lg shadow-sm">
-                  <div className="text-2xl font-bold text-green-600">15+</div>
+                  <div className="text-2xl font-bold text-green-600">{carolinianCount.toLocaleString()}</div>
                   <div className="text-sm text-gray-600">Carolinians</div>
                 </div>
               </div>

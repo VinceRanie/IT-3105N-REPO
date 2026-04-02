@@ -3,6 +3,7 @@ import { jwtVerify } from "jose";
 
 const JWT_TOKEN = process.env.JWT_TOKEN;
 const JWT_SECRET = JWT_TOKEN ? new TextEncoder().encode(JWT_TOKEN) : null;
+const ENABLE_LOCAL_ADMIN_BYPASS = process.env.LOCAL_ADMIN_BYPASS === "true";
 
 const roleAccess: Record<string, string[]> = {
   "/AdminUI": ["admin"],
@@ -24,7 +25,7 @@ const getDashboardPath = (role: string) => {
   const normalizedRole = normalizeRole(role);
   if (normalizedRole === "admin") return "/AdminUI/AdminDashBoard";
   if (normalizedRole === "student" || normalizedRole === "faculty") {
-    return "/UsersUI/UsersDashBoard";
+    return "/UsersUI/UsersDashBoard/Features/UserCollection";
   }
   return "/RAStaffUI/RAStaffDashBoard";
 };
@@ -50,6 +51,28 @@ const decodeJwtPayloadRole = (token: string): string | undefined => {
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const pathnameLower = pathname.toLowerCase();
+
+  // Normalize common lowercase URL typed in browser to the actual route casing.
+  if (pathname === "/adminui/admindashboard") {
+    return NextResponse.redirect(
+      new URL("/AdminUI/AdminDashBoard", request.url)
+    );
+  }
+
+  const isLocalHost =
+    request.nextUrl.hostname === "localhost" ||
+    request.nextUrl.hostname === "127.0.0.1";
+  const shouldBypassAdminAuth =
+    ENABLE_LOCAL_ADMIN_BYPASS &&
+    process.env.NODE_ENV !== "production" &&
+    isLocalHost &&
+    pathnameLower.startsWith("/adminui");
+
+  // Allow direct Admin UI access for local-only visual testing when explicitly enabled.
+  if (shouldBypassAdminAuth) {
+    return NextResponse.next();
+  }
 
   const matchedPath = Object.keys(roleAccess).find((path) =>
     pathname.startsWith(path)
@@ -119,6 +142,7 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     "/AdminUI/:path*",
+    "/adminui/:path*",
     "/UsersUI/:path*",
     "/RAStaffUI/:path*",
     "/Login",

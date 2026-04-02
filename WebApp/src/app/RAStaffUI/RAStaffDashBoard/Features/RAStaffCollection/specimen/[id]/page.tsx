@@ -43,14 +43,14 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
     try {
       setLoading(true);
       console.log("Fetching specimen with ID:", resolvedParams.id);
-      const response = await fetch(`${API_URL}/microbials/${resolvedParams.id}`, {
+      const roleResponse = await fetch(`${API_URL}/microbials/${resolvedParams.id}?role=staff`, {
         headers: getAuthHeader(),
       });
-      if (response.ok) {
-        const data = await response.json();
+      if (roleResponse.ok) {
+        const data = await roleResponse.json();
         setSpecimen(data);
       } else {
-        console.error("Failed to fetch specimen:", response.status, response.statusText);
+        console.error("Failed to fetch specimen:", roleResponse.status, roleResponse.statusText);
       }
     } catch (error) {
       console.error("Error fetching specimen details:", error);
