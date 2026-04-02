@@ -3,63 +3,29 @@ import Image from "next/image"
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 
-export default function Collections() {
-    const collections = [
-      {
-        id: 1,
-        title: "Bacterial Cultures",
-        description: "Comprehensive collection of beneficial and pathogenic bacterial strains for research and analysis.",
-        specimens: 1250,
-        category: "Bacteria",
-        image: "/UI/img/Laboratory.jpg",
-        color: "blue",
-      },
-      {
-        id: 2,
-        title: "Fungal Specimens",
-        description: "Diverse fungi collection including yeasts, molds, and medicinal mushroom cultures.",
-        specimens: 890,
-        category: "Fungi",
-        image: "/UI/img/Laboratory.jpg",
-        color: "green",
-      },
-      {
-        id: 3,
-        title: "Marine Microbes",
-        description: "Unique collection of marine microorganisms from various oceanic environments.",
-        specimens: 650,
-        category: "Marine",
-        image: "/UI/img/Laboratory.jpg",
-        color: "cyan",
-      },
-      {
-        id: 4,
-        title: "Soil Microbiome",
-        description: "Extensive soil-derived microbial cultures from different geographical regions.",
-        specimens: 980,
-        category: "Environmental",
-        image: "/UI/img/Laboratory.jpg",
-        color: "amber",
-      },
-      {
-        id: 5,
-        title: "Probiotic Strains",
-        description: "Carefully curated collection of beneficial microorganisms for health applications.",
-        specimens: 420,
-        category: "Health",
-        image: "/UI/img/Laboratory.jpg",
-        color: "purple",
-      },
-      {
-        id: 6,
-        title: "Extremophiles",
-        description: "Rare microorganisms that thrive in extreme conditions like high temperature or acidity.",
-        specimens: 320,
-        category: "Specialized",
-        image: "/UI/img/Laboratory.jpg",
-        color: "red",
-      },
-    ]
+type SpecimenTypeStat = {
+  type: string;
+  count: number;
+};
+
+type CollectionsProps = {
+  specimenTypes?: SpecimenTypeStat[];
+  totalSpecimens?: number;
+  collectionCategories?: number;
+};
+
+export default function Collections({ specimenTypes = [], totalSpecimens = 0, collectionCategories = 0 }: CollectionsProps) {
+    const colors = ["blue", "green", "cyan", "amber", "purple", "red"] as const;
+
+    const collections = specimenTypes.map((item, index) => ({
+      id: index + 1,
+      title: `${item.type} Specimens`,
+      description: `Catalogued ${item.type.toLowerCase()} specimens available for laboratory research and study.`,
+      specimens: item.count,
+      category: item.type,
+      image: "/UI/img/Laboratory.jpg",
+      color: colors[index % colors.length],
+    }));
   
     const getColorClasses = (color: string) => {
       const colorMap = {
@@ -135,11 +101,11 @@ export default function Collections() {
           <div className="mt-16 bg-white rounded-2xl p-8 shadow-lg">
             <div className="grid md:grid-cols-3 gap-8 text-center">
               <div>
-                <div className="text-3xl font-bold text-[#113F67] mb-2">4,510+</div>
+                <div className="text-3xl font-bold text-[#113F67] mb-2">{totalSpecimens.toLocaleString()}</div>
                 <div className="text-gray-600">Total Specimens</div>
               </div>
               <div>
-                <div className="text-3xl font-bold text-[#113F67] mb-2">6</div>
+                <div className="text-3xl font-bold text-[#113F67] mb-2">{collectionCategories.toLocaleString()}</div>
                 <div className="text-gray-600">Collection Categories</div>
               </div>
               <div>

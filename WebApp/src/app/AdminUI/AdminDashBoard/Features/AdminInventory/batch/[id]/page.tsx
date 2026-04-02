@@ -10,11 +10,13 @@ interface Batch {
   batch_id: number;
   chemical_id: number;
   chemical_name?: string;
+  chemical_unit?: string;
   quantity: number;
   used_quantity: number;
   date_received: string;
   expiration_date: string;
   location: string;
+  lot_number?: string | null;
   qr_code: string | null;
 }
 
@@ -29,10 +31,12 @@ export default function BatchEditPage() {
   const [saving, setSaving] = useState(false);
 
   // Usage form
-  const [amountUsed, setAmountUsed] = useState(0);
+  const [amountUsedInput, setAmountUsedInput] = useState("");
+  const [usageUnit, setUsageUnit] = useState("");
   const [purpose, setPurpose] = useState("");
   const [userId, setUserId] = useState<number | null>(null);
   const [isMounted, setIsMounted] = useState(false);
+  const ROUNDING_TOLERANCE = 0.2;
 
   useEffect(() => {
     setIsMounted(true);
@@ -56,12 +60,48 @@ export default function BatchEditPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMounted, batchId, userId]);
 
+  const normalizeUnit = (unit: string) => unit.toLowerCase().replace("μ", "u");
+
+  const getCompatibleUnits = (baseUnit: string) => {
+    const normalizedBase = normalizeUnit(baseUnit);
+    if (["kg", "g", "mg"].includes(normalizedBase)) {
+      return ["kg", "g", "mg"];
+    }
+    if (["l", "ml", "ul"].includes(normalizedBase)) {
+      return ["L", "mL", "uL"];
+    }
+    return [baseUnit || "unit"];
+  };
+
+  const convertToBaseUnit = (amount: number, fromUnit: string, baseUnit: string) => {
+    const normalizedFrom = normalizeUnit(fromUnit);
+    const normalizedBase = normalizeUnit(baseUnit);
+
+    const massFactors: Record<string, number> = { kg: 1000, g: 1, mg: 0.001 };
+    const volumeFactors: Record<string, number> = { l: 1000, ml: 1, ul: 0.001 };
+
+    if (normalizedFrom in massFactors && normalizedBase in massFactors) {
+      return (amount * massFactors[normalizedFrom]) / massFactors[normalizedBase];
+    }
+
+    if (normalizedFrom in volumeFactors && normalizedBase in volumeFactors) {
+      return (amount * volumeFactors[normalizedFrom]) / volumeFactors[normalizedBase];
+    }
+
+    if (normalizedFrom === normalizedBase) {
+      return amount;
+    }
+
+    throw new Error(`Cannot convert from ${fromUnit} to ${baseUnit}`);
+  };
+
   const fetchBatch = async () => {
     try {
       const response = await fetch(`${API_URL}/batches/${batchId}`);
       if (!response.ok) throw new Error("Failed to fetch batch");
       const data = await response.json();
       setBatch(data);
+      setUsageUnit(data.chemical_unit || "");
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
@@ -80,12 +120,29 @@ export default function BatchEditPage() {
     setError(null);
 
     try {
-      // Calculate new used quantity
-      const newUsedQuantity = batch.used_quantity + amountUsed;
+      const amountUsed = Number.parseFloat(amountUsedInput);
+      if (!Number.isFinite(amountUsed) || amountUsed <= 0) {
+        throw new Error("Amount used must be greater than 0");
+      }
 
-      if (newUsedQuantity > batch.quantity) {
+      const baseUnit = batch.chemical_unit || "";
+      const normalizedAmountUsed = convertToBaseUnit(amountUsed, usageUnit || baseUnit, baseUnit);
+      const currentUsedQuantity = Number(batch.used_quantity);
+      const totalQuantity = Number(batch.quantity);
+
+      if (!Number.isFinite(currentUsedQuantity) || !Number.isFinite(totalQuantity)) {
+        throw new Error("Batch quantities are invalid");
+      }
+
+      const remainingBeforeUse = Math.max(0, totalQuantity - currentUsedQuantity);
+      const overage = normalizedAmountUsed - remainingBeforeUse;
+
+      if (overage > ROUNDING_TOLERANCE) {
         throw new Error("Cannot use more than available quantity");
       }
+
+      const amountToLog = Math.min(normalizedAmountUsed, remainingBeforeUse);
+      const newUsedQuantity = currentUsedQuantity + amountToLog;
 
       // Update batch used_quantity
       const batchResponse = await fetch(`${API_URL}/batches/${batchId}`, {
@@ -111,7 +168,7 @@ export default function BatchEditPage() {
           chemical_id: batch.chemical_id,
           user_id: userId,
           date_used: new Date().toISOString(),
-          amount_used: amountUsed,
+          amount_used: amountToLog,
           purpose,
           batch_id: batch.batch_id,
         }),
@@ -123,7 +180,7 @@ export default function BatchEditPage() {
 
       // Refresh batch data
       await fetchBatch();
-      setAmountUsed(0);
+      setAmountUsedInput("");
       setPurpose("");
       alert("Usage logged successfully!");
     } catch (err) {
@@ -158,8 +215,11 @@ export default function BatchEditPage() {
     );
   }
 
-  const remainingQuantity = batch.quantity - batch.used_quantity;
-  const percentageUsed = (batch.used_quantity / batch.quantity) * 100;
+  const quantityValue = Number(batch.quantity) || 0;
+  const usedQuantityValue = Number(batch.used_quantity) || 0;
+  const remainingQuantity = Math.max(0, quantityValue - usedQuantityValue);
+  const percentageUsed = quantityValue > 0 ? (usedQuantityValue / quantityValue) * 100 : 0;
+  const compatibleUnits = getCompatibleUnits(batch.chemical_unit || "");
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
@@ -193,6 +253,11 @@ export default function BatchEditPage() {
             </div>
 
             <div>
+              <label className="text-sm font-medium text-gray-600">Lot Number</label>
+              <p className="text-lg font-semibold">{batch.lot_number || 'N/A'}</p>
+            </div>
+
+            <div>
               <label className="text-sm font-medium text-gray-600">Expiration Date</label>
               <p className="text-lg">
                 {batch.expiration_date ? new Date(batch.expiration_date).toLocaleDateString() : 'N/A'}
@@ -206,17 +271,17 @@ export default function BatchEditPage() {
 
             <div className="border-t pt-3">
               <label className="text-sm font-medium text-gray-600">Total Quantity</label>
-              <p className="text-lg font-semibold">{batch.quantity}</p>
+              <p className="text-lg font-semibold">{batch.quantity} {batch.chemical_unit || ""}</p>
             </div>
 
             <div>
               <label className="text-sm font-medium text-gray-600">Used Quantity</label>
-              <p className="text-lg font-semibold text-red-600">{batch.used_quantity}</p>
+              <p className="text-lg font-semibold text-red-600">{batch.used_quantity} {batch.chemical_unit || ""}</p>
             </div>
 
             <div>
               <label className="text-sm font-medium text-gray-600">Remaining</label>
-              <p className="text-2xl font-bold text-green-600">{remainingQuantity}</p>
+              <p className="text-2xl font-bold text-green-600">{remainingQuantity} {batch.chemical_unit || ""}</p>
             </div>
 
             {/* Progress Bar */}
@@ -246,16 +311,31 @@ export default function BatchEditPage() {
               </label>
               <input
                 type="number"
-                value={amountUsed}
-                onChange={(e) => setAmountUsed(Number(e.target.value))}
+                value={amountUsedInput}
+                onChange={(e) => setAmountUsedInput(e.target.value)}
                 required
                 min="0"
-                max={remainingQuantity}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                step="0.01"
+                inputMode="decimal"
+                className="w-full px-3 py-2 text-base text-gray-900 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
                 placeholder="Enter amount used"
               />
+              <div className="mt-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Usage Unit
+                </label>
+                <select
+                  value={usageUnit || (batch.chemical_unit || "")}
+                  onChange={(e) => setUsageUnit(e.target.value)}
+                  className="w-full px-3 py-2 text-base text-gray-900 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                >
+                  {compatibleUnits.map((unit) => (
+                    <option key={unit} value={unit}>{unit}</option>
+                  ))}
+                </select>
+              </div>
               <p className="mt-1 text-xs text-gray-500">
-                Maximum: {remainingQuantity} remaining
+                Remaining: {remainingQuantity} {batch.chemical_unit || ""}
               </p>
             </div>
 
@@ -268,7 +348,7 @@ export default function BatchEditPage() {
                 onChange={(e) => setPurpose(e.target.value)}
                 required
                 rows={4}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                className="w-full px-3 py-2 text-base text-gray-900 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
                 placeholder="Describe what this was used for..."
               />
             </div>

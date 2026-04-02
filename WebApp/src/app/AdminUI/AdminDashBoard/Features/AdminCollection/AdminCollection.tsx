@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 
 interface Collection {
   _id: string;
+  publish_status?: 'published' | 'unpublished';
   code_name: string;
   classification: string;
   source: string;
@@ -82,11 +83,12 @@ const sampleCollections_backup = [
   },
 ];
 
-export default function CollectionTable({ specimens, onEdit, onDelete, onView }: { 
+export default function CollectionTable({ specimens, onEdit, onDelete, onView, onTogglePublish }: { 
   specimens: Collection[], 
   onEdit: (specimen: Collection) => void,
   onDelete: (id: string) => void,
-  onView: (specimen: Collection) => void 
+  onView: (specimen: Collection) => void,
+  onTogglePublish: (specimen: Collection) => void
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sortColumn, setSortColumn] = useState<string | null>(null);
@@ -165,6 +167,7 @@ export default function CollectionTable({ specimens, onEdit, onDelete, onView }:
                 <SortableHeader column="locale" label="Locale" />
                 <SortableHeader column="source" label="Source" />
                 <SortableHeader column="classification" label="Classification" />
+                <SortableHeader column="publish_status" label="Status" />
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">
                   Actions
                 </th>
@@ -173,7 +176,7 @@ export default function CollectionTable({ specimens, onEdit, onDelete, onView }:
             <tbody className="divide-y divide-gray-200">
               {getSortedData().length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
                     No specimens found. Add your first specimen to get started.
                   </td>
                 </tr>
@@ -201,6 +204,17 @@ export default function CollectionTable({ specimens, onEdit, onDelete, onView }:
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-800">
                         {specimen.classification || (typeof specimen.project_id === 'object' ? specimen.project_id?.classification : "N/A")}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-800">
+                        <span
+                          className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
+                            specimen.publish_status === 'published'
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}
+                        >
+                          {specimen.publish_status === 'published' ? 'Published' : 'Unpublished'}
+                        </span>
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-800">
                         <div className="flex gap-2">
@@ -231,6 +245,16 @@ export default function CollectionTable({ specimens, onEdit, onDelete, onView }:
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
+                              onTogglePublish(specimen);
+                            }}
+                            className="px-2 py-1 text-xs text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded"
+                            title={specimen.publish_status === 'published' ? 'Unpublish' : 'Publish'}
+                          >
+                            {specimen.publish_status === 'published' ? 'Unpublish' : 'Publish'}
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
                               if (confirm("Are you sure you want to delete this specimen?")) {
                                 onDelete(specimen._id);
                               }
@@ -246,7 +270,7 @@ export default function CollectionTable({ specimens, onEdit, onDelete, onView }:
 
                     {selectedId === specimen._id && (
                       <tr className="bg-gray-50">
-                        <td colSpan={7}>
+                        <td colSpan={8}>
                           <div className="p-4">
                             <h4 className="font-semibold text-gray-700 mb-2">Description:</h4>
                             <p className="text-sm text-gray-600">

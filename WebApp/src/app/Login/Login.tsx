@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { setAuthToken, setUserData } from '@/app/utils/authUtil';
+import { setAuthToken, setUserData, redirectByRole } from '@/app/utils/authUtil';
 
 export default function LoginForm() {
   const router = useRouter();
@@ -48,15 +48,7 @@ export default function LoginForm() {
         setMessage({ text: data.message || 'Login successful!', type: 'success' });
 
         // Redirect based on role
-        if (data.role === 'admin') {
-          router.push('/AdminUI/AdminDashBoard');
-        } else if (data.role === 'student' || data.role === 'faculty') {
-          router.push('/UsersUI/UsersDashBoard');
-        } else if (data.role === 'ra' || data.role === 'staff') {
-          router.push('/RAStaffUI/RAStaffDashBoard');
-        } else {
-          router.push('/UsersUI/UsersDashBoard');
-        }
+        redirectByRole(router, data.role);
       } else {
         setMessage({ text: data.message || 'Invalid credentials. Please try again.', type: 'error' });
       }
@@ -188,6 +180,14 @@ export default function LoginForm() {
 
           {/* Sign Up Link */}
           <div className="text-center pt-4 border-t border-gray-200">
+            <button
+              type="button"
+              className="text-sm text-[#113F67] hover:text-[#0a2a4a] font-medium transition-colors cursor-pointer hover:underline"
+              onClick={() => router.push('/')}
+            >
+              Back to Homepage
+            </button>
+            <p className="text-sm text-gray-400 mt-2">or</p>
             <p className="text-sm text-gray-600">
               Don&apos;t have an account?{' '}
 

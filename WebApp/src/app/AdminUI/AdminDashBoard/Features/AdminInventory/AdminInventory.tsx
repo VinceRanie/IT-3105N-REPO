@@ -3,10 +3,10 @@
 import { useState, useEffect } from "react";
 import { Chemical, Batch } from "./types";
 import AddChemicalModal from "./AddChemicalModal";
+import EditChemicalModal from "./EditChemicalModal";
 import DeleteConfirmModal from "./DeleteConfirmModal";
 import { Search, Plus, Edit, Trash2, ChevronLeft, ChevronRight, Package, ChevronUp, ChevronDown } from "lucide-react";
 import { API_URL } from "@/config/api";
-import { useRouter } from "next/navigation";
 
 export default function AdminInventory() {
   const [chemicals, setChemicals] = useState<Chemical[]>([]);
@@ -19,6 +19,7 @@ export default function AdminInventory() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedChemical, setSelectedChemical] = useState<Chemical | null>(null);
+  const [editingChemical, setEditingChemical] = useState<Chemical | null>(null);
   
   // Search and filter
   const [searchTerm, setSearchTerm] = useState("");
@@ -69,6 +70,10 @@ export default function AdminInventory() {
   useEffect(() => {
     let result = chemicals;
 
+    // Only show chemicals that still have at least one active batch.
+    const activeChemicalIds = new Set(batches.map((batch) => batch.chemical_id));
+    result = result.filter((chemical) => activeChemicalIds.has(chemical.chemical_id));
+
     // Search filter
     if (searchTerm) {
       result = result.filter((chemical) =>
@@ -88,11 +93,39 @@ export default function AdminInventory() {
 
     setFilteredChemicals(result);
     setCurrentPage(1); // Reset to first page on filter change
-  }, [searchTerm, unitFilter, typeFilter, chemicals]);
+  }, [searchTerm, unitFilter, typeFilter, chemicals, batches]);
 
   // Check if quantity is below threshold
   const isLowStock = (chemical: Chemical) => {
-    return chemical.quantity <= chemical.threshold;
+    return getRemainingQuantity(chemical.chemical_id) <= chemical.threshold;
+  };
+
+  const getChemicalBatches = (chemicalId: number) =>
+    batches.filter((batch) => batch.chemical_id === chemicalId);
+
+  const getRemainingQuantity = (chemicalId: number) => {
+    const chemicalBatches = getChemicalBatches(chemicalId);
+    if (!chemicalBatches.length) return 0;
+    return chemicalBatches.reduce(
+      (sum, batch) => sum + Math.max(0, batch.quantity - batch.used_quantity),
+      0
+    );
+  };
+
+  const getLotGroupsLabel = (chemical: Chemical) => {
+    const chemicalBatches = getChemicalBatches(chemical.chemical_id);
+    if (!chemicalBatches.length) return "N/A";
+
+    const lotTotals = chemicalBatches.reduce((acc, batch) => {
+      const lot = (batch.lot_number || "NO-LOT").trim() || "NO-LOT";
+      const remaining = Math.max(0, batch.quantity - batch.used_quantity);
+      acc[lot] = (acc[lot] || 0) + remaining;
+      return acc;
+    }, {} as Record<string, number>);
+
+    return Object.entries(lotTotals)
+      .map(([lot, total]) => `${lot}: ${total} ${chemical.unit}`)
+      .join(", ");
   };
 
   const handleSort = (column: string) => {
@@ -140,14 +173,9 @@ export default function AdminInventory() {
   const uniqueUnits = Array.from(new Set(chemicals.map((c) => c.unit)));
   const uniqueTypes = Array.from(new Set(chemicals.map((c) => c.type)));
 
-  const router = useRouter();
-
   // Handler functions
   const handleEdit = (chemical: Chemical) => {
-    const chemicalBatch = batches.find(b => b.chemical_id === chemical.chemical_id);
-    if (chemicalBatch) {
-      router.push(`/AdminUI/AdminDashBoard/Features/AdminInventory/batch/${chemicalBatch.batch_id}`);
-    }
+    setEditingChemical(chemical);
   };
 
   const handleDelete = (chemical: Chemical) => {
@@ -163,6 +191,11 @@ export default function AdminInventory() {
   const handleDeleteSuccess = () => {
     fetchChemicals();
     setIsDeleteModalOpen(false);
+  };
+
+  const handleEditSuccess = () => {
+    fetchChemicals();
+    setEditingChemical(null);
   };
 
   const SortIcon = ({ column }: { column: string }) => {
@@ -272,7 +305,8 @@ export default function AdminInventory() {
             <thead className="bg-[#113F67] text-white">
               <tr>
                 <SortableHeader column="chemical_id" label="Chem ID" />
-                <SortableHeader column="batch_id" label="Batch ID" />
+                <th className="px-6 py-3 text-left text-sm font-semibold">Batch ID</th>
+                <th className="px-6 py-3 text-left text-sm font-semibold">Lot Groups</th>
                 <SortableHeader column="name" label="Name" />
                 <SortableHeader column="type" label="Type" />
                 <SortableHeader column="quantity" label="Quantity" />
@@ -287,13 +321,20 @@ export default function AdminInventory() {
             <tbody className="divide-y divide-gray-200">
               {currentItems.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={12} className="px-6 py-8 text-center text-gray-500">
                     No chemicals found
                   </td>
                 </tr>
               ) : (
                 currentItems.map((chemical) => {
-                  const chemicalBatch = batches.find(b => b.chemical_id === chemical.chemical_id);
+                  const chemicalBatches = getChemicalBatches(chemical.chemical_id);
+                  const chemicalBatch = chemicalBatches[0];
+                  const remainingQuantity = chemicalBatches.length
+                    ? chemicalBatches.reduce(
+                        (sum, batch) => sum + Math.max(0, batch.quantity - batch.used_quantity),
+                        0
+                      )
+                    : chemical.quantity;
                   return (
                   <tr
                     key={chemical.chemical_id}
@@ -307,6 +348,9 @@ export default function AdminInventory() {
                     <td className="px-6 py-4 text-sm text-gray-900 font-semibold">
                       {chemicalBatch?.batch_id || 'N/A'}
                     </td>
+                    <td className="px-6 py-4 text-sm text-gray-900">
+                      {getLotGroupsLabel(chemical)}
+                    </td>
                     <td className="px-6 py-4 text-sm font-medium text-gray-900">
                       {chemical.name}
                     </td>
@@ -316,7 +360,7 @@ export default function AdminInventory() {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">
-                      {chemicalBatch ? chemicalBatch.quantity - chemicalBatch.used_quantity : chemical.quantity}
+                      {remainingQuantity}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">
                       {chemical.unit}
@@ -330,7 +374,7 @@ export default function AdminInventory() {
                     <td className="px-6 py-4 text-sm">
                       {isLowStock(chemical) ? (
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                          Low Stock
+                          Low Stocks
                         </span>
                       ) : (
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
@@ -364,7 +408,11 @@ export default function AdminInventory() {
                     <td className="px-6 py-4 text-sm text-center">
                       <div className="flex justify-center gap-2">
                         <button
-                          onClick={() => window.location.href = `/AdminUI/AdminDashBoard/Features/AdminInventory/batches/${chemical.chemical_id}`}
+                          onClick={() => {
+                            if (chemicalBatch) {
+                              window.location.href = `/AdminUI/AdminDashBoard/Features/AdminInventory/batch/${chemicalBatch.batch_id}`;
+                            }
+                          }}
                           className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
                           title="View Batches"
                         >
@@ -428,6 +476,15 @@ export default function AdminInventory() {
         onClose={() => setIsAddModalOpen(false)}
         onSuccess={handleAddSuccess}
       />
+
+      {editingChemical && (
+        <EditChemicalModal
+          isOpen={!!editingChemical}
+          onClose={() => setEditingChemical(null)}
+          onSuccess={handleEditSuccess}
+          chemical={editingChemical}
+        />
+      )}
       
       {selectedChemical && (
         <DeleteConfirmModal

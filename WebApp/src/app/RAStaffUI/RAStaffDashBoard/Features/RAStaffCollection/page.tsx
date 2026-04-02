@@ -15,11 +15,12 @@ interface Project {
   title: string;
   code: string;
   classification: string;
-  user_id: number;
+  user_id?: number | string;
 }
 
 interface Specimen {
   _id: string;
+  publish_status?: 'published' | 'unpublished';
   code_name: string;
   classification: string;
   source: string;
@@ -78,6 +79,7 @@ export default function RAStaffCollectionPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "unpublished" | "published">("all");
   
   // Modal states
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
@@ -106,7 +108,7 @@ export default function RAStaffCollectionPage() {
   const fetchSpecimens = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_URL}/microbials`, {
+      const response = await fetch(`${API_URL}/microbials?role=staff`, {
         headers: getAuthHeader(),
       });
       if (response.ok) {
@@ -209,10 +211,39 @@ export default function RAStaffCollectionPage() {
     setIsSpecimenModalOpen(true);
   };
 
+  const handleTogglePublish = async (specimen: Specimen) => {
+    try {
+      const nextStatus = specimen.publish_status === 'published' ? 'unpublished' : 'published';
+      const payload = new FormData();
+      payload.append('publish_status', nextStatus);
+
+      const response = await fetch(`${API_URL}/microbials/${specimen._id}`, {
+        method: 'PUT',
+        headers: getAuthHeader(),
+        body: payload,
+      });
+
+      if (response.ok) {
+        await fetchSpecimens();
+      } else {
+        alert('Failed to update publish status');
+      }
+    } catch (error) {
+      console.error('Error updating publish status:', error);
+      alert('Error updating publish status');
+    }
+  };
+
   // Filter specimens based on search query
   const filteredSpecimens = specimens.filter((specimen: any) => {
+    const matchesStatus =
+      statusFilter === "all" ||
+      (specimen.publish_status || "unpublished") === statusFilter;
+
+    if (!matchesStatus) return false;
+
     if (!searchQuery) return true;
-    
+
     const query = searchQuery.toLowerCase();
     return (
       specimen.code_name?.toLowerCase().includes(query) ||
@@ -249,12 +280,15 @@ export default function RAStaffCollectionPage() {
         }}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
+        statusFilter={statusFilter}
+        onStatusFilterChange={setStatusFilter}
       />
       
       <RAStaffCollection
         specimens={filteredSpecimens}
         onEdit={handleEditSpecimen}
         onView={handleViewSpecimen}
+        onTogglePublish={handleTogglePublish}
       />
 
       <ProjectModal

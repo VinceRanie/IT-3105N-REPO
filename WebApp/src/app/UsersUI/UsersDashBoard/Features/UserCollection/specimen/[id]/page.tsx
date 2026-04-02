@@ -38,6 +38,11 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
       const response = await fetch(`${API_URL}/microbials/${resolvedParams.id}`);
       if (response.ok) {
         const data = await response.json();
+        const status = String(data?.publish_status || "published").trim().toLowerCase();
+        if (status !== "published") {
+          setSpecimen(null);
+          return;
+        }
         setSpecimen(data);
       } else {
         console.error("Failed to fetch specimen:", response.status, response.statusText);
