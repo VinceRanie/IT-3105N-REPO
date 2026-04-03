@@ -419,25 +419,29 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
       }
 
         // Cell and Colony Morphology
-        const morphologyEntries: Array<[string, any]> = specimen.morphology
-          ? [
-              ["Shape", specimen.morphology.shape],
-              ["Cell Size", specimen.morphology.cell_size],
-              ["Colony Size", specimen.morphology.colony_size],
-              ["Pigmentation", specimen.morphology.pigmentation],
-              ["Form", specimen.morphology.form],
-              ["Elevation", specimen.morphology.elevation],
-              ["Margin", specimen.morphology.margin],
-              ["Colony Surface", specimen.morphology.colony_surface],
-              ["Opacity", specimen.morphology.opacity],
-              ["Texture", specimen.morphology.texture],
-              ["Spore Formation", specimen.morphology.spore_formation],
-              ["Mycelium Formation", specimen.morphology.mycelium_formation],
-              ["Description", specimen.morphology.description],
-            ].filter(([_, value]) => value && String(value).trim() !== "")
-          : [];
+        const morphologyEntries: Array<[string, any]> = [];
+        if (specimen.morphology) {
+          morphologyEntries.push(
+            ["Shape", specimen.morphology.shape],
+            ["Cell Size", specimen.morphology.cell_size],
+            ["Colony Size", specimen.morphology.colony_size],
+            ["Pigmentation", specimen.morphology.pigmentation],
+            ["Form", specimen.morphology.form],
+            ["Elevation", specimen.morphology.elevation],
+            ["Margin", specimen.morphology.margin],
+            ["Colony Surface", specimen.morphology.colony_surface],
+            ["Opacity", specimen.morphology.opacity],
+            ["Texture", specimen.morphology.texture],
+            ["Spore Formation", specimen.morphology.spore_formation],
+            ["Mycelium Formation", specimen.morphology.mycelium_formation],
+            ["Description", specimen.morphology.description],
+          );
+        }
+        const filledMorphologyEntries = morphologyEntries.filter(
+          ([_, value]) => value && String(value).trim() !== ""
+        );
 
-        if (morphologyEntries.length > 0) {
+        if (filledMorphologyEntries.length > 0) {
           yPos += 5;
           checkPageBreak(20);
           doc.setFontSize(14);
@@ -446,7 +450,7 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
           yPos += lineHeight;
 
           doc.setFontSize(10);
-          morphologyEntries.forEach(([label, value]) => {
+          filledMorphologyEntries.forEach(([label, value]) => {
             checkPageBreak();
             doc.setFont("helvetica", "bold");
             doc.text(`${label}:`, margin, yPos);
