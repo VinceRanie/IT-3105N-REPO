@@ -418,6 +418,45 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
         }
       }
 
+        // Cell and Colony Morphology
+        const morphologyEntries: Array<[string, any]> = specimen.morphology
+          ? [
+              ["Shape", specimen.morphology.shape],
+              ["Cell Size", specimen.morphology.cell_size],
+              ["Colony Size", specimen.morphology.colony_size],
+              ["Pigmentation", specimen.morphology.pigmentation],
+              ["Form", specimen.morphology.form],
+              ["Elevation", specimen.morphology.elevation],
+              ["Margin", specimen.morphology.margin],
+              ["Colony Surface", specimen.morphology.colony_surface],
+              ["Opacity", specimen.morphology.opacity],
+              ["Texture", specimen.morphology.texture],
+              ["Spore Formation", specimen.morphology.spore_formation],
+              ["Mycelium Formation", specimen.morphology.mycelium_formation],
+              ["Description", specimen.morphology.description],
+            ].filter(([_, value]) => value && String(value).trim() !== "")
+          : [];
+
+        if (morphologyEntries.length > 0) {
+          yPos += 5;
+          checkPageBreak(20);
+          doc.setFontSize(14);
+          doc.setFont("helvetica", "bold");
+          doc.text("Cell and Colony Morphology", margin, yPos);
+          yPos += lineHeight;
+
+          doc.setFontSize(10);
+          morphologyEntries.forEach(([label, value]) => {
+            checkPageBreak();
+            doc.setFont("helvetica", "bold");
+            doc.text(`${label}:`, margin, yPos);
+            doc.setFont("helvetica", "normal");
+            const wrappedValue = doc.splitTextToSize(String(value), contentWidth - 52);
+            doc.text(wrappedValue, margin + 52, yPos);
+            yPos += lineHeight * Math.max(1, wrappedValue.length);
+          });
+        }
+
       if (specimen.activity || specimen.result) {
         yPos += 5;
         checkPageBreak(15);
@@ -621,7 +660,7 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
         {/* Tabs */}
         <div className="mb-6 border-b border-gray-200">
           <div className="flex gap-4">
-            {["info", "bioactivity", "biochemical", "genome"].map((tab) => (
+            {["info", "bioactivity", "biochemical", "morphology", "genome"].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -795,6 +834,33 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
                   </>
                 ) : (
                   <p className="text-gray-500 text-sm">No biochemical data available yet.</p>
+                )}
+              </div>
+            )}
+
+            {activeTab === "morphology" && (
+              <div className="bg-white shadow rounded-xl p-6">
+                <h2 className="text-lg font-semibold mb-4">Cell and Colony Morphology</h2>
+                {specimen.morphology ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <InfoItem label="Shape" value={specimen.morphology.shape || "N/A"} />
+                    <InfoItem label="Cell Size" value={specimen.morphology.cell_size || "N/A"} />
+                    <InfoItem label="Colony Size" value={specimen.morphology.colony_size || "N/A"} />
+                    <InfoItem label="Pigmentation" value={specimen.morphology.pigmentation || "N/A"} />
+                    <InfoItem label="Form" value={specimen.morphology.form || "N/A"} />
+                    <InfoItem label="Elevation" value={specimen.morphology.elevation || "N/A"} />
+                    <InfoItem label="Margin" value={specimen.morphology.margin || "N/A"} />
+                    <InfoItem label="Colony Surface" value={specimen.morphology.colony_surface || "N/A"} />
+                    <InfoItem label="Opacity" value={specimen.morphology.opacity || "N/A"} />
+                    <InfoItem label="Texture" value={specimen.morphology.texture || "N/A"} />
+                    <InfoItem label="Spore Formation" value={specimen.morphology.spore_formation || "N/A"} />
+                    <InfoItem label="Mycelium Formation" value={specimen.morphology.mycelium_formation || "N/A"} />
+                    <div className="md:col-span-2">
+                      <InfoItem label="Description" value={specimen.morphology.description || "N/A"} />
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-gray-500 text-sm">No morphology data available yet.</p>
                 )}
               </div>
             )}

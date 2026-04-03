@@ -13,12 +13,29 @@ interface SpecimenModalProps {
   projects: any[];
 }
 
+const DEFAULT_MORPHOLOGY = {
+  shape: "",
+  cell_size: "",
+  colony_size: "",
+  pigmentation: "",
+  form: "",
+  elevation: "",
+  margin: "",
+  colony_surface: "",
+  opacity: "",
+  texture: "",
+  spore_formation: "",
+  mycelium_formation: "",
+  description: ""
+};
+
 export default function SpecimenModal({ isOpen, onClose, onSave, specimen, projects }: SpecimenModalProps) {
   // Collapsible sections state
   const [expandedSections, setExpandedSections] = useState({
     basic: true,
     molecular: false,
     biochemical: false,
+    morphology: false,
     culture: false,
     custom: false
   });
@@ -59,6 +76,9 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
     special_reqs: "",
     activity: "",
     result: "",
+
+    // Cell and Colony Morphology
+    morphology: { ...DEFAULT_MORPHOLOGY },
     
     // Dynamic custom fields
     custom_fields: {} as Record<string, string>
@@ -97,6 +117,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
         special_reqs: specimen.special_reqs || "",
         activity: specimen.activity || "",
         result: specimen.result || "",
+        morphology: specimen.morphology || { ...DEFAULT_MORPHOLOGY },
         custom_fields: specimen.custom_fields || {}
       });
       if (specimen.image_url) {
@@ -132,6 +153,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
         special_reqs: "",
         activity: "",
         result: "",
+        morphology: { ...DEFAULT_MORPHOLOGY },
         custom_fields: {}
       });
       setImageFile(null);
@@ -255,7 +277,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
     
     // Add all form fields
     Object.entries(formData).forEach(([key, value]) => {
-      if (key === 'biochemical_tests' || key === 'custom_fields') {
+      if (key === 'biochemical_tests' || key === 'custom_fields' || key === 'morphology') {
         submitData.append(key, JSON.stringify(value));
       } else {
         submitData.append(key, value as string);
@@ -730,6 +752,203 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
           </div>
 
           {/* CULTURE REQUIREMENTS SECTION */}
+          <div className="mb-6 border rounded-lg">
+            <button
+              type="button"
+              onClick={() => toggleSection('morphology')}
+              className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
+            >
+              <span className="font-semibold text-gray-800">Cell and Colony Morphology</span>
+              {expandedSections.morphology ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+            </button>
+
+            {expandedSections.morphology && (
+              <div className="p-4 border-t grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Shape</label>
+                  <input
+                    type="text"
+                    value={formData.morphology.shape}
+                    onChange={(e) => setFormData({
+                      ...formData,
+                      morphology: { ...formData.morphology, shape: e.target.value }
+                    })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                    placeholder="e.g., Cocci, Bacilli"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Cell Size</label>
+                  <input
+                    type="text"
+                    value={formData.morphology.cell_size}
+                    onChange={(e) => setFormData({
+                      ...formData,
+                      morphology: { ...formData.morphology, cell_size: e.target.value }
+                    })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                    placeholder="e.g., 1-2 um"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Colony Size</label>
+                  <input
+                    type="text"
+                    value={formData.morphology.colony_size}
+                    onChange={(e) => setFormData({
+                      ...formData,
+                      morphology: { ...formData.morphology, colony_size: e.target.value }
+                    })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                    placeholder="e.g., 2-4 mm"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Pigmentation</label>
+                  <input
+                    type="text"
+                    value={formData.morphology.pigmentation}
+                    onChange={(e) => setFormData({
+                      ...formData,
+                      morphology: { ...formData.morphology, pigmentation: e.target.value }
+                    })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                    placeholder="e.g., Cream, Yellow"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Form</label>
+                  <input
+                    type="text"
+                    value={formData.morphology.form}
+                    onChange={(e) => setFormData({
+                      ...formData,
+                      morphology: { ...formData.morphology, form: e.target.value }
+                    })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                    placeholder="e.g., Circular, Irregular"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Elevation</label>
+                  <input
+                    type="text"
+                    value={formData.morphology.elevation}
+                    onChange={(e) => setFormData({
+                      ...formData,
+                      morphology: { ...formData.morphology, elevation: e.target.value }
+                    })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                    placeholder="e.g., Flat, Raised"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Margin</label>
+                  <input
+                    type="text"
+                    value={formData.morphology.margin}
+                    onChange={(e) => setFormData({
+                      ...formData,
+                      morphology: { ...formData.morphology, margin: e.target.value }
+                    })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                    placeholder="e.g., Entire, Lobate"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Colony Surface</label>
+                  <input
+                    type="text"
+                    value={formData.morphology.colony_surface}
+                    onChange={(e) => setFormData({
+                      ...formData,
+                      morphology: { ...formData.morphology, colony_surface: e.target.value }
+                    })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                    placeholder="e.g., Smooth, Rough"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Opacity</label>
+                  <input
+                    type="text"
+                    value={formData.morphology.opacity}
+                    onChange={(e) => setFormData({
+                      ...formData,
+                      morphology: { ...formData.morphology, opacity: e.target.value }
+                    })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                    placeholder="e.g., Opaque, Translucent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Texture</label>
+                  <input
+                    type="text"
+                    value={formData.morphology.texture}
+                    onChange={(e) => setFormData({
+                      ...formData,
+                      morphology: { ...formData.morphology, texture: e.target.value }
+                    })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                    placeholder="e.g., Mucoid, Dry"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Spore Formation</label>
+                  <input
+                    type="text"
+                    value={formData.morphology.spore_formation}
+                    onChange={(e) => setFormData({
+                      ...formData,
+                      morphology: { ...formData.morphology, spore_formation: e.target.value }
+                    })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                    placeholder="e.g., Present, Absent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Mycelium Formation</label>
+                  <input
+                    type="text"
+                    value={formData.morphology.mycelium_formation}
+                    onChange={(e) => setFormData({
+                      ...formData,
+                      morphology: { ...formData.morphology, mycelium_formation: e.target.value }
+                    })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                    placeholder="e.g., Present, Absent"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Morphology Description</label>
+                  <textarea
+                    value={formData.morphology.description}
+                    onChange={(e) => setFormData({
+                      ...formData,
+                      morphology: { ...formData.morphology, description: e.target.value }
+                    })}
+                    rows={2}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                    placeholder="Additional morphology notes"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="mb-6 border rounded-lg">
             <button
               type="button"
