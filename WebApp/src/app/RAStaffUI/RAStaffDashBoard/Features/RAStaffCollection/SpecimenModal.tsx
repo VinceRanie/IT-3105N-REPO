@@ -8,7 +8,7 @@ import { API_URL } from "@/config/api";
 interface SpecimenModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (specimen: FormData) => void;
+  onSave: (specimen: FormData) => Promise<void> | void;
   specimen?: any;
   projects: any[];
 }
@@ -89,6 +89,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
   const [fastaFile, setFastaFile] = useState<File | null>(null);
   const [blastStatus, setBlastStatus] = useState<string>("");
   const [blastResults, setBlastResults] = useState<any>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (specimen) {
@@ -272,6 +273,12 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (isSubmitting) {
+      return;
+    }
+
+    setIsSubmitting(true);
     
     const submitData = new FormData();
     
@@ -291,8 +298,12 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
     if (fastaFile) {
       submitData.append('fasta_file', fastaFile);
     }
-    
-    onSave(submitData);
+
+    try {
+      await onSave(submitData);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleBlastSubmit = async () => {
@@ -1072,9 +1083,10 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-[#113F67] text-white rounded-lg hover:bg-[#0d2f4d] transition-colors"
+              disabled={isSubmitting}
+              className="px-4 py-2 bg-[#113F67] text-white rounded-lg hover:bg-[#0d2f4d] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {specimen ? "Update" : "Add"} Specimen
+              {isSubmitting ? "Submitting..." : `${specimen ? "Update" : "Add"} Specimen`}
             </button>
           </div>
         </form>
