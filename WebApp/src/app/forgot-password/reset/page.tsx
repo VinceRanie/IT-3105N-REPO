@@ -59,10 +59,10 @@ function ForgotResetContent() {
       return;
     }
 
-    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{6,}$/;
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
     if (!passwordRegex.test(password)) {
       setMessage({
-        text: "Password must be at least 6 characters with at least one uppercase, one lowercase, and one number.",
+        text: "Password must be at least 8 characters with at least one uppercase, one lowercase, and one number.",
         type: "error",
       });
       return;
@@ -95,13 +95,7 @@ function ForgotResetContent() {
   return (
     <div className="min-h-screen grid grid-cols-1 md:grid-cols-2 bg-white">
       <div className="relative hidden md:block">
-        <Image
-          src="/UI/img/Laboratory.jpg"
-          alt="Laboratory Background"
-          fill
-          sizes="(max-width: 768px) 0px, 50vw"
-          className="object-cover"
-        />
+        <Image src="/UI/img/Laboratory.jpg" alt="Laboratory Background" fill className="object-cover" />
         <div className="absolute inset-0 bg-gradient-to-r from-transparent to-white/70" />
       </div>
 
@@ -190,7 +184,16 @@ function ForgotResetContent() {
 
 export default function ForgotResetPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-[#113F67]">Loading reset page...</div>}>
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-white">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#113F67] mx-auto mb-4" />
+            <p className="text-[#113F67] font-medium">Loading reset page...</p>
+          </div>
+        </div>
+      }
+    >
       <ForgotResetContent />
     </Suspense>
   );
