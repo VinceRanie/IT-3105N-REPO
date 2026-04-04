@@ -5,6 +5,7 @@ const authController = require("../controllers/authController");
 // Authentication endpoints
 router.post("/login", authController.login);
 router.post("/register", authController.register);
+router.post("/forgot-password", authController.forgotPassword);
 router.post("/reset-password", authController.resetPassword);
 router.post("/finalize-setup", authController.finalizeSetup);
 router.post("/get-user-by-token", authController.getUserByToken);

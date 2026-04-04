@@ -5,23 +5,23 @@ const bcrypt = require("bcryptjs");
 const ALLOWED_ROLES = ["student", "faculty", "staff"];
 
 // CREATE - Register new user
-exports.createUser = async (email, resetToken) => {
+exports.createUser = async (email, resetToken, resetTokenExpires = null) => {
   const [result] = await db.execute(
-    "INSERT INTO user (email, reset_token, first_name, last_name, role) VALUES (?, ?, ?, ?, ?)",
-    [email, resetToken, "", "", "student"]
+    "INSERT INTO user (email, reset_token, reset_token_expires, first_name, last_name, role) VALUES (?, ?, ?, ?, ?, ?)",
+    [email, resetToken, resetTokenExpires, "", "", "student"]
   );
   return result.insertId;
 };
 
 // CREATE - Admin-invited user (allows non-USC emails and custom role)
-exports.createUserByAdmin = async (email, resetToken, role = "student") => {
+exports.createUserByAdmin = async (email, resetToken, role = "student", resetTokenExpires = null) => {
   if (!ALLOWED_ROLES.includes(role)) {
     throw new Error("Invalid role");
   }
 
   const [result] = await db.execute(
-    "INSERT INTO user (email, reset_token, first_name, last_name, role) VALUES (?, ?, ?, ?, ?)",
-    [email, resetToken, "", "", role]
+    "INSERT INTO user (email, reset_token, reset_token_expires, first_name, last_name, role) VALUES (?, ?, ?, ?, ?, ?)",
+    [email, resetToken, resetTokenExpires, "", "", role]
   );
   return result.insertId;
 };
@@ -29,7 +29,7 @@ exports.createUserByAdmin = async (email, resetToken, role = "student") => {
 // READ - Get user by email
 exports.getUserByEmail = async (email) => {
   const [rows] = await db.execute(
-    "SELECT user_id, email, password, failed_login_attempts, lockout_until, role FROM user WHERE email = ?",
+    "SELECT user_id, email, password, failed_login_attempts, lockout_until, role, reset_token, reset_token_expires FROM user WHERE email = ?",
     [email]
   );
   return rows[0] || null;
@@ -38,7 +38,7 @@ exports.getUserByEmail = async (email) => {
 // READ - Get user by reset token
 exports.getUserByResetToken = async (token) => {
   const [rows] = await db.execute(
-    "SELECT user_id, email, reset_token, first_name, last_name, department, course, role FROM user WHERE reset_token = ?",
+    "SELECT user_id, email, password, reset_token, reset_token_expires, first_name, last_name, profile_photo, department, course, role, is_setup_complete FROM user WHERE reset_token = ?",
     [token]
   );
   return rows[0] || null;
@@ -79,6 +79,14 @@ exports.incrementFailedLoginAttempts = async (userId, newAttempts, lockoutTime =
   );
 };
 
+// UPDATE - Set reset token
+exports.setResetToken = async (userId, resetToken, resetTokenExpires = null) => {
+  await db.execute(
+    "UPDATE user SET reset_token = ?, reset_token_expires = ? WHERE user_id = ?",
+    [resetToken, resetTokenExpires, userId]
+  );
+};
+
 // UPDATE - Role change (cannot promote/demote admins)
 exports.updateUserRole = async (userId, role) => {
   if (!ALLOWED_ROLES.includes(role)) {
@@ -93,20 +101,20 @@ exports.updateUserRole = async (userId, role) => {
 };
 
 // UPDATE - Set password
-exports.setPassword = async (userId, hashedPassword) => {
+exports.setPassword = async (userId, hashedPassword, nextResetAllowedAt = null) => {
   await db.execute(
-    "UPDATE user SET password = ?, reset_token = NULL WHERE user_id = ?",
-    [hashedPassword, userId]
+    "UPDATE user SET password = ?, reset_token = NULL, reset_token_expires = ? WHERE user_id = ?",
+    [hashedPassword, nextResetAllowedAt, userId]
   );
 };
 
 // UPDATE - Finalize user setup
-exports.finalizeUserSetup = async (email, firstName, lastName, department, course, hashedPassword) => {
+exports.finalizeUserSetup = async (userId, firstName, lastName, profilePhoto, department, course, hashedPassword) => {
   await db.execute(
     `UPDATE user 
-     SET first_name = ?, last_name = ?, department = ?, course = ?, password = ?, is_setup_complete = 1, reset_token = NULL 
-     WHERE email = ?`,
-    [firstName, lastName, department, course, hashedPassword, email]
+     SET first_name = ?, last_name = ?, profile_photo = ?, department = ?, course = ?, password = ?, is_setup_complete = 1, reset_token = NULL, reset_token_expires = NULL
+     WHERE user_id = ?`,
+    [firstName, lastName, profilePhoto, department, course, hashedPassword, userId]
   );
 };
 
@@ -122,7 +130,7 @@ exports.comparePassword = async (plainPassword, hashedPassword) => {
 
 // UTILITY - Validate password strength
 exports.validatePasswordStrength = (password) => {
-  const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{6,}$/;
+  const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
   return passwordRegex.test(password);
 };
 

@@ -20,11 +20,31 @@ const HttpStatus = {
   BAD_REQUEST: 400,
   UNAUTHORIZED: 401,
   CONFLICT: 409,
+  SERVICE_UNAVAILABLE: 503,
   INTERNAL_SERVER_ERROR: 500,
 };
 
 const JWT_SECRET = process.env.JWT_TOKEN || "your-secret-key-change-in-production";
 const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_BASE_URL || "http://localhost:3000";
+const RESET_LINK_TTL_MS = 60 * 60 * 1000; // 1 hour
+const RESET_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+const didEmailSend = (result, expectedRecipient = "") => {
+  if (!result) return false;
+  if (result.error) return false;
+  if (!result.messageId) return false;
+  if (result.messageId === "SKIPPED_NO_CONFIG") return false;
+  const accepted = Array.isArray(result.accepted)
+    ? result.accepted.map((value) => String(value).toLowerCase())
+    : [];
+  const rejected = Array.isArray(result.rejected) ? result.rejected : [];
+
+  if (rejected.length > 0) return false;
+  if (expectedRecipient) {
+    return accepted.includes(String(expectedRecipient).toLowerCase());
+  }
+  return true;
+};
 
 // LOGIN
 exports.login = async (req, res) => {
@@ -51,8 +71,12 @@ exports.login = async (req, res) => {
 
     // Check if account is locked
     if (user.lockout_until && new Date() < new Date(user.lockout_until)) {
+      const remainingMs = new Date(user.lockout_until).getTime() - Date.now();
+      const minutes = Math.max(1, Math.ceil(remainingMs / 60000));
+      const remainingText = `${minutes} minute${minutes === 1 ? "" : "s"}`;
+
       return res.status(HttpStatus.UNAUTHORIZED).json({
-        message: "Account is locked. Please try again later.",
+        message: `Account is locked. Time remaining: ${remainingText}`,
         statusCode: HttpStatus.UNAUTHORIZED,
       });
     }
@@ -132,53 +156,63 @@ exports.register = async (req, res) => {
       });
     }
 
-    // Check if user already exists
-    const existingUser = await authModel.userExists(email);
+    // Check existing account state.
+    // Accounts without a password are treated as not yet finalized.
+    const existingUser = await authModel.getUserByEmail(email);
     if (existingUser) {
+      if (existingUser.password) {
+        return res.status(HttpStatus.CONFLICT).json({
+          message: "User already registered.",
+          statusCode: HttpStatus.CONFLICT,
+        });
+      }
+
       return res.status(HttpStatus.CONFLICT).json({
-        message: "User already exists.",
+        message: "Finish finalize setup.",
         statusCode: HttpStatus.CONFLICT,
       });
     }
 
-    // Create reset token and insert user
+    // Prepare reset token; create user only after email delivery succeeds.
     const resetToken = uuidv4();
-    const userId = await authModel.createUser(email, resetToken);
+    const tokenExpiry = new Date(Date.now() + RESET_LINK_TTL_MS);
 
     // Send email with verification link
+    let emailResult;
     try {
-      await sendEmail({
+      emailResult = await sendEmail({
         to: email,
-        subject: "Set Your Password to Complete Registration",
+        subject: "Finalize Your BIOCELLA Account Setup",
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #113F67;">Welcome to BIOCELLA!</h2>
-            <p>Hi,</p>
-            <p>Thank you for registering for our application!</p>
-            <p>Please click the link below to set your secure password and complete your registration:</p>
-            <p>
+            <p>Hi there,</p>
+            <p>Thank you for registering with your USC email. To complete your account setup, click the button below:</p>
+            <div style="text-align: center; margin: 30px 0;">
               <a href="${APP_BASE_URL}/signup/finalize?token=${resetToken}" 
-                 style="display: inline-block; padding: 10px 20px; background-color: #113F67; color: white; text-decoration: none; border-radius: 5px;">
-                Set Your Password Now
+                 style="background-color: #113F67; color: white; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
+                Finalize Setup
               </a>
-            </p>
-            <p style="color: #666; font-size: 12px;">
-              Or copy and paste this link in your browser:<br>
-              ${APP_BASE_URL}/signup/finalize?token=${resetToken}
-            </p>
-            <p>This link will expire in 24 hours.</p>
+            </div>
+            <p>You will be asked to sign in with your Google account (<strong>${email}</strong>) to verify your identity. Your name and profile photo will be fetched automatically.</p>
+            <p><strong>This link will expire in 1 hour.</strong></p>
             <p>If you did not register for this service, please ignore this email.</p>
-            <p>Sincerely,<br>BIOCELLA Team</p>
+            <p>Sincerely,<br/><strong>BIOCELLA Team</strong></p>
           </div>
         `,
       });
-
-      console.log(`Registration email sent to ${email}`);
     } catch (emailError) {
       console.error("Email sending error:", emailError);
-      // Don't fail the registration if email fails, but log the error
-      // In production, you might want to retry or queue the email
     }
+
+    if (!didEmailSend(emailResult, email)) {
+      return res.status(HttpStatus.SERVICE_UNAVAILABLE).json({
+        message: "Registration could not be completed because finalize email was not sent. Please try again later.",
+        statusCode: HttpStatus.SERVICE_UNAVAILABLE,
+      });
+    }
+
+    const userId = await authModel.createUser(email, resetToken, tokenExpiry);
 
     return res.status(HttpStatus.CREATED).json({
       message: "User registered successfully. A password setup link has been sent to your email.",
@@ -190,6 +224,95 @@ exports.register = async (req, res) => {
     console.error("Registration Error:", error);
     return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
       message: "An unexpected error occurred during registration.",
+      error: error.message || error,
+      statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+    });
+  }
+};
+
+// FORGOT PASSWORD
+exports.forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email || typeof email !== "string") {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        message: "Valid email is required.",
+        statusCode: HttpStatus.BAD_REQUEST,
+      });
+    }
+
+    const user = await authModel.getUserByEmail(email);
+
+    // Return a generic response to avoid exposing whether an email exists.
+    if (!user) {
+      return res.status(HttpStatus.OK).json({
+        message: "If an account exists, a reset link has been sent to your email.",
+        statusCode: HttpStatus.OK,
+      });
+    }
+
+    // Enforce cooldown after a successful password reset.
+    // After reset, token is cleared but reset_token_expires stores next allowed request time.
+    if (user.reset_token_expires) {
+      const expiresAtMs = new Date(user.reset_token_expires).getTime();
+      const remainingMs = expiresAtMs - Date.now();
+
+      // During cooldown (7 days), do not send another reset email.
+      // Also covers inconsistent token state if cooldown timestamp exists.
+      const isCooldownWindow = remainingMs > RESET_LINK_TTL_MS;
+      if (remainingMs > 0 && (!user.reset_token || isCooldownWindow)) {
+        return res.status(429).json({
+          message: "You can only change your password once every 7 days.",
+          statusCode: 429,
+        });
+      }
+    }
+
+    const resetToken = uuidv4();
+    const tokenExpiry = new Date(Date.now() + RESET_LINK_TTL_MS);
+    await authModel.setResetToken(user.user_id, resetToken, tokenExpiry);
+
+    let emailResult;
+    try {
+      emailResult = await sendEmail({
+        to: email,
+        subject: "Reset Your BIOCELLA Password",
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #113F67;">BIOCELLA Password Reset</h2>
+            <p>We received a request to reset your password.</p>
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${APP_BASE_URL}/forgot-password/reset?token=${resetToken}"
+                 style="background-color: #113F67; color: white; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
+                Reset Password
+              </a>
+            </div>
+            <p><strong>This link will expire in 1 hour.</strong></p>
+            <p>If you did not request this, you can safely ignore this email.</p>
+            <p>Sincerely,<br/><strong>BIOCELLA Team</strong></p>
+          </div>
+        `,
+      });
+    } catch (emailError) {
+      console.error("Forgot password email error:", emailError);
+    }
+
+    if (!didEmailSend(emailResult, email)) {
+      return res.status(HttpStatus.SERVICE_UNAVAILABLE).json({
+        message: "If an account exists, we could not send the reset email right now. Please try again later.",
+        statusCode: HttpStatus.SERVICE_UNAVAILABLE,
+      });
+    }
+
+    return res.status(HttpStatus.OK).json({
+      message: "If an account exists, a reset link has been sent to your email.",
+      statusCode: HttpStatus.OK,
+    });
+  } catch (error) {
+    console.error("Forgot Password Error:", error);
+    return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+      message: "An unexpected error occurred during forgot password.",
       error: error.message || error,
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
     });
@@ -225,10 +348,11 @@ exports.adminInvite = async (req, res) => {
     }
 
     const resetToken = uuidv4();
-    const userId = await authModel.createUserByAdmin(email, resetToken, normalizedRole);
+    const tokenExpiry = new Date(Date.now() + RESET_LINK_TTL_MS);
 
+    let emailResult;
     try {
-      await sendEmail({
+      emailResult = await sendEmail({
         to: email,
         subject: "Set your password to access BIOCELLA",
         html: `
@@ -251,6 +375,15 @@ exports.adminInvite = async (req, res) => {
     } catch (emailError) {
       console.error("Admin invite email error:", emailError);
     }
+
+    if (!didEmailSend(emailResult, email)) {
+      return res.status(HttpStatus.SERVICE_UNAVAILABLE).json({
+        message: "Invitation could not be completed because setup email was not sent. Please try again later.",
+        statusCode: HttpStatus.SERVICE_UNAVAILABLE,
+      });
+    }
+
+    const userId = await authModel.createUserByAdmin(email, resetToken, normalizedRole, tokenExpiry);
 
     return res.status(HttpStatus.CREATED).json({
       message: "User invited successfully. A password setup link has been sent to the email.",
@@ -286,7 +419,7 @@ exports.resetPassword = async (req, res) => {
     if (!authModel.validatePasswordStrength(newPassword)) {
       return res.status(HttpStatus.BAD_REQUEST).json({
         message:
-          "Password must be at least 6 characters long and contain at least one uppercase, one lowercase, and a number.",
+          "Password must be at least 8 characters long and contain at least one uppercase, one lowercase, and a number.",
         statusCode: HttpStatus.BAD_REQUEST,
       });
     }
@@ -301,9 +434,33 @@ exports.resetPassword = async (req, res) => {
       });
     }
 
+    // Only registered accounts can use forgot-password reset.
+    if (!user.password) {
+      return res.status(HttpStatus.CONFLICT).json({
+        message: "Account is not registered.",
+        statusCode: HttpStatus.CONFLICT,
+      });
+    }
+
+    if (user.reset_token_expires && new Date() > new Date(user.reset_token_expires)) {
+      return res.status(HttpStatus.UNAUTHORIZED).json({
+        message: "This reset link has expired.",
+        statusCode: HttpStatus.UNAUTHORIZED,
+      });
+    }
+
+    const isSameAsOld = await authModel.comparePassword(newPassword, user.password);
+    if (isSameAsOld) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        message: "New password must be different from your current password.",
+        statusCode: HttpStatus.BAD_REQUEST,
+      });
+    }
+
     // Hash new password and update user
     const hashedPassword = await authModel.hashPassword(newPassword);
-    await authModel.setPassword(user.user_id, hashedPassword);
+    const nextResetAllowedAt = new Date(Date.now() + RESET_COOLDOWN_MS);
+    await authModel.setPassword(user.user_id, hashedPassword, nextResetAllowedAt);
 
     return res.status(HttpStatus.OK).json({
       message: "Password has been successfully reset.",
@@ -322,13 +479,35 @@ exports.resetPassword = async (req, res) => {
 // FINALIZE SETUP
 exports.finalizeSetup = async (req, res) => {
   try {
-    const { email, first_name, last_name, department, course, password, retypePassword } = req.body;
+    const { token, email, first_name, last_name, profile_photo, department, course, password, retypePassword } = req.body;
 
     // Validate required fields
-    if (!email || !first_name || !last_name || !department || !course || !password || !retypePassword) {
+    if (!token || !email || !first_name || !last_name || !department || !course || !password || !retypePassword) {
       return res.status(HttpStatus.BAD_REQUEST).json({
         message: "All fields are required.",
         statusCode: HttpStatus.BAD_REQUEST,
+      });
+    }
+
+    const userByToken = await authModel.getUserByResetToken(token);
+    if (!userByToken) {
+      return res.status(HttpStatus.UNAUTHORIZED).json({
+        message: "Invalid or expired token.",
+        statusCode: HttpStatus.UNAUTHORIZED,
+      });
+    }
+
+    if (userByToken.email.toLowerCase() !== email.toLowerCase()) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        message: "Email does not match this setup token.",
+        statusCode: HttpStatus.BAD_REQUEST,
+      });
+    }
+
+    if (userByToken.password) {
+      return res.status(HttpStatus.CONFLICT).json({
+        message: "Account setup is already complete. Please log in.",
+        statusCode: HttpStatus.CONFLICT,
       });
     }
 
@@ -344,7 +523,7 @@ exports.finalizeSetup = async (req, res) => {
     if (!authModel.validatePasswordStrength(password)) {
       return res.status(HttpStatus.BAD_REQUEST).json({
         message:
-          "Password must be at least 6 characters long and contain at least one uppercase, one lowercase, and a number.",
+          "Password must be at least 8 characters long and contain at least one uppercase, one lowercase, and a number.",
         statusCode: HttpStatus.BAD_REQUEST,
       });
     }
@@ -353,7 +532,15 @@ exports.finalizeSetup = async (req, res) => {
     const hashedPassword = await authModel.hashPassword(password);
 
     // Update user with profile information
-    await authModel.finalizeUserSetup(email, first_name, last_name, department, course, hashedPassword);
+    await authModel.finalizeUserSetup(
+      userByToken.user_id,
+      first_name,
+      last_name,
+      profile_photo || null,
+      department,
+      course,
+      hashedPassword
+    );
 
     return res.status(HttpStatus.OK).json({
       message: "Signup finalized successfully.",
@@ -427,6 +614,8 @@ exports.getUserByToken = async (req, res) => {
         department: user.department,
         course: user.course,
         role: user.role,
+        is_setup_complete: user.is_setup_complete || 0,
+        profile_photo: user.profile_photo || null,
       },
       statusCode: HttpStatus.OK,
     });

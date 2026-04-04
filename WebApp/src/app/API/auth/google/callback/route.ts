@@ -1,39 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { google } from "googleapis";
-import { RowDataPacket } from "mysql2";
-import { query } from "@/app/API/lib/mysql";
 
 // Google redirects here after the student signs in.
 // Fetch their profile, verify the email matches the one they registered,
 // then redirect to the finalize form with profile data in the URL.
 
-interface UserRow extends RowDataPacket {
-  user_id: number;
-  email: string;
-  is_setup_complete: number;
-}
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || "https://22102959.dcism.org/biocella-api";
 
-const getOAuthClient = () =>
-  new google.auth.OAuth2(
-    process.env.GMAIL_CLIENT_ID!,
-    process.env.GMAIL_CLIENT_SECRET!,
-    `${process.env.NEXT_PUBLIC_APP_BASE_URL!}/API/auth/google/callback`
-  );
+const oauth2Client = new google.auth.OAuth2(
+  process.env.GMAIL_CLIENT_ID,
+  process.env.GMAIL_CLIENT_SECRET,
+  `${process.env.NEXT_PUBLIC_APP_BASE_URL}/API/auth/google/callback`
+);
 
 export async function GET(request: NextRequest) {
-  if (!process.env.GMAIL_CLIENT_ID || !process.env.GMAIL_CLIENT_SECRET || !process.env.NEXT_PUBLIC_APP_BASE_URL) {
-    return NextResponse.json(
-      { message: "Google OAuth is not configured." },
-      { status: 500 }
-    );
-  }
-
-  const oauth2Client = getOAuthClient();
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const state = searchParams.get("state"); // this is the registration token
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_BASE_URL!;
+  const baseUrl = process.env.NEXT_PUBLIC_APP_BASE_URL || "";
   const errorRedirect = (msg: string) =>
     NextResponse.redirect(
       `${baseUrl}/signup/finalize?error=${encodeURIComponent(msg)}`
@@ -56,16 +42,26 @@ export async function GET(request: NextRequest) {
       return errorRedirect("Could not retrieve email from Google.");
     }
 
-    // Look up the user by the registration token (state)
-    const users = await query<UserRow>(
-      "SELECT user_id, email, is_setup_complete FROM user WHERE reset_token = ?",
-      [state]
-    );
+    // Validate token and fetch user from backend API.
+    // This avoids requiring DB credentials in the frontend deployment.
+    const userResponse = await fetch(`${API_BASE_URL}/auth/get-user-by-token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: state }),
+    });
 
-    const user = users[0];
+    const raw = await userResponse.text();
+    let parsed;
+    try {
+      parsed = raw ? JSON.parse(raw) : {};
+    } catch {
+      parsed = {};
+    }
 
-    if (!user) {
-      return errorRedirect("Invalid or expired registration link.");
+    const user = parsed?.user;
+
+    if (!userResponse.ok || !user) {
+      return errorRedirect(parsed?.message || "Invalid or expired registration link.");
     }
 
     if (user.is_setup_complete === 1) {
