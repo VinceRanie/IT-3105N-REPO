@@ -52,6 +52,7 @@ const decodeJwtPayloadRole = (token: string): string | undefined => {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const pathnameLower = pathname.toLowerCase();
+  const isLandingPage = pathname === "/";
 
   // Normalize common lowercase URL typed in browser to the actual route casing.
   if (pathname === "/adminui/admindashboard") {
@@ -96,6 +97,10 @@ export async function proxy(request: NextRequest) {
   if (!JWT_SECRET) {
     const fallbackRole = decodeJwtPayloadRole(token);
 
+    if (isLandingPage && fallbackRole) {
+      return NextResponse.redirect(new URL(getDashboardPath(fallbackRole), request.url));
+    }
+
     if (isAuthPage && fallbackRole) {
       return NextResponse.redirect(new URL(getDashboardPath(fallbackRole), request.url));
     }
@@ -119,6 +124,10 @@ export async function proxy(request: NextRequest) {
     const rawRole = payload.role as string | undefined;
     const role = rawRole ? normalizeRole(rawRole) : undefined;
 
+    if (isLandingPage && role) {
+      return NextResponse.redirect(new URL(getDashboardPath(role), request.url));
+    }
+
     if (isAuthPage && role) {
       return NextResponse.redirect(new URL(getDashboardPath(role), request.url));
     }
@@ -141,6 +150,7 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
+    "/",
     "/AdminUI/:path*",
     "/adminui/:path*",
     "/UsersUI/:path*",
