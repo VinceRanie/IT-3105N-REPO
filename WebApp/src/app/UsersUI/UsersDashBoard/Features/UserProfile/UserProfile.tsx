@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { User, GraduationCap, Shield, Lock, Save, Eye, EyeOff, Upload } from "lucide-react";
+import { User, GraduationCap, Shield, Lock, Save, Upload } from "lucide-react";
 import Image from "next/image";
 import { API_URL } from "@/config/api";
 import { getAuthHeader } from "@/app/utils/authUtil";
@@ -72,15 +72,10 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [sendingReset, setSendingReset] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [profileImageInput, setProfileImageInput] = useState("");
   const [profileImageSrc, setProfileImageSrc] = useState(DEFAULT_PROFILE_IMAGE);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [formData, setFormData] = useState({
-    newPassword: "",
-    confirmPassword: ""
-  });
 
   const fetchProfile = async () => {
     try {
@@ -116,18 +111,8 @@ export default function ProfilePage() {
     fetchProfile();
   }, []);
 
-  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
-
   const handleSave = async () => {
     if (!userData) {
-      return;
-    }
-
-    if (formData.newPassword && formData.newPassword !== formData.confirmPassword) {
-      alert("Password Mismatch: New password and confirm password do not match.");
       return;
     }
 
@@ -142,11 +127,6 @@ export default function ProfilePage() {
 
       if (canEditProfilePhoto) {
         body.profile_photo = profileImageInput.trim();
-      }
-
-      if (formData.newPassword) {
-        body.newPassword = formData.newPassword;
-        body.confirmPassword = formData.confirmPassword;
       }
 
       const headers = {
@@ -169,7 +149,6 @@ export default function ProfilePage() {
       const updatedPhoto = (data.user as UserProfile).profile_photo || "";
       setProfileImageInput(updatedPhoto);
       setProfileImageSrc(resolveProfilePhotoSrc(updatedPhoto));
-      setFormData({ newPassword: "", confirmPassword: "" });
       alert("Profile Updated: Your profile has been successfully updated.");
     } catch (err: any) {
       setError(err.message || "Failed to update profile.");
@@ -213,6 +192,32 @@ export default function ProfilePage() {
     } finally {
       setUploadingPhoto(false);
       event.target.value = "";
+    }
+  };
+
+  const handleChangePassword = async () => {
+    try {
+      setSendingReset(true);
+      setError(null);
+
+      const response = await fetch(`${API_URL}/auth/forgot-password-authenticated`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeader(),
+        },
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to request password reset.");
+      }
+
+      alert("A password reset email has been sent to your account email.");
+    } catch (err: any) {
+      setError(err.message || "Failed to request password reset.");
+    } finally {
+      setSendingReset(false);
     }
   };
 
@@ -374,45 +379,15 @@ export default function ProfilePage() {
           <h2 className="flex items-center gap-2 text-lg font-semibold text-[#113F67]">
             <Lock className="h-5 w-5 text-[#113F67]" /> Change Password
           </h2>
-          <p className="text-sm text-gray-500">Update your account password</p>
-          <div>
-            <label className="block text-sm font-medium text-[#113F67]">New Password</label>
-            <div className="relative">
-              <input
-                className="w-full border rounded p-2 text-[#113F67]"
-                type={showPassword ? "text" : "password"}
-                name="newPassword"
-                value={formData.newPassword}
-                onChange={handlePasswordChange}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-2 top-2 text-gray-500 text-[#113F67]"
-              >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-[#113F67]">Confirm Password</label>
-            <div className="relative">
-              <input
-                className="w-full border rounded p-2 text-[#113F67]"
-                type={showConfirmPassword ? "text" : "password"}
-                name="confirmPassword"
-                value={formData.confirmPassword}
-                onChange={handlePasswordChange}
-              />
-              <button
-                type="button"
-                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                className="absolute right-2 top-2 text-gray-500"
-              >
-                {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </div>
-          </div>
+          <p className="text-sm text-gray-500">Send a reset link to your email to change your password.</p>
+          <button
+            type="button"
+            onClick={handleChangePassword}
+            disabled={sendingReset}
+            className="bg-[#113F67] text-white px-4 py-2 rounded-lg shadow cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {sendingReset ? "Sending..." : "Change Password"}
+          </button>
         </div>
 
         {/* Save */}

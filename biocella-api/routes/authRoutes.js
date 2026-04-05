@@ -7,6 +7,7 @@ const upload = require("../config/upload");
 router.post("/login", authController.login);
 router.post("/register", authController.register);
 router.post("/forgot-password", authController.forgotPassword);
+router.post("/forgot-password-authenticated", authController.requestPasswordResetAuthenticated);
 router.post("/reset-password", authController.resetPassword);
 router.post("/finalize-setup", authController.finalizeSetup);
 router.post("/get-user-by-token", authController.getUserByToken);

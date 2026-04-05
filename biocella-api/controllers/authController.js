@@ -62,6 +62,69 @@ const didEmailSend = (result, expectedRecipient = "") => {
   return true;
 };
 
+const issuePasswordResetForUser = async (user) => {
+  // Enforce cooldown after a successful password reset.
+  // After reset, token is cleared but reset_token_expires stores next allowed request time.
+  if (user.reset_token_expires) {
+    const expiresAtMs = new Date(user.reset_token_expires).getTime();
+    const remainingMs = expiresAtMs - Date.now();
+
+    // During cooldown (7 days), do not send another reset email.
+    // Also covers inconsistent token state if cooldown timestamp exists.
+    const isCooldownWindow = remainingMs > RESET_LINK_TTL_MS;
+    if (remainingMs > 0 && (!user.reset_token || isCooldownWindow)) {
+      return {
+        ok: false,
+        statusCode: 429,
+        message: "You can only change your password once every 7 days.",
+      };
+    }
+  }
+
+  const resetToken = uuidv4();
+  const tokenExpiry = new Date(Date.now() + RESET_LINK_TTL_MS);
+  await authModel.setResetToken(user.user_id, resetToken, tokenExpiry);
+
+  let emailResult;
+  try {
+    emailResult = await sendEmail({
+      to: user.email,
+      subject: "Reset Your BIOCELLA Password",
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #113F67;">BIOCELLA Password Reset</h2>
+          <p>We received a request to reset your password.</p>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${APP_BASE_URL}/forgot-password/reset?token=${resetToken}"
+               style="background-color: #113F67; color: white; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
+              Reset Password
+            </a>
+          </div>
+          <p><strong>This link will expire in 1 hour.</strong></p>
+          <p>If you did not request this, you can safely ignore this email.</p>
+          <p>Sincerely,<br/><strong>BIOCELLA Team</strong></p>
+        </div>
+      `,
+    });
+  } catch (emailError) {
+    console.error("Forgot password email error:", emailError);
+  }
+
+  if (!didEmailSend(emailResult, user.email)) {
+    return {
+      ok: false,
+      statusCode: HttpStatus.SERVICE_UNAVAILABLE,
+      message: "If an account exists, we could not send the reset email right now. Please try again later.",
+    };
+  }
+
+  return {
+    ok: true,
+    statusCode: HttpStatus.OK,
+    message: "Email sent successfully",
+  };
+};
+
 // LOGIN
 exports.login = async (req, res) => {
   try {
@@ -267,67 +330,59 @@ exports.forgotPassword = async (req, res) => {
       });
     }
 
-    // Enforce cooldown after a successful password reset.
-    // After reset, token is cleared but reset_token_expires stores next allowed request time.
-    if (user.reset_token_expires) {
-      const expiresAtMs = new Date(user.reset_token_expires).getTime();
-      const remainingMs = expiresAtMs - Date.now();
-
-      // During cooldown (7 days), do not send another reset email.
-      // Also covers inconsistent token state if cooldown timestamp exists.
-      const isCooldownWindow = remainingMs > RESET_LINK_TTL_MS;
-      if (remainingMs > 0 && (!user.reset_token || isCooldownWindow)) {
-        return res.status(429).json({
-          message: "You can only change your password once every 7 days.",
-          statusCode: 429,
-        });
-      }
-    }
-
-    const resetToken = uuidv4();
-    const tokenExpiry = new Date(Date.now() + RESET_LINK_TTL_MS);
-    await authModel.setResetToken(user.user_id, resetToken, tokenExpiry);
-
-    let emailResult;
-    try {
-      emailResult = await sendEmail({
-        to: email,
-        subject: "Reset Your BIOCELLA Password",
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #113F67;">BIOCELLA Password Reset</h2>
-            <p>We received a request to reset your password.</p>
-            <div style="text-align: center; margin: 30px 0;">
-              <a href="${APP_BASE_URL}/forgot-password/reset?token=${resetToken}"
-                 style="background-color: #113F67; color: white; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
-                Reset Password
-              </a>
-            </div>
-            <p><strong>This link will expire in 1 hour.</strong></p>
-            <p>If you did not request this, you can safely ignore this email.</p>
-            <p>Sincerely,<br/><strong>BIOCELLA Team</strong></p>
-          </div>
-        `,
-      });
-    } catch (emailError) {
-      console.error("Forgot password email error:", emailError);
-    }
-
-    if (!didEmailSend(emailResult, email)) {
-      return res.status(HttpStatus.SERVICE_UNAVAILABLE).json({
-        message: "If an account exists, we could not send the reset email right now. Please try again later.",
-        statusCode: HttpStatus.SERVICE_UNAVAILABLE,
-      });
-    }
-
-    return res.status(HttpStatus.OK).json({
-      message: "Email sent successfully",
-      statusCode: HttpStatus.OK,
+    const resetResult = await issuePasswordResetForUser(user);
+    return res.status(resetResult.statusCode).json({
+      message: resetResult.message,
+      statusCode: resetResult.statusCode,
     });
   } catch (error) {
     console.error("Forgot Password Error:", error);
     return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
       message: "An unexpected error occurred during forgot password.",
+      error: error.message || error,
+      statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+    });
+  }
+};
+
+// REQUEST PASSWORD RESET FOR AUTHENTICATED USER
+exports.requestPasswordResetAuthenticated = async (req, res) => {
+  try {
+    const authUser = getAuthenticatedUserFromRequest(req);
+    const userId = authUser?.userId;
+
+    if (!userId) {
+      return res.status(HttpStatus.UNAUTHORIZED).json({
+        message: "User not authenticated.",
+        statusCode: HttpStatus.UNAUTHORIZED,
+      });
+    }
+
+    const profile = await authModel.getUserProfileById(userId);
+    if (!profile?.email) {
+      return res.status(HttpStatus.NOT_FOUND).json({
+        message: "User profile not found.",
+        statusCode: HttpStatus.NOT_FOUND,
+      });
+    }
+
+    const user = await authModel.getUserByEmail(profile.email);
+    if (!user) {
+      return res.status(HttpStatus.NOT_FOUND).json({
+        message: "User profile not found.",
+        statusCode: HttpStatus.NOT_FOUND,
+      });
+    }
+
+    const resetResult = await issuePasswordResetForUser(user);
+    return res.status(resetResult.statusCode).json({
+      message: resetResult.message,
+      statusCode: resetResult.statusCode,
+    });
+  } catch (error) {
+    console.error("Authenticated Reset Password Request Error:", error);
+    return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+      message: "An unexpected error occurred during password reset request.",
       error: error.message || error,
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
     });
