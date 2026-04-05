@@ -3,7 +3,7 @@ import { jwtVerify } from "jose";
 
 const JWT_TOKEN = process.env.JWT_TOKEN;
 const JWT_SECRET = JWT_TOKEN ? new TextEncoder().encode(JWT_TOKEN) : null;
-const ENABLE_LOCAL_ADMIN_BYPASS = process.env.LOCAL_ADMIN_BYPASS === "true";
+const ENABLE_LOCAL_BYPASS = process.env.LOCAL_BYPASS === "true";
 
 const roleAccess: Record<string, string[]> = {
   "/AdminUI": ["admin"],
@@ -65,10 +65,9 @@ export async function proxy(request: NextRequest) {
     request.nextUrl.hostname === "localhost" ||
     request.nextUrl.hostname === "127.0.0.1";
   const shouldBypassAdminAuth =
-    ENABLE_LOCAL_ADMIN_BYPASS &&
+    ENABLE_LOCAL_BYPASS &&
     process.env.NODE_ENV !== "production" &&
-    isLocalHost &&
-    pathnameLower.startsWith("/adminui");
+    isLocalHost
 
   // Allow direct Admin UI access for local-only visual testing when explicitly enabled.
   if (shouldBypassAdminAuth) {
