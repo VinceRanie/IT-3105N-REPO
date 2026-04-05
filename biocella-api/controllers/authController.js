@@ -19,6 +19,7 @@ const HttpStatus = {
   CREATED: 201,
   BAD_REQUEST: 400,
   UNAUTHORIZED: 401,
+  NOT_FOUND: 404,
   CONFLICT: 409,
   SERVICE_UNAVAILABLE: 503,
   INTERNAL_SERVER_ERROR: 500,
@@ -28,6 +29,20 @@ const JWT_SECRET = process.env.JWT_TOKEN || "your-secret-key-change-in-productio
 const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_BASE_URL || "http://localhost:3000";
 const RESET_LINK_TTL_MS = 60 * 60 * 1000; // 1 hour
 const RESET_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+const getAuthenticatedUserFromRequest = (req) => {
+  const authHeader = req.headers.authorization || "";
+  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  if (!token) {
+    return null;
+  }
+
+  try {
+    return jwt.verify(token, JWT_SECRET);
+  } catch (_error) {
+    return null;
+  }
+};
 
 const didEmailSend = (result, expectedRecipient = "") => {
   if (!result) return false;
@@ -558,7 +573,8 @@ exports.finalizeSetup = async (req, res) => {
 // GET USER PROFILE
 exports.getUserProfile = async (req, res) => {
   try {
-    const userId = req.user?.userId; // Assuming middleware extracts this from JWT
+    const authUser = getAuthenticatedUserFromRequest(req);
+    const userId = authUser?.userId;
 
     if (!userId) {
       return res.status(HttpStatus.UNAUTHORIZED).json({
@@ -567,13 +583,117 @@ exports.getUserProfile = async (req, res) => {
       });
     }
 
-    // TODO: Implement get user profile logic
+    const user = await authModel.getUserProfileById(userId);
+
+    if (!user) {
+      return res.status(HttpStatus.NOT_FOUND).json({
+        message: "User profile not found.",
+        statusCode: HttpStatus.NOT_FOUND,
+      });
+    }
+
     return res.status(HttpStatus.OK).json({
       message: "User profile retrieved.",
+      user,
       statusCode: HttpStatus.OK,
     });
   } catch (error) {
     console.error("Get User Profile Error:", error);
+    return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+      message: "An unexpected error occurred.",
+      error: error.message || error,
+      statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+    });
+  }
+};
+
+// UPDATE USER PROFILE
+exports.updateUserProfile = async (req, res) => {
+  try {
+    const authUser = getAuthenticatedUserFromRequest(req);
+    const userId = authUser?.userId;
+
+    if (!userId) {
+      return res.status(HttpStatus.UNAUTHORIZED).json({
+        message: "User not authenticated.",
+        statusCode: HttpStatus.UNAUTHORIZED,
+      });
+    }
+
+    const existingUser = await authModel.getUserProfileById(userId);
+    if (!existingUser) {
+      return res.status(HttpStatus.NOT_FOUND).json({
+        message: "User profile not found.",
+        statusCode: HttpStatus.NOT_FOUND,
+      });
+    }
+
+    const {
+      department,
+      course,
+      profile_photo,
+      newPassword,
+      confirmPassword,
+    } = req.body || {};
+
+    const nextDepartment = typeof department === "string" ? department.trim() : (existingUser.department || "");
+    const nextCourse = typeof course === "string" ? course.trim() : (existingUser.course || "");
+    const nextProfilePhoto = typeof profile_photo === "string"
+      ? profile_photo.trim()
+      : (existingUser.profile_photo || null);
+
+    if (!nextDepartment || !nextCourse) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        message: "Department and course are required.",
+        statusCode: HttpStatus.BAD_REQUEST,
+      });
+    }
+
+    let hashedPassword = null;
+    const hasPasswordInput = Boolean(newPassword || confirmPassword);
+
+    if (hasPasswordInput) {
+      if (!newPassword || !confirmPassword) {
+        return res.status(HttpStatus.BAD_REQUEST).json({
+          message: "Both newPassword and confirmPassword are required.",
+          statusCode: HttpStatus.BAD_REQUEST,
+        });
+      }
+
+      if (newPassword !== confirmPassword) {
+        return res.status(HttpStatus.BAD_REQUEST).json({
+          message: "Passwords do not match.",
+          statusCode: HttpStatus.BAD_REQUEST,
+        });
+      }
+
+      if (!authModel.validatePasswordStrength(newPassword)) {
+        return res.status(HttpStatus.BAD_REQUEST).json({
+          message: "Password must be at least 8 characters long and contain at least one uppercase, one lowercase, and a number.",
+          statusCode: HttpStatus.BAD_REQUEST,
+        });
+      }
+
+      hashedPassword = await authModel.hashPassword(newPassword);
+    }
+
+    await authModel.updateUserProfile({
+      userId,
+      department: nextDepartment,
+      course: nextCourse,
+      profilePhoto: nextProfilePhoto || null,
+      hashedPassword,
+    });
+
+    const updatedUser = await authModel.getUserProfileById(userId);
+
+    return res.status(HttpStatus.OK).json({
+      message: "Profile updated successfully.",
+      user: updatedUser,
+      statusCode: HttpStatus.OK,
+    });
+  } catch (error) {
+    console.error("Update User Profile Error:", error);
     return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
       message: "An unexpected error occurred.",
       error: error.message || error,
