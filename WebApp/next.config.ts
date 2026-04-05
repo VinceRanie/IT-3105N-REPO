@@ -16,6 +16,14 @@ const nextConfig: NextConfig = {
         hostname: '22102959.dcism.org',
         pathname: '/biocella-api/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'lh3.googleusercontent.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'googleusercontent.com',
+      },
     ],
   },
 };

@@ -50,6 +50,8 @@ const roleLabelMap: Record<string, string> = {
   student: "Student",
 };
 
+const DEFAULT_PROFILE_IMAGE = "/UI/img/corporateWorker.jpg";
+
 export default function ProfilePage() {
   const [selectedDepartment, setSelectedDepartment] = useState("");
   const [selectedCourse, setSelectedCourse] = useState("");
@@ -57,6 +59,8 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [profileImageInput, setProfileImageInput] = useState("");
+  const [profileImageSrc, setProfileImageSrc] = useState(DEFAULT_PROFILE_IMAGE);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [formData, setFormData] = useState({
@@ -85,6 +89,8 @@ export default function ProfilePage() {
       setUserData(profile);
       setSelectedDepartment(profile.department || "");
       setSelectedCourse(profile.course || "");
+      setProfileImageInput(profile.profile_photo || "");
+      setProfileImageSrc(profile.profile_photo || DEFAULT_PROFILE_IMAGE);
     } catch (err: any) {
       setError(err.message || "Failed to load profile.");
     } finally {
@@ -118,7 +124,7 @@ export default function ProfilePage() {
       const body: Record<string, string> = {
         department: selectedDepartment,
         course: selectedCourse,
-        profile_photo: userData.profile_photo || "",
+        profile_photo: profileImageInput.trim(),
       };
 
       if (formData.newPassword) {
@@ -143,6 +149,9 @@ export default function ProfilePage() {
       }
 
       setUserData(data.user as UserProfile);
+  const updatedPhoto = (data.user as UserProfile).profile_photo || "";
+  setProfileImageInput(updatedPhoto);
+  setProfileImageSrc(updatedPhoto || DEFAULT_PROFILE_IMAGE);
       setFormData({ newPassword: "", confirmPassword: "" });
       alert("Profile Updated: Your profile has been successfully updated.");
     } catch (err: any) {
@@ -187,11 +196,12 @@ export default function ProfilePage() {
         <div className="flex justify-center items-center mt-4">
   <div className="relative w-40 h-40">
     <Image
-      src={userData.profile_photo || "/UI/img/corporateWorker.jpg"}
+      src={profileImageSrc || DEFAULT_PROFILE_IMAGE}
       alt={`${userData.first_name} ${userData.last_name}`}
       fill
       className="rounded-full object-cover"
       sizes="120px"
+      onError={() => setProfileImageSrc(DEFAULT_PROFILE_IMAGE)}
     />
   </div>
 </div>
@@ -218,6 +228,20 @@ export default function ProfilePage() {
           <div>
             <label className="block text-sm font-medium text-[#113F67]">Email</label>
             <input className="w-full border rounded p-2 bg-gray-100 text-[#113F67]" value={userData.email || ""} readOnly />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-[#113F67]">Profile Photo URL</label>
+            <input
+              className="w-full border rounded p-2 text-[#113F67]"
+              value={profileImageInput}
+              onChange={(e) => {
+                const nextValue = e.target.value;
+                setProfileImageInput(nextValue);
+                setProfileImageSrc(nextValue.trim() || DEFAULT_PROFILE_IMAGE);
+              }}
+              placeholder="https://..."
+            />
+            <p className="mt-1 text-xs text-gray-500">Leave empty to use the default profile image.</p>
           </div>
           <div>
             <label className="block text-sm font-medium flex items-center gap-2 text-[#113F67]">

@@ -1,19 +1,24 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { User, Mail, Building2, Calendar, Edit2 } from "lucide-react";
 import { useProtectedRoute } from "@/app/hooks/useProtectedRoute";
-import { getUserData } from "@/app/utils/authUtil";
+import { API_URL } from "@/config/api";
+import { getAuthHeader } from "@/app/utils/authUtil";
 
 interface UserProfile {
   user_id: number;
   email: string;
   first_name: string;
   last_name: string;
-  department: string;
+  department: string | null;
+  course: string | null;
+  profile_photo: string | null;
   role: string;
-  created_at: string;
 }
+
+const DEFAULT_PROFILE_IMAGE = "/UI/img/corporateWorker.jpg";
 
 export default function RAStaffProfile() {
   // Protect route
@@ -22,43 +27,99 @@ export default function RAStaffProfile() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [imageSrc, setImageSrc] = useState(DEFAULT_PROFILE_IMAGE);
   const [formData, setFormData] = useState({
     first_name: "",
     last_name: "",
     department: "",
+    course: "",
+    profile_photo: "",
   });
 
   useEffect(() => {
-    const userData = getUserData();
-    if (userData) {
-      setProfile({
-        user_id: userData.userId,
-        email: userData.email,
-        first_name: "",
-        last_name: "",
-        department: "",
-        role: "Staff",
-        created_at: new Date().toISOString(),
-      });
-      setFormData({
-        first_name: "",
-        last_name: "",
-        department: "",
-      });
-    }
-    setLoading(false);
+    const fetchProfile = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const headers = {
+          "Content-Type": "application/json",
+          ...getAuthHeader(),
+        };
+
+        const response = await fetch(`${API_URL}/auth/profile`, { headers });
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.message || "Failed to load profile.");
+        }
+
+        const user = data.user as UserProfile;
+        setProfile(user);
+        setFormData({
+          first_name: user.first_name || "",
+          last_name: user.last_name || "",
+          department: user.department || "",
+          course: user.course || "",
+          profile_photo: user.profile_photo || "",
+        });
+        setImageSrc(user.profile_photo || DEFAULT_PROFILE_IMAGE);
+      } catch (err: any) {
+        setError(err.message || "Failed to load profile.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProfile();
   }, []);
 
   const handleSave = async () => {
-    // In a real app, you would send this to the backend
-    if (profile) {
-      setProfile({
-        ...profile,
-        first_name: formData.first_name,
-        last_name: formData.last_name,
-        department: formData.department,
+    if (!profile) {
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError(null);
+
+      const headers = {
+        "Content-Type": "application/json",
+        ...getAuthHeader(),
+      };
+
+      const response = await fetch(`${API_URL}/auth/profile`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({
+          department: formData.department,
+          course: formData.course,
+          profile_photo: formData.profile_photo.trim(),
+        }),
       });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to update profile.");
+      }
+
+      const updatedUser = data.user as UserProfile;
+      setProfile(updatedUser);
+      setFormData({
+        first_name: updatedUser.first_name || "",
+        last_name: updatedUser.last_name || "",
+        department: updatedUser.department || "",
+        course: updatedUser.course || "",
+        profile_photo: updatedUser.profile_photo || "",
+      });
+      setImageSrc(updatedUser.profile_photo || DEFAULT_PROFILE_IMAGE);
       setIsEditing(false);
+    } catch (err: any) {
+      setError(err.message || "Failed to update profile.");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -66,8 +127,13 @@ export default function RAStaffProfile() {
     return <div className="text-center py-10">Loading profile...</div>;
   }
 
+  if (!profile) {
+    return <div className="text-center py-10 text-red-600">{error || "Unable to load profile."}</div>;
+  }
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
+      {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
       {/* Header */}
       <div className="bg-white rounded-lg shadow p-6">
         <div className="flex justify-between items-center">
@@ -93,10 +159,14 @@ export default function RAStaffProfile() {
           <div className="grid md:grid-cols-2 gap-8">
             {/* Left side - Avatar & Basic Info */}
             <div className="flex flex-col items-center md:items-start">
-              <div className="w-24 h-24 bg-gradient-to-br from-[#113F67] to-[#0d2947] rounded-full flex items-center justify-center mb-4">
-                <span className="text-4xl font-bold text-white">
-                  {profile.first_name.charAt(0)}{profile.last_name.charAt(0)}
-                </span>
+              <div className="relative w-24 h-24 rounded-full overflow-hidden mb-4">
+                <Image
+                  src={imageSrc || DEFAULT_PROFILE_IMAGE}
+                  alt={`${profile.first_name} ${profile.last_name}`}
+                  fill
+                  className="object-cover"
+                  onError={() => setImageSrc(DEFAULT_PROFILE_IMAGE)}
+                />
               </div>
               <h2 className="text-2xl font-bold text-gray-900">
                 {profile.first_name} {profile.last_name}
@@ -141,15 +211,52 @@ export default function RAStaffProfile() {
                       className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
                     />
                   </div>
+                  <div>
+                    <label className="block text-sm font-semibold mb-2">Course</label>
+                    <input
+                      type="text"
+                      value={formData.course}
+                      onChange={(e) =>
+                        setFormData({ ...formData, course: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold mb-2">Profile Photo URL</label>
+                    <input
+                      type="url"
+                      value={formData.profile_photo}
+                      onChange={(e) => {
+                        const nextValue = e.target.value;
+                        setFormData({ ...formData, profile_photo: nextValue });
+                        setImageSrc(nextValue.trim() || DEFAULT_PROFILE_IMAGE);
+                      }}
+                      placeholder="https://..."
+                      className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">Leave empty to use default profile image.</p>
+                  </div>
                   <div className="flex gap-3 pt-4">
                     <button
                       onClick={handleSave}
-                      className="flex-1 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700"
+                      disabled={saving}
+                      className="flex-1 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 disabled:opacity-60"
                     >
-                      Save Changes
+                      {saving ? "Saving..." : "Save Changes"}
                     </button>
                     <button
-                      onClick={() => setIsEditing(false)}
+                      onClick={() => {
+                        setIsEditing(false);
+                        setFormData({
+                          first_name: profile.first_name || "",
+                          last_name: profile.last_name || "",
+                          department: profile.department || "",
+                          course: profile.course || "",
+                          profile_photo: profile.profile_photo || "",
+                        });
+                        setImageSrc(profile.profile_photo || DEFAULT_PROFILE_IMAGE);
+                      }}
                       className="flex-1 bg-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-400"
                     >
                       Cancel
@@ -171,6 +278,15 @@ export default function RAStaffProfile() {
                       <p className="text-xs text-gray-600">Department</p>
                       <p className="font-semibold text-gray-900">
                         {profile.department || "N/A"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                    <Building2 className="w-5 h-5 text-[#113F67]" />
+                    <div>
+                      <p className="text-xs text-gray-600">Course</p>
+                      <p className="font-semibold text-gray-900">
+                        {profile.course || "N/A"}
                       </p>
                     </div>
                   </div>
