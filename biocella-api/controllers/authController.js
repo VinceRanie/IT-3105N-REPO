@@ -244,11 +244,10 @@ exports.forgotPassword = async (req, res) => {
 
     const user = await authModel.getUserByEmail(email);
 
-    // Return a generic response to avoid exposing whether an email exists.
     if (!user) {
-      return res.status(HttpStatus.OK).json({
-        message: "If an account exists, a reset link has been sent to your email.",
-        statusCode: HttpStatus.OK,
+      return res.status(HttpStatus.NOT_FOUND).json({
+        message: "Email is not registered.",
+        statusCode: HttpStatus.NOT_FOUND,
       });
     }
 
@@ -306,7 +305,7 @@ exports.forgotPassword = async (req, res) => {
     }
 
     return res.status(HttpStatus.OK).json({
-      message: "If an account exists, a reset link has been sent to your email.",
+      message: "Email sent successfully",
       statusCode: HttpStatus.OK,
     });
   } catch (error) {
