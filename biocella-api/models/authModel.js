@@ -149,6 +149,14 @@ exports.updateUserProfile = async ({ userId, department, course, profilePhoto = 
   );
 };
 
+// UPDATE - Authenticated user profile photo only
+exports.updateUserProfilePhoto = async (userId, profilePhoto = null) => {
+  await db.execute(
+    "UPDATE user SET profile_photo = ? WHERE user_id = ?",
+    [profilePhoto, userId]
+  );
+};
+
 // UTILITY - Hash password
 exports.hashPassword = async (password) => {
   return await bcrypt.hash(password, 10);

@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const authController = require("../controllers/authController");
+const upload = require("../config/upload");
 
 // Authentication endpoints
 router.post("/login", authController.login);
@@ -13,6 +14,7 @@ router.post("/logout", authController.logout);
 router.get("/verify-token", authController.verifyToken);
 router.get("/profile", authController.getUserProfile);
 router.patch("/profile", authController.updateUserProfile);
+router.post("/profile/upload", upload.single("image"), authController.uploadProfilePhoto);
 router.post("/google-verify", authController.verifyGoogleProfile);
 
 // Admin user management

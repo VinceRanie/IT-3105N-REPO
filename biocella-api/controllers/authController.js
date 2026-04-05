@@ -642,13 +642,6 @@ exports.updateUserProfile = async (req, res) => {
       ? profile_photo.trim()
       : (existingUser.profile_photo || null);
 
-    if (!nextDepartment || !nextCourse) {
-      return res.status(HttpStatus.BAD_REQUEST).json({
-        message: "Department and course are required.",
-        statusCode: HttpStatus.BAD_REQUEST,
-      });
-    }
-
     let hashedPassword = null;
     const hasPasswordInput = Boolean(newPassword || confirmPassword);
 
@@ -694,6 +687,55 @@ exports.updateUserProfile = async (req, res) => {
     });
   } catch (error) {
     console.error("Update User Profile Error:", error);
+    return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+      message: "An unexpected error occurred.",
+      error: error.message || error,
+      statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+    });
+  }
+};
+
+// UPLOAD USER PROFILE PHOTO
+exports.uploadProfilePhoto = async (req, res) => {
+  try {
+    const authUser = getAuthenticatedUserFromRequest(req);
+    const userId = authUser?.userId;
+
+    if (!userId) {
+      return res.status(HttpStatus.UNAUTHORIZED).json({
+        message: "User not authenticated.",
+        statusCode: HttpStatus.UNAUTHORIZED,
+      });
+    }
+
+    if (!req.file) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        message: "Profile image file is required.",
+        statusCode: HttpStatus.BAD_REQUEST,
+      });
+    }
+
+    const existingUser = await authModel.getUserProfileById(userId);
+    if (!existingUser) {
+      return res.status(HttpStatus.NOT_FOUND).json({
+        message: "User profile not found.",
+        statusCode: HttpStatus.NOT_FOUND,
+      });
+    }
+
+    const profilePhotoPath = `/uploads/specimens/${req.file.filename}`;
+    await authModel.updateUserProfilePhoto(userId, profilePhotoPath);
+
+    const updatedUser = await authModel.getUserProfileById(userId);
+
+    return res.status(HttpStatus.OK).json({
+      message: "Profile photo uploaded successfully.",
+      profile_photo: profilePhotoPath,
+      user: updatedUser,
+      statusCode: HttpStatus.OK,
+    });
+  } catch (error) {
+    console.error("Upload Profile Photo Error:", error);
     return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
       message: "An unexpected error occurred.",
       error: error.message || error,

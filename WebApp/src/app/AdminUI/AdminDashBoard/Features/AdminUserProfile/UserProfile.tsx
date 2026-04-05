@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { User, GraduationCap, Shield, Lock, Save, Eye, EyeOff } from "lucide-react";
+import { User, GraduationCap, Shield, Lock, Save, Eye, EyeOff, Upload } from "lucide-react";
 import Image from "next/image";
 import { API_URL } from "@/config/api";
 import { getAuthHeader } from "@/app/utils/authUtil";
@@ -52,12 +52,26 @@ const roleLabelMap: Record<string, string> = {
 
 const DEFAULT_PROFILE_IMAGE = "/UI/img/corporateWorker.jpg";
 
+const resolveProfilePhotoSrc = (photo: string | null | undefined) => {
+  const trimmed = String(photo || "").trim();
+  if (!trimmed) {
+    return DEFAULT_PROFILE_IMAGE;
+  }
+
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    return trimmed;
+  }
+
+  return `${API_URL}${trimmed.startsWith("/") ? "" : "/"}${trimmed}`;
+};
+
 export default function ProfilePage() {
   const [selectedDepartment, setSelectedDepartment] = useState("");
   const [selectedCourse, setSelectedCourse] = useState("");
   const [userData, setUserData] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [profileImageInput, setProfileImageInput] = useState("");
   const [profileImageSrc, setProfileImageSrc] = useState(DEFAULT_PROFILE_IMAGE);
@@ -90,7 +104,7 @@ export default function ProfilePage() {
       setSelectedDepartment(profile.department || "");
       setSelectedCourse(profile.course || "");
       setProfileImageInput(profile.profile_photo || "");
-      setProfileImageSrc(profile.profile_photo || DEFAULT_PROFILE_IMAGE);
+      setProfileImageSrc(resolveProfilePhotoSrc(profile.profile_photo));
     } catch (err: any) {
       setError(err.message || "Failed to load profile.");
     } finally {
@@ -149,15 +163,53 @@ export default function ProfilePage() {
       }
 
       setUserData(data.user as UserProfile);
-  const updatedPhoto = (data.user as UserProfile).profile_photo || "";
-  setProfileImageInput(updatedPhoto);
-  setProfileImageSrc(updatedPhoto || DEFAULT_PROFILE_IMAGE);
+        const updatedPhoto = (data.user as UserProfile).profile_photo || "";
+        setProfileImageInput(updatedPhoto);
+        setProfileImageSrc(resolveProfilePhotoSrc(updatedPhoto));
       setFormData({ newPassword: "", confirmPassword: "" });
       alert("Profile Updated: Your profile has been successfully updated.");
     } catch (err: any) {
       setError(err.message || "Failed to update profile.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleProfileImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    try {
+      setUploadingPhoto(true);
+      setError(null);
+
+      const uploadFormData = new FormData();
+      uploadFormData.append("image", file);
+
+      const response = await fetch(`${API_URL}/auth/profile/upload`, {
+        method: "POST",
+        headers: {
+          ...getAuthHeader(),
+        },
+        body: uploadFormData,
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to upload profile photo.");
+      }
+
+      const updatedUser = data.user as UserProfile;
+      setUserData(updatedUser);
+      setProfileImageInput(updatedUser.profile_photo || "");
+      setProfileImageSrc(resolveProfilePhotoSrc(updatedUser.profile_photo));
+    } catch (err: any) {
+      setError(err.message || "Failed to upload profile photo.");
+    } finally {
+      setUploadingPhoto(false);
+      event.target.value = "";
     }
   };
 
@@ -237,11 +289,24 @@ export default function ProfilePage() {
               onChange={(e) => {
                 const nextValue = e.target.value;
                 setProfileImageInput(nextValue);
-                setProfileImageSrc(nextValue.trim() || DEFAULT_PROFILE_IMAGE);
+                setProfileImageSrc(resolveProfilePhotoSrc(nextValue));
               }}
               placeholder="https://..."
             />
             <p className="mt-1 text-xs text-gray-500">Leave empty to use the default profile image.</p>
+            <div className="mt-2">
+              <label className="inline-flex items-center gap-2 rounded-md bg-[#113F67] px-3 py-2 text-sm font-medium text-white cursor-pointer hover:bg-[#0d2f4d]">
+                <Upload className="h-4 w-4" />
+                {uploadingPhoto ? "Uploading..." : "Upload Image"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleProfileImageUpload}
+                  className="hidden"
+                  disabled={uploadingPhoto}
+                />
+              </label>
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium flex items-center gap-2 text-[#113F67]">
