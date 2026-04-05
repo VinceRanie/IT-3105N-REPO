@@ -44,6 +44,17 @@ exports.getUserByResetToken = async (token) => {
   return rows[0] || null;
 };
 
+// READ - Get user profile by user id
+exports.getUserProfileById = async (userId) => {
+  const [rows] = await db.execute(
+    `SELECT user_id, email, first_name, last_name, profile_photo, department, course, role, is_setup_complete
+     FROM user
+     WHERE user_id = ?`,
+    [userId]
+  );
+  return rows[0] || null;
+};
+
 // READ - Check if user exists
 exports.userExists = async (email) => {
   const [rows] = await db.execute(
@@ -115,6 +126,26 @@ exports.finalizeUserSetup = async (userId, firstName, lastName, profilePhoto, de
      SET first_name = ?, last_name = ?, profile_photo = ?, department = ?, course = ?, password = ?, is_setup_complete = 1, reset_token = NULL, reset_token_expires = NULL
      WHERE user_id = ?`,
     [firstName, lastName, profilePhoto, department, course, hashedPassword, userId]
+  );
+};
+
+// UPDATE - Authenticated user profile (department/course/photo, and optional password)
+exports.updateUserProfile = async ({ userId, department, course, profilePhoto = null, hashedPassword = null }) => {
+  if (hashedPassword) {
+    await db.execute(
+      `UPDATE user
+       SET department = ?, course = ?, profile_photo = ?, password = ?
+       WHERE user_id = ?`,
+      [department, course, profilePhoto, hashedPassword, userId]
+    );
+    return;
+  }
+
+  await db.execute(
+    `UPDATE user
+     SET department = ?, course = ?, profile_photo = ?
+     WHERE user_id = ?`,
+    [department, course, profilePhoto, userId]
   );
 };
 
