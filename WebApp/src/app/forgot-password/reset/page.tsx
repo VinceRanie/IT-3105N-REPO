@@ -50,6 +50,18 @@ function ForgotResetContent() {
     load();
   }, [token]);
 
+  useEffect(() => {
+    const handlePageShow = (event: PageTransitionEvent) => {
+      // When returning via browser back/forward cache, reload to re-validate token state.
+      if (event.persisted) {
+        window.location.reload();
+      }
+    };
+
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage(null);
@@ -80,7 +92,8 @@ function ForgotResetContent() {
       if (res.ok) {
         setMessage({ text: data.message || "Password reset successful.", type: "success" });
         setTimeout(() => {
-          window.location.href = "/Login";
+          // Replace history entry so browser back does not return to a reusable reset form.
+          window.location.replace("/Login");
         }, 1800);
       } else {
         setMessage({ text: data.message || "Failed to reset password.", type: "error" });

@@ -86,7 +86,7 @@ exports.createMicrobial = async (req, res) => {
     };
 
     // Parse JSON fields if they're strings (from multipart form data)
-    const jsonFields = ['custom_fields', 'biochemical_tests'];
+    const jsonFields = ['custom_fields', 'biochemical_tests', 'morphology'];
     jsonFields.forEach(field => {
       if (typeof specimenData[field] === 'string') {
         try {
@@ -281,7 +281,7 @@ exports.updateMicrobial = async (req, res) => {
     }
 
     // Parse JSON fields if they're strings (from multipart form data)
-    const jsonFields = ['custom_fields', 'biochemical_tests'];
+    const jsonFields = ['custom_fields', 'biochemical_tests', 'morphology'];
     jsonFields.forEach(field => {
       if (typeof updateData[field] === 'string') {
         try {
