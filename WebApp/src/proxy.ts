@@ -79,6 +79,11 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith(path)
   );
 
+  // Reset links should stay accessible even if the user is already logged in.
+  const isResetPasswordPage =
+    pathname === "/forgot-password/reset" ||
+    pathname.startsWith("/forgot-password/reset/");
+
   const isAuthPage = authPages.some(
     (path) => pathname === path || pathname.startsWith(`${path}/`)
   );
