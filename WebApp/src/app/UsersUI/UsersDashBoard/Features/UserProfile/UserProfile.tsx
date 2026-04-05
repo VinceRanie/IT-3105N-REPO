@@ -138,8 +138,11 @@ export default function ProfilePage() {
       const body: Record<string, string> = {
         department: selectedDepartment,
         course: selectedCourse,
-        profile_photo: profileImageInput.trim(),
       };
+
+      if (canEditProfilePhoto) {
+        body.profile_photo = profileImageInput.trim();
+      }
 
       if (formData.newPassword) {
         body.newPassword = formData.newPassword;
@@ -218,6 +221,11 @@ export default function ProfilePage() {
     return roleLabelMap[role] || role || "-";
   }, [userData?.role]);
 
+  const canEditProfilePhoto = useMemo(() => {
+    const role = (userData?.role || "").toLowerCase();
+    return role === "admin" || role === "staff";
+  }, [userData?.role]);
+
   const availableCourses = selectedDepartment ? courses[selectedDepartment as keyof typeof courses] || [] : [];
 
   if (loading) {
@@ -292,21 +300,28 @@ export default function ProfilePage() {
                 setProfileImageSrc(resolveProfilePhotoSrc(nextValue));
               }}
               placeholder="https://..."
+              disabled={!canEditProfilePhoto}
             />
-            <p className="mt-1 text-xs text-gray-500">Leave empty to use the default profile image.</p>
-            <div className="mt-2">
-              <label className="inline-flex items-center gap-2 rounded-md bg-[#113F67] px-3 py-2 text-sm font-medium text-white cursor-pointer hover:bg-[#0d2f4d]">
-                <Upload className="h-4 w-4" />
-                {uploadingPhoto ? "Uploading..." : "Upload Image"}
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleProfileImageUpload}
-                  className="hidden"
-                  disabled={uploadingPhoto}
-                />
-              </label>
-            </div>
+            {canEditProfilePhoto ? (
+              <>
+                <p className="mt-1 text-xs text-gray-500">Leave empty to use the default profile image.</p>
+                <div className="mt-2">
+                  <label className="inline-flex items-center gap-2 rounded-md bg-[#113F67] px-3 py-2 text-sm font-medium text-white cursor-pointer hover:bg-[#0d2f4d]">
+                    <Upload className="h-4 w-4" />
+                    {uploadingPhoto ? "Uploading..." : "Upload Image"}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleProfileImageUpload}
+                      className="hidden"
+                      disabled={uploadingPhoto}
+                    />
+                  </label>
+                </div>
+              </>
+            ) : (
+              <p className="mt-1 text-xs text-gray-500">Profile photo is managed by your school Google account.</p>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium flex items-center gap-2 text-[#113F67]">

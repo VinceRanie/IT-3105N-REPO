@@ -19,6 +19,7 @@ const HttpStatus = {
   CREATED: 201,
   BAD_REQUEST: 400,
   UNAUTHORIZED: 401,
+  FORBIDDEN: 403,
   NOT_FOUND: 404,
   CONFLICT: 409,
   SERVICE_UNAVAILABLE: 503,
@@ -638,8 +639,19 @@ exports.updateUserProfile = async (req, res) => {
 
     const nextDepartment = typeof department === "string" ? department.trim() : (existingUser.department || "");
     const nextCourse = typeof course === "string" ? course.trim() : (existingUser.course || "");
-    const nextProfilePhoto = typeof profile_photo === "string"
-      ? profile_photo.trim()
+    const normalizedRole = String(existingUser.role || "").trim().toLowerCase();
+    const canUpdateProfilePhoto = normalizedRole === "admin" || normalizedRole === "staff";
+    const requestedProfilePhoto = typeof profile_photo === "string" ? profile_photo.trim() : null;
+
+    if (!canUpdateProfilePhoto && requestedProfilePhoto !== null && requestedProfilePhoto !== (existingUser.profile_photo || "")) {
+      return res.status(HttpStatus.FORBIDDEN).json({
+        message: "Only admin and staff can update profile photos.",
+        statusCode: HttpStatus.FORBIDDEN,
+      });
+    }
+
+    const nextProfilePhoto = canUpdateProfilePhoto
+      ? (requestedProfilePhoto !== null ? requestedProfilePhoto : (existingUser.profile_photo || null))
       : (existingUser.profile_photo || null);
 
     let hashedPassword = null;
@@ -720,6 +732,15 @@ exports.uploadProfilePhoto = async (req, res) => {
       return res.status(HttpStatus.NOT_FOUND).json({
         message: "User profile not found.",
         statusCode: HttpStatus.NOT_FOUND,
+      });
+    }
+
+    const normalizedRole = String(existingUser.role || "").trim().toLowerCase();
+    const canUploadProfilePhoto = normalizedRole === "admin" || normalizedRole === "staff";
+    if (!canUploadProfilePhoto) {
+      return res.status(HttpStatus.FORBIDDEN).json({
+        message: "Only admin and staff can upload profile photos.",
+        statusCode: HttpStatus.FORBIDDEN,
       });
     }
 
