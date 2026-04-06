@@ -1,49 +1,152 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { API_URL } from "@/config/api";
+import { getAuthHeader } from "@/app/utils/authUtil";
+
 import { Microscope,FlaskConical,AlertTriangle,CalendarClock,Users,Package,QrCode,Clock,} from "lucide-react";
 
 import {BarChart,Bar,XAxis,YAxis,CartesianGrid,Tooltip,ResponsiveContainer,} from "recharts";
 
-/* ================= SINGLE DATA OBJECT ================= */
-const dashboardData = {
-  cards: [
+type CardTrend = "up" | "neutral" | "warning";
+
+type SummaryCard = {
+  title: string;
+  value: string;
+  sub: string;
+  icon: typeof Microscope;
+  trend: CardTrend;
+};
+
+type ChemicalItem = {
+  quantity?: number | string | null;
+  threshold?: number | string | null;
+};
+
+type AppointmentItem = {
+  status?: string | null;
+  date?: string | Date | null;
+};
+
+type UsersResponse = {
+  users?: unknown[];
+};
+
+const DEFAULT_SUMMARY_CARDS: SummaryCard[] = [
+  {
+    title: "Total Specimens",
+    value: "0",
+    sub: "All microbial records",
+    icon: Microscope,
+    trend: "neutral",
+  },
+  {
+    title: "Chemical Stocks",
+    value: "0",
+    sub: "Available items",
+    icon: FlaskConical,
+    trend: "neutral",
+  },
+  {
+    title: "Low Stock Alerts",
+    value: "0",
+    sub: "Requires attention",
+    icon: AlertTriangle,
+    trend: "neutral",
+  },
+  {
+    title: "Pending Appointments",
+    value: "0",
+    sub: "0 today",
+    icon: CalendarClock,
+    trend: "neutral",
+  },
+  {
+    title: "Registered Users",
+    value: "0",
+    sub: "Total active accounts",
+    icon: Users,
+    trend: "neutral",
+  },
+];
+
+const toNumber = (value: number | string | null | undefined) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const formatCount = (value: number) => new Intl.NumberFormat().format(value);
+
+const isTodayLocal = (input: string | Date | null | undefined) => {
+  if (!input) return false;
+
+  const parsedDate = new Date(input);
+  if (Number.isNaN(parsedDate.getTime())) return false;
+
+  const now = new Date();
+  return (
+    parsedDate.getFullYear() === now.getFullYear() &&
+    parsedDate.getMonth() === now.getMonth() &&
+    parsedDate.getDate() === now.getDate()
+  );
+};
+
+const createSummaryCards = ({
+  specimenCount,
+  chemicalCount,
+  lowStockCount,
+  pendingAppointments,
+  pendingToday,
+  registeredUsers,
+}: {
+  specimenCount: number;
+  chemicalCount: number;
+  lowStockCount: number;
+  pendingAppointments: number;
+  pendingToday: number;
+  registeredUsers: number;
+}): SummaryCard[] => {
+  return [
     {
       title: "Total Specimens",
-      value: "1,248",
-      sub: "+12 this week",
+      value: formatCount(specimenCount),
+      sub: "All microbial records",
       icon: Microscope,
       trend: "up",
     },
     {
       title: "Chemical Stocks",
-      value: "342",
+      value: formatCount(chemicalCount),
       sub: "Available items",
       icon: FlaskConical,
       trend: "neutral",
     },
     {
       title: "Low Stock Alerts",
-      value: "8",
-      sub: "Requires attention",
+      value: formatCount(lowStockCount),
+      sub: lowStockCount > 0 ? "Requires attention" : "All stock healthy",
       icon: AlertTriangle,
-      trend: "warning",
+      trend: lowStockCount > 0 ? "warning" : "neutral",
     },
     {
       title: "Pending Appointments",
-      value: "15",
-      sub: "3 today",
+      value: formatCount(pendingAppointments),
+      sub: `${formatCount(pendingToday)} today`,
       icon: CalendarClock,
       trend: "neutral",
     },
     {
       title: "Registered Users",
-      value: "64",
-      sub: "+5 this month",
+      value: formatCount(registeredUsers),
+      sub: "Total active accounts",
       icon: Users,
       trend: "up",
     },
-  ],
+  ];
+};
 
+/* ================= SINGLE DATA OBJECT ================= */
+const dashboardData = {
   activities: [
     { text: "New specimen added — Amoeba proteus", time: "2 min ago" },
     { text: "User registered — Maria Santos", time: "18 min ago" },
@@ -107,6 +210,82 @@ const getActivityConfig = (text: string) => {
 
 /* ================= COMPONENT ================= */
 export default function AdminHome() {
+  const [summaryCards, setSummaryCards] = useState<SummaryCard[]>(DEFAULT_SUMMARY_CARDS);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const fetchSummaryCards = async () => {
+      const headers = {
+        "Content-Type": "application/json",
+        ...getAuthHeader(),
+      };
+
+      const [microbialsResult, chemicalsResult, appointmentsResult, usersResult] =
+        await Promise.allSettled([
+          fetch(`${API_URL}/microbials?role=staff`, { headers }),
+          fetch(`${API_URL}/chemicals`, { headers }),
+          fetch(`${API_URL}/appointments`, { headers }),
+          fetch(`${API_URL}/auth/users`, { headers }),
+        ]);
+
+      const readJsonIfOk = async <T,>(result: PromiseSettledResult<Response>): Promise<T | null> => {
+        if (result.status !== "fulfilled" || !result.value.ok) {
+          return null;
+        }
+
+        try {
+          return (await result.value.json()) as T;
+        } catch {
+          return null;
+        }
+      };
+
+      const [microbialsData, chemicalsData, appointmentsData, usersData] = await Promise.all([
+        readJsonIfOk<unknown[]>(microbialsResult),
+        readJsonIfOk<ChemicalItem[]>(chemicalsResult),
+        readJsonIfOk<AppointmentItem[]>(appointmentsResult),
+        readJsonIfOk<UsersResponse>(usersResult),
+      ]);
+
+      const specimenCount = Array.isArray(microbialsData) ? microbialsData.length : 0;
+      const chemicals = Array.isArray(chemicalsData) ? chemicalsData : [];
+      const appointments = Array.isArray(appointmentsData) ? appointmentsData : [];
+      const users = Array.isArray(usersData?.users) ? usersData.users : [];
+
+      const lowStockCount = chemicals.filter((chemical) => {
+        return toNumber(chemical.quantity) <= toNumber(chemical.threshold);
+      }).length;
+
+      const pendingAppointments = appointments.filter((appointment) => {
+        return String(appointment.status || "").toLowerCase() === "pending";
+      });
+
+      const pendingToday = pendingAppointments.filter((appointment) => {
+        return isTodayLocal(appointment.date);
+      }).length;
+
+      if (!isCancelled) {
+        setSummaryCards(
+          createSummaryCards({
+            specimenCount,
+            chemicalCount: chemicals.length,
+            lowStockCount,
+            pendingAppointments: pendingAppointments.length,
+            pendingToday,
+            registeredUsers: users.length,
+          })
+        );
+      }
+    };
+
+    fetchSummaryCards();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
+
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
 
@@ -118,7 +297,7 @@ export default function AdminHome() {
 
       {/* SUMMARY CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-        {dashboardData.cards.map((card) => (
+        {summaryCards.map((card) => (
           <div
             key={card.title}
             className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm hover:shadow-md transition"
