@@ -444,7 +444,7 @@ exports.getCalendarOverview = async (req, res) => {
 
     const blockedDateStatus = {};
     unavailableDates.forEach(item => {
-      const dateStr = new Date(item.unavailable_date).toISOString().split('T')[0];
+      const dateStr = String(item.unavailable_date);
       blockedDateStatus[dateStr] = {
         reason: item.reason,
         unavailable: true
@@ -476,11 +476,22 @@ exports.markDateUnavailable = async (req, res) => {
       return res.status(400).json({ message: "Reason is required" });
     }
 
+    const existing = await Appointment.isDateUnavailable(date);
+    if (existing) {
+      return res.status(409).json({
+        message: "This date is already marked as unavailable",
+        date,
+        reason: existing.reason || null
+      });
+    }
+
+    const creatorId = Number(created_by_user_id);
+
     await Appointment.upsertUnavailableDate({
       date,
       reason: String(reason).trim(),
       created_by_role: created_by_role || null,
-      created_by_user_id: created_by_user_id || null
+      created_by_user_id: Number.isFinite(creatorId) ? creatorId : null
     });
 
     // Notification payload is intentionally returned for future integration.

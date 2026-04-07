@@ -123,6 +123,21 @@ export default function RAStaffAppointmentDashboard() {
     }
   };
 
+  const getCurrentUserId = (): number | null => {
+    try {
+      const fromUserData = localStorage.getItem('userData');
+      const fromUser = localStorage.getItem('user');
+      const raw = fromUserData || fromUser;
+      if (!raw) return null;
+
+      const parsed = JSON.parse(raw);
+      const id = Number(parsed.userId ?? parsed.user_id ?? parsed.id);
+      return Number.isFinite(id) ? id : null;
+    } catch {
+      return null;
+    }
+  };
+
   const handleSetUnavailableDate = async () => {
     if (!unavailableDate || !unavailableReason.trim()) {
       alert('Please select a date and provide a reason.');
@@ -137,7 +152,8 @@ export default function RAStaffAppointmentDashboard() {
         body: JSON.stringify({
           date: unavailableDate,
           reason: unavailableReason.trim(),
-          created_by_role: 'ra'
+          created_by_role: 'ra',
+          created_by_user_id: getCurrentUserId()
         })
       });
 
@@ -491,7 +507,7 @@ export default function RAStaffAppointmentDashboard() {
             unavailableDates.slice(0, 8).map((item) => (
               <div key={item.unavailable_id} className="flex items-center justify-between rounded-md bg-white px-3 py-2 text-sm border border-orange-100">
                 <span>
-                  {format(new Date(item.unavailable_date), 'MMM dd, yyyy')} - {item.reason}
+                  {format(new Date(`${item.unavailable_date}T00:00:00`), 'MMM dd, yyyy')} - {item.reason}
                 </span>
                 <button
                   onClick={() => handleRemoveUnavailableDate(item.unavailable_date)}

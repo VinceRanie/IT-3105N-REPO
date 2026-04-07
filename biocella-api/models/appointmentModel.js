@@ -226,7 +226,13 @@ exports.upsertUnavailableDate = async ({ date, reason, created_by_role = null, c
 
 // LIST UNAVAILABLE DATES
 exports.getUnavailableDates = async (startDate = null, endDate = null) => {
-  let query = `SELECT unavailable_id, unavailable_date, reason, created_by_role, created_by_user_id, created_at, updated_at
+  let query = `SELECT unavailable_id,
+                      DATE_FORMAT(unavailable_date, '%Y-%m-%d') AS unavailable_date,
+                      reason,
+                      created_by_role,
+                      created_by_user_id,
+                      created_at,
+                      updated_at
                FROM appointment_unavailable_dates
                WHERE deleted_at IS NULL`;
   const params = [];
