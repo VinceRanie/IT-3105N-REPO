@@ -1,6 +1,7 @@
 const authModel = require("../models/authModel");
 const jwt = require("jsonwebtoken");
 const { v4: uuidv4 } = require("uuid");
+const { google } = require("googleapis");
 const { sendEmail } = require('../config/email');
 
 // DB enum roles: student, faculty, staff (staff corresponds to RA)
@@ -30,6 +31,11 @@ const JWT_SECRET = process.env.JWT_TOKEN || "your-secret-key-change-in-productio
 const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_BASE_URL || "http://localhost:3000";
 const RESET_LINK_TTL_MS = 60 * 60 * 1000; // 1 hour
 const RESET_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const googleOauthClient = new google.auth.OAuth2(
+  process.env.GMAIL_CLIENT_ID,
+  process.env.GMAIL_CLIENT_SECRET,
+  process.env.NEXT_PUBLIC_APP_BASE_URL || "http://localhost:3000"
+);
 
 const getAuthenticatedUserFromRequest = (req) => {
   const authHeader = req.headers.authorization || "";
@@ -991,26 +997,18 @@ exports.verifyGoogleProfile = async (req, res) => {
       });
     }
 
-    const profile = await new Promise((resolve, reject) => {
-      const url = `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(token)}`;
-      const https = require('https');
-      https
-        .get(url, (resp) => {
-          let data = '';
-          resp.on('data', (chunk) => (data += chunk));
-          resp.on('end', () => {
-            if (resp.statusCode !== 200) {
-              return reject(new Error('Invalid Google token'));
-            }
-            try {
-              resolve(JSON.parse(data));
-            } catch (e) {
-              reject(e);
-            }
-          });
-        })
-        .on('error', reject);
+    const ticket = await googleOauthClient.verifyIdToken({
+      idToken: token,
+      audience: process.env.GMAIL_CLIENT_ID,
     });
+    const profile = ticket.getPayload();
+
+    if (!profile) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        message: "Invalid Google token.",
+        statusCode: HttpStatus.BAD_REQUEST,
+      });
+    }
 
     // Optional: enforce email match if provided
     if (email && profile.email && profile.email.toLowerCase() !== email.toLowerCase()) {
