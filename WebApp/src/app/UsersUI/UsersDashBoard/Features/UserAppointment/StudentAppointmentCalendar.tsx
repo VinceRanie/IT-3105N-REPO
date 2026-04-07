@@ -11,12 +11,18 @@ interface DayStatus {
   total: number;
 }
 
+interface UnavailableDay {
+  reason: string;
+  unavailable: boolean;
+}
+
 export default function StudentAppointmentCalendar() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [availability, setAvailability] = useState<any>(null);
   const [showModal, setShowModal] = useState(false);
   const [dayStatus, setDayStatus] = useState<Record<string, DayStatus>>({});
+  const [unavailableDays, setUnavailableDays] = useState<Record<string, UnavailableDay>>({});
   const [maxDuration, setMaxDuration] = useState(3); // Default 3 hours
   const [loading, setLoading] = useState(true);
 
@@ -59,6 +65,7 @@ export default function StudentAppointmentCalendar() {
         };
       });
       setDayStatus(status);
+      setUnavailableDays(data.daysUnavailable || {});
       setLoading(false);
     } catch (err) {
       console.error('Failed to fetch calendar overview:', err);
@@ -76,6 +83,10 @@ export default function StudentAppointmentCalendar() {
     compareDate.setHours(0, 0, 0, 0);
     
     const dateStr = format(date, 'yyyy-MM-dd');
+
+    if (unavailableDays[dateStr]?.unavailable) {
+      return 'disabled';
+    }
 
     // Disable: today or past dates (minimum 1 day advance notice) and Sundays
     // Must be at least tomorrow to book
@@ -176,12 +187,14 @@ export default function StudentAppointmentCalendar() {
             const status = getDateStatus(date);
             const dateStr = format(date, 'yyyy-MM-dd');
             const dateInfo = dayStatus[dateStr];
+            const blockedInfo = unavailableDays[dateStr];
 
             return (
               <div
                 key={dateStr}
                 className={`${styles.day} ${styles[status]}`}
                 onClick={() => handleDateClick(date)}
+                title={blockedInfo?.unavailable ? `Unavailable: ${blockedInfo.reason}` : undefined}
               >
                 <div className={styles.dayNumber}>{format(date, 'd')}</div>
                 {dateInfo && status !== 'disabled' && (
@@ -202,6 +215,7 @@ export default function StudentAppointmentCalendar() {
         <TimeSlotModal
           date={selectedDate}
           availability={availability}
+          unavailableReason={availability.unavailableReason || null}
           maxDuration={maxDuration}
           onClose={() => setShowModal(false)}
           onSuccess={() => {

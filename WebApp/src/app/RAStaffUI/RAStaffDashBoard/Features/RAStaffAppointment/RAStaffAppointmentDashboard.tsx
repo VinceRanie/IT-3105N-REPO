@@ -18,6 +18,12 @@ interface Appointment {
   denial_reason?: string | null;
 }
 
+interface UnavailableDate {
+  unavailable_id: number;
+  unavailable_date: string;
+  reason: string;
+}
+
 type TabType = 'pending' | 'ongoing' | 'visited' | 'denied';
 
 export default function RAStaffAppointmentDashboard() {
@@ -38,6 +44,10 @@ export default function RAStaffAppointmentDashboard() {
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [cameraFacingMode, setCameraFacingMode] = useState<'environment' | 'user'>('environment');
+  const [unavailableDate, setUnavailableDate] = useState('');
+  const [unavailableReason, setUnavailableReason] = useState('');
+  const [unavailableDates, setUnavailableDates] = useState<UnavailableDate[]>([]);
+  const [savingUnavailable, setSavingUnavailable] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -97,7 +107,74 @@ export default function RAStaffAppointmentDashboard() {
 
   useEffect(() => {
     fetchAllAppointmentsAndCount();
+    fetchUnavailableDates();
   }, []);
+
+  const fetchUnavailableDates = async () => {
+    try {
+      const res = await fetch('/API/appointments/unavailable-dates');
+      if (!res.ok) {
+        throw new Error('Failed to fetch unavailable dates');
+      }
+      const data = await res.json();
+      setUnavailableDates(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Error fetching unavailable dates:', err);
+    }
+  };
+
+  const handleSetUnavailableDate = async () => {
+    if (!unavailableDate || !unavailableReason.trim()) {
+      alert('Please select a date and provide a reason.');
+      return;
+    }
+
+    try {
+      setSavingUnavailable(true);
+      const response = await fetch('/API/appointments/unavailable-dates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date: unavailableDate,
+          reason: unavailableReason.trim(),
+          created_by_role: 'ra'
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || data.error || 'Failed to mark date unavailable');
+      }
+
+      alert('Date marked unavailable. Notification payload queued for future system integration.');
+      setUnavailableDate('');
+      setUnavailableReason('');
+      fetchUnavailableDates();
+    } catch (err) {
+      console.error('Error marking date unavailable:', err);
+      alert(err instanceof Error ? err.message : 'Failed to mark date unavailable');
+    } finally {
+      setSavingUnavailable(false);
+    }
+  };
+
+  const handleRemoveUnavailableDate = async (date: string) => {
+    try {
+      const response = await fetch(`/API/appointments/unavailable-dates/${encodeURIComponent(date)}`, {
+        method: 'DELETE'
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || data.error || 'Failed to remove unavailable date');
+      }
+
+      fetchUnavailableDates();
+    } catch (err) {
+      console.error('Error removing unavailable date:', err);
+      alert(err instanceof Error ? err.message : 'Failed to remove unavailable date');
+    }
+  };
 
   // Auto-verify when valid appointment QR is detected
   useEffect(() => {
@@ -378,6 +455,54 @@ export default function RAStaffAppointmentDashboard() {
         >
           📷 Scan QR Code
         </button>
+      </div>
+
+      <div className="mb-6 rounded-lg border border-orange-200 bg-orange-50 p-4">
+        <h2 className="text-lg font-semibold text-orange-900 mb-3">Set Date Unavailable</h2>
+        <p className="text-sm text-orange-800 mb-4">This blocks booking for students/faculty and prepares data for the upcoming notification system.</p>
+        <div className="grid gap-3 md:grid-cols-3">
+          <input
+            type="date"
+            value={unavailableDate}
+            onChange={(e) => setUnavailableDate(e.target.value)}
+            className="rounded-md border border-orange-300 px-3 py-2"
+          />
+          <input
+            type="text"
+            value={unavailableReason}
+            onChange={(e) => setUnavailableReason(e.target.value)}
+            placeholder="Reason (e.g. lab maintenance)"
+            className="rounded-md border border-orange-300 px-3 py-2 md:col-span-2"
+          />
+        </div>
+        <div className="mt-3 flex items-center gap-3">
+          <button
+            onClick={handleSetUnavailableDate}
+            disabled={savingUnavailable}
+            className="rounded-md bg-orange-600 px-4 py-2 text-white hover:bg-orange-700 disabled:opacity-60"
+          >
+            {savingUnavailable ? 'Saving...' : 'Mark Unavailable'}
+          </button>
+        </div>
+        <div className="mt-4 space-y-2">
+          {unavailableDates.length === 0 ? (
+            <p className="text-sm text-orange-700">No blocked dates yet.</p>
+          ) : (
+            unavailableDates.slice(0, 8).map((item) => (
+              <div key={item.unavailable_id} className="flex items-center justify-between rounded-md bg-white px-3 py-2 text-sm border border-orange-100">
+                <span>
+                  {format(new Date(item.unavailable_date), 'MMM dd, yyyy')} - {item.reason}
+                </span>
+                <button
+                  onClick={() => handleRemoveUnavailableDate(item.unavailable_date)}
+                  className="text-red-600 hover:text-red-700 font-semibold"
+                >
+                  Remove
+                </button>
+              </div>
+            ))
+          )}
+        </div>
       </div>
 
       {/* Tabs */}
