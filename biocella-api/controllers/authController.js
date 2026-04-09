@@ -172,7 +172,7 @@ const issuePasswordResetForUser = async (user) => {
     return {
       ok: false,
       statusCode: HttpStatus.SERVICE_UNAVAILABLE,
-      message: "If an account exists, we could not send the reset email right now. Please try again later.",
+      message: "If an account exists, we couldn't send the reset email right now. Please try again later.",
     };
   }
 
@@ -203,6 +203,13 @@ exports.login = async (req, res) => {
       return res.status(HttpStatus.UNAUTHORIZED).json({
         message: "Invalid credentials",
         statusCode: HttpStatus.UNAUTHORIZED,
+      });
+    }
+
+    if (!user.password) {
+      return res.status(HttpStatus.CONFLICT).json({
+        message: "Account setup is not complete. Please finish finalize setup.",
+        statusCode: HttpStatus.CONFLICT,
       });
     }
 
