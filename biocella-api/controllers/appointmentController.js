@@ -419,22 +419,42 @@ exports.getCalendarOverview = async (req, res) => {
       return res.status(400).json({ message: "Month and year parameters are required" });
     }
     
-    const startDate = new Date(`${year}-${String(month).padStart(2, '0')}-01`);
-    const endDate = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0);
+    const toDateOnly = (value) => {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return null;
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    };
+
+    const monthNumber = Number(month);
+    const yearNumber = Number(year);
+    const startDate = new Date(yearNumber, monthNumber - 1, 1);
+    const endDate = new Date(yearNumber, monthNumber, 0);
+
+    const startDateStr = toDateOnly(startDate);
+    const endDateStr = toDateOnly(endDate);
+
+    if (!startDateStr || !endDateStr) {
+      return res.status(400).json({ error: "Invalid month/year values" });
+    }
     
     const appointments = await Appointment.getAppointmentsByDateRange(
-      startDate.toISOString().split('T')[0],
-      endDate.toISOString().split('T')[0]
+      startDateStr,
+      endDateStr
     );
     const unavailableDates = await Appointment.getUnavailableDates(
-      startDate.toISOString().split('T')[0],
-      endDate.toISOString().split('T')[0]
+      startDateStr,
+      endDateStr
     );
     
     // Group appointments by date
     const dateStatus = {};
     appointments.forEach(appt => {
-      const dateStr = appt.date.toISOString().split('T')[0];
+      const dateStr = toDateOnly(appt.date);
+      if (!dateStr) return;
+
       if (!dateStatus[dateStr]) {
         dateStatus[dateStr] = { total: 0, booked: 0, available: 0 };
       }
