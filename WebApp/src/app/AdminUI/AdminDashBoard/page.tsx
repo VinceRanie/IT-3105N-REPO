@@ -40,11 +40,19 @@ type AppointmentItem = {
   purpose?: string | null;
   status?: string | null;
   date?: string | Date | null;
+  end_time?: string | Date | null;
   pending_at?: string | Date | null;
   approved_at?: string | Date | null;
   denied_at?: string | Date | null;
   ongoing_at?: string | Date | null;
   visited_at?: string | Date | null;
+};
+
+type DashboardAppointmentEntry = {
+  id: string;
+  time: string;
+  title: string;
+  status: "ongoing" | "pending";
 };
 
 type UsersResponse = {
@@ -179,6 +187,75 @@ const isTodayLocal = (input: string | Date | null | undefined) => {
     parsedDate.getMonth() === now.getMonth() &&
     parsedDate.getDate() === now.getDate()
   );
+};
+
+const isTomorrowLocal = (input: string | Date | null | undefined) => {
+  if (!input) return false;
+
+  const parsedDate = new Date(input);
+  if (Number.isNaN(parsedDate.getTime())) return false;
+
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  return (
+    parsedDate.getFullYear() === tomorrow.getFullYear() &&
+    parsedDate.getMonth() === tomorrow.getMonth() &&
+    parsedDate.getDate() === tomorrow.getDate()
+  );
+};
+
+const formatAppointmentTime = (
+  dateInput: string | Date | null | undefined,
+  endInput?: string | Date | null
+) => {
+  if (!dateInput) return "Time TBD";
+
+  const start = new Date(dateInput);
+  if (Number.isNaN(start.getTime())) return "Time TBD";
+
+  const startText = start.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+  if (!endInput) return startText;
+
+  const end = new Date(endInput);
+  if (Number.isNaN(end.getTime())) return startText;
+
+  const endText = end.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+  return `${startText} - ${endText}`;
+};
+
+const formatAppointmentTitle = (appointment: AppointmentItem) => {
+  const purpose = String(appointment.purpose || "").trim();
+  const department = String(appointment.department || "").trim();
+  const studentId = String(appointment.student_id || "").trim();
+
+  if (purpose && department) {
+    return `${purpose} - ${department}`;
+  }
+  if (purpose) return purpose;
+  if (department) return department;
+  if (studentId) return `Student ${studentId}`;
+  return `Appointment #${appointment.appointment_id || "N/A"}`;
+};
+
+const mapDashboardAppointment = (
+  appointment: AppointmentItem,
+  status: "ongoing" | "pending"
+): DashboardAppointmentEntry => {
+  return {
+    id: String(appointment.appointment_id || `${status}-${appointment.date || Date.now()}`),
+    time: formatAppointmentTime(appointment.date, appointment.end_time),
+    title: formatAppointmentTitle(appointment),
+    status,
+  };
 };
 
 const createSummaryCards = ({
@@ -438,6 +515,8 @@ export default function AdminHome() {
   const [summaryCards, setSummaryCards] = useState<SummaryCard[]>(DEFAULT_SUMMARY_CARDS);
   const [recentActivities, setRecentActivities] = useState<ActivityEntry[]>([]);
   const [inventoryChartData, setInventoryChartData] = useState<InventoryChartEntry[]>([]);
+  const [todayOngoingAppointments, setTodayOngoingAppointments] = useState<DashboardAppointmentEntry[]>([]);
+  const [tomorrowPendingAppointments, setTomorrowPendingAppointments] = useState<DashboardAppointmentEntry[]>([]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -508,6 +587,34 @@ export default function AdminHome() {
         return isTodayLocal(appointment.date);
       }).length;
 
+      const ongoingToday = appointments
+        .filter((appointment) => {
+          return (
+            String(appointment.status || "").toLowerCase() === "ongoing" &&
+            isTodayLocal(appointment.date)
+          );
+        })
+        .sort((a, b) => {
+          const aTime = parseTimestamp(a.date) ?? 0;
+          const bTime = parseTimestamp(b.date) ?? 0;
+          return aTime - bTime;
+        })
+        .map((appointment) => mapDashboardAppointment(appointment, "ongoing"));
+
+      const pendingTomorrow = appointments
+        .filter((appointment) => {
+          return (
+            String(appointment.status || "").toLowerCase() === "pending" &&
+            isTomorrowLocal(appointment.date)
+          );
+        })
+        .sort((a, b) => {
+          const aTime = parseTimestamp(a.date) ?? 0;
+          const bTime = parseTimestamp(b.date) ?? 0;
+          return aTime - bTime;
+        })
+        .map((appointment) => mapDashboardAppointment(appointment, "pending"));
+
       const activities = buildRecentActivities({
         microbials: Array.isArray(microbialsData) ? microbialsData : [],
         users,
@@ -533,6 +640,8 @@ export default function AdminHome() {
         );
         setRecentActivities(activities);
         setInventoryChartData(inventoryData);
+        setTodayOngoingAppointments(ongoingToday);
+        setTomorrowPendingAppointments(pendingTomorrow);
       }
     };
 
@@ -712,29 +821,80 @@ export default function AdminHome() {
               </h3>
             </div>
 
-            <div className="space-y-3">
-              {dashboardData.appointments.map((a, i) => (
-                <div key={i} className="flex items-center justify-between py-2 border-b last:border-0 border-gray-200">
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-1.5 text-gray-500">
-                      <Clock className="h-3.5 w-3.5" />
-                      <span className="text-xs font-medium w-16">{a.time}</span>
-                    </div>
-
-                    <span className="text-sm text-gray-900">{a.title}</span>
-                  </div>
-
-                  <span
-                    className={`text-[10px] px-2 py-1 rounded-full font-medium ${
-                      a.status === "confirmed"
-                        ? "bg-green-100 text-green-600"
-                        : "bg-yellow-100 text-yellow-600"
-                    }`}
-                  >
-                    {a.status}
+            <div className="space-y-4">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Ongoing Appointments Today
+                  </p>
+                  <span className="inline-flex items-center justify-center rounded-full bg-green-100 text-green-700 text-[10px] font-semibold px-2 py-0.5 min-w-6">
+                    {todayOngoingAppointments.length}
                   </span>
                 </div>
-              ))}
+
+                <div className="space-y-2">
+                  {todayOngoingAppointments.map((appointment) => (
+                    <div
+                      key={`today-${appointment.id}`}
+                      className="flex items-center justify-between py-2 border-b last:border-0 border-gray-200"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex items-center gap-1.5 text-gray-500">
+                          <Clock className="h-3.5 w-3.5" />
+                          <span className="text-xs font-medium">{appointment.time}</span>
+                        </div>
+
+                        <span className="text-sm text-gray-900 truncate">{appointment.title}</span>
+                      </div>
+
+                      <span className="text-[10px] px-2 py-1 rounded-full font-medium bg-green-100 text-green-600">
+                        ongoing
+                      </span>
+                    </div>
+                  ))}
+
+                  {todayOngoingAppointments.length === 0 && (
+                    <p className="text-sm text-gray-500">No ongoing appointments for today.</p>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Pending Appointments for Tomorrow
+                  </p>
+                  <span className="inline-flex items-center justify-center rounded-full bg-yellow-100 text-yellow-700 text-[10px] font-semibold px-2 py-0.5 min-w-6">
+                    {tomorrowPendingAppointments.length}
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  {tomorrowPendingAppointments.map((appointment) => (
+                    <div
+                      key={`tomorrow-${appointment.id}`}
+                      className="flex items-center justify-between py-2 border-b last:border-0 border-gray-200"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex items-center gap-1.5 text-gray-500">
+                          <Clock className="h-3.5 w-3.5" />
+                          <span className="text-xs font-medium">{appointment.time}</span>
+                        </div>
+
+                        <span className="text-sm text-gray-900 truncate">{appointment.title}</span>
+                      </div>
+
+                      <span className="text-[10px] px-2 py-1 rounded-full font-medium bg-yellow-100 text-yellow-700">
+                        pending
+                      </span>
+                    </div>
+                  ))}
+
+                  {tomorrowPendingAppointments.length === 0 && (
+                    <p className="text-sm text-gray-500">No pending appointments for tomorrow.</p>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>
