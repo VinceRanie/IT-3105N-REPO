@@ -29,11 +29,11 @@ exports.create = async (req, res) => {
       });
     }
     
-    // Check for schedule conflicts (check time range overlap on same date and same student)
-    const hasConflict = await Appointment.checkScheduleConflict(req.body.date, req.body.end_time, null, req.body.student_id);
+    // Global conflict check: no overlapping time range is allowed for any user on the same date.
+    const hasConflict = await Appointment.checkScheduleConflict(req.body.date, req.body.end_time, null, null);
     if (hasConflict) {
       return res.status(409).json({ 
-        error: "Schedule conflict: An appointment already exists at this time on this date" 
+        error: "Schedule conflict: This time range is already occupied by another appointment"
       });
     }
     
@@ -122,6 +122,20 @@ exports.approve = async (req, res) => {
   try {
     const appointment = await Appointment.getAppointmentWithUserEmail(req.params.id);
     if (!appointment) return res.status(404).json({ message: "Appointment not found" });
+
+    // Re-check for global schedule conflicts right before approval to avoid race conditions.
+    const hasConflict = await Appointment.checkScheduleConflict(
+      appointment.date,
+      appointment.end_time,
+      appointment.appointment_id,
+      null
+    );
+
+    if (hasConflict) {
+      return res.status(409).json({
+        message: "Cannot approve appointment due to schedule conflict with another approved/ongoing appointment."
+      });
+    }
     
     // Format date properly
     const appointmentDate = new Date(appointment.date);
