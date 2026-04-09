@@ -54,15 +54,18 @@ export default function TimeSlotModal({
     return `${time} - ${String(endHours).padStart(2, '0')}:${String(endMins).padStart(2, '0')}`;
   };
 
-  const availableSlots = availability.timeSlots.filter((slot) => slot.available && !slot.booked);
+  const allSlots = [...availability.timeSlots].sort(
+    (a, b) => parseMinutes(a.time) - parseMinutes(b.time)
+  );
+  const availableSlots = allSlots.filter((slot) => slot.available && !slot.booked);
   const bookedHourSet = new Set(
     availability.timeSlots
       .filter((slot) => !slot.available || slot.booked)
       .map((slot) => slot.time)
   );
 
-  const earliestStartTime = availableSlots[0]?.time || '09:00';
-  const latestStartSlot = availableSlots[availableSlots.length - 1]?.time || '16:00';
+  const earliestStartTime = allSlots[0]?.time || '09:00';
+  const latestStartSlot = allSlots[allSlots.length - 1]?.time || '16:00';
   const latestStartMinutes = parseMinutes(latestStartSlot);
   const latestEndMinutes = latestStartMinutes + 60;
   const latestEndTime = `${String(Math.floor(latestEndMinutes / 60)).padStart(2, '0')}:${String(latestEndMinutes % 60).padStart(2, '0')}`;
@@ -138,6 +141,13 @@ export default function TimeSlotModal({
 
     const startMinutes = parseMinutes(selectedStartTime);
     const endMinutes = parseMinutes(selectedEndTime);
+    const openingMinutes = parseMinutes(earliestStartTime);
+    const closingMinutes = parseMinutes(latestEndTime);
+
+    if (startMinutes < openingMinutes || endMinutes > closingMinutes) {
+      setError(`Time must be within operating hours: ${earliestStartTime} to ${latestEndTime}.`);
+      return;
+    }
 
     if (endMinutes <= startMinutes) {
       setError('End time must be later than start time.');
