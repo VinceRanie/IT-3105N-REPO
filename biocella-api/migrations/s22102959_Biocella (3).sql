@@ -185,7 +185,8 @@ CREATE TABLE `user` (
   `failed_login_attempts` int(11) DEFAULT 0,
   `lockout_until` datetime DEFAULT NULL,
   `reset_token` varchar(255) DEFAULT NULL,
-  `reset_token_expires` datetime DEFAULT NULL
+  `reset_token_expires` datetime DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --

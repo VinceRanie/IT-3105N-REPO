@@ -12,7 +12,16 @@ exports.createReagent = async (data) => {
 
 // READ ALL
 exports.getAllReagents = async () => {
-  const [rows] = await db.execute("SELECT * FROM reagents_chemicals");
+  const [rows] = await db.execute(`
+    SELECT r.*
+    FROM reagents_chemicals r
+    WHERE EXISTS (
+      SELECT 1
+      FROM chemical_stock_batch b
+      WHERE b.chemical_id = r.chemical_id
+        AND b.deleted_at IS NULL
+    )
+  `);
   return rows;
 };
 
