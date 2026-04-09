@@ -65,6 +65,10 @@ export default function AdminInventory() {
   useEffect(() => {
     let result = chemicals;
 
+    // Only show chemicals that still have at least one active batch.
+    const activeChemicalIds = new Set(batches.map((batch) => batch.chemical_id));
+    result = result.filter((chemical) => activeChemicalIds.has(chemical.chemical_id));
+
     // Search filter
     if (searchTerm) {
       result = result.filter((chemical) =>
@@ -84,7 +88,7 @@ export default function AdminInventory() {
 
     setFilteredChemicals(result);
     setCurrentPage(1); // Reset to first page on filter change
-  }, [searchTerm, unitFilter, typeFilter, chemicals]);
+  }, [searchTerm, unitFilter, typeFilter, chemicals, batches]);
 
   // Pagination logic
   const indexOfLastItem = currentPage * itemsPerPage;
