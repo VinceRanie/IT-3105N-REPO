@@ -647,7 +647,13 @@ export default function AdminHome() {
                     axisLine={false}
                   />
                   <Tooltip
-                    formatter={(value: number | string) => [`${value}%`, "Stock Left"]}
+                    formatter={(value: unknown) => {
+                      const normalizedValue = Array.isArray(value)
+                        ? value.join(" / ")
+                        : value ?? 0;
+
+                      return [`${normalizedValue}%`, "Stock Left"];
+                    }}
                     contentStyle={{
                       borderRadius: "10px",
                       border: "1px solid #e5e7eb",
