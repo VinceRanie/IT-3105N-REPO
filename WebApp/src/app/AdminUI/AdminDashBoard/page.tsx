@@ -575,8 +575,25 @@ export default function AdminHome() {
         activeChemicalIds.has(toNumber(chemical.chemical_id))
       );
 
+      const remainingByChemicalId = new Map<number, number>();
+      batches.forEach((batch) => {
+        const chemicalId = toNumber(batch.chemical_id);
+        if (chemicalId <= 0) return;
+
+        const total = Math.max(toNumber(batch.quantity), 0);
+        const used = Math.max(toNumber(batch.used_quantity), 0);
+        const remaining = Math.max(total - used, 0);
+
+        remainingByChemicalId.set(
+          chemicalId,
+          (remainingByChemicalId.get(chemicalId) || 0) + remaining
+        );
+      });
+
       const lowStockCount = activeChemicals.filter((chemical) => {
-        return toNumber(chemical.quantity) <= toNumber(chemical.threshold);
+        const chemicalId = toNumber(chemical.chemical_id);
+        const remainingQuantity = remainingByChemicalId.get(chemicalId) ?? toNumber(chemical.quantity);
+        return remainingQuantity <= toNumber(chemical.threshold);
       }).length;
 
       const pendingAppointments = appointments.filter((appointment) => {
