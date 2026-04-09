@@ -77,6 +77,49 @@ const didEmailSend = (result, expectedRecipient = "") => {
   return true;
 };
 
+const sendFinalizeSetupEmail = async (email, resetToken) => {
+  let emailResult;
+  try {
+    emailResult = await sendEmail({
+      to: email,
+      subject: "Finalize Your BIOCELLA Account Setup",
+      html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #113F67;">Welcome to BIOCELLA!</h2>
+            <p>Hi there,</p>
+            <p>Thank you for registering with your USC email. To complete your account setup, click the button below:</p>
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${APP_BASE_URL}/signup/finalize?token=${resetToken}" 
+                 style="background-color: #113F67; color: white; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
+                Finalize Setup
+              </a>
+            </div>
+            <p>You will be asked to sign in with your Google account (<strong>${email}</strong>) to verify your identity. Your name and profile photo will be fetched automatically.</p>
+            <p><strong>This link will expire in 1 hour.</strong></p>
+            <p>If you did not register for this service, please ignore this email.</p>
+            <p>Sincerely,<br/><strong>BIOCELLA Team</strong></p>
+          </div>
+        `,
+    });
+  } catch (emailError) {
+    console.error("Email sending error:", emailError);
+  }
+
+  if (!didEmailSend(emailResult, email)) {
+    return {
+      ok: false,
+      statusCode: HttpStatus.SERVICE_UNAVAILABLE,
+      message: "Registration could not be completed because finalize email was not sent. Please try again later.",
+    };
+  }
+
+  return {
+    ok: true,
+    statusCode: HttpStatus.OK,
+    message: "Finalize setup email sent successfully.",
+  };
+};
+
 const issuePasswordResetForUser = async (user) => {
   // Enforce cooldown after a successful password reset.
   // After reset, token is cleared but reset_token_expires stores next allowed request time.
@@ -261,9 +304,35 @@ exports.register = async (req, res) => {
         });
       }
 
-      return res.status(HttpStatus.CONFLICT).json({
-        message: "Finish finalize setup.",
-        statusCode: HttpStatus.CONFLICT,
+      const tokenExpiryMs = existingUser.reset_token_expires
+        ? new Date(existingUser.reset_token_expires).getTime()
+        : 0;
+      const hasActiveFinalizeLink =
+        Boolean(existingUser.reset_token) && tokenExpiryMs > Date.now();
+
+      if (hasActiveFinalizeLink) {
+        return res.status(HttpStatus.CONFLICT).json({
+          message: "Finish finalize setup.",
+          statusCode: HttpStatus.CONFLICT,
+        });
+      }
+
+      // Re-issue finalize link when account is not finalized and previous link is expired/missing.
+      const resetToken = uuidv4();
+      const tokenExpiry = new Date(Date.now() + RESET_LINK_TTL_MS);
+      const resendResult = await sendFinalizeSetupEmail(email, resetToken);
+      if (!resendResult.ok) {
+        return res.status(resendResult.statusCode).json({
+          message: resendResult.message,
+          statusCode: resendResult.statusCode,
+        });
+      }
+
+      await authModel.setResetToken(existingUser.user_id, resetToken, tokenExpiry);
+
+      return res.status(HttpStatus.OK).json({
+        message: "A new finalize setup link has been sent to your email.",
+        statusCode: HttpStatus.OK,
       });
     }
 
@@ -271,38 +340,11 @@ exports.register = async (req, res) => {
     const resetToken = uuidv4();
     const tokenExpiry = new Date(Date.now() + RESET_LINK_TTL_MS);
 
-    // Send email with verification link
-    let emailResult;
-    try {
-      emailResult = await sendEmail({
-        to: email,
-        subject: "Finalize Your BIOCELLA Account Setup",
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #113F67;">Welcome to BIOCELLA!</h2>
-            <p>Hi there,</p>
-            <p>Thank you for registering with your USC email. To complete your account setup, click the button below:</p>
-            <div style="text-align: center; margin: 30px 0;">
-              <a href="${APP_BASE_URL}/signup/finalize?token=${resetToken}" 
-                 style="background-color: #113F67; color: white; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
-                Finalize Setup
-              </a>
-            </div>
-            <p>You will be asked to sign in with your Google account (<strong>${email}</strong>) to verify your identity. Your name and profile photo will be fetched automatically.</p>
-            <p><strong>This link will expire in 1 hour.</strong></p>
-            <p>If you did not register for this service, please ignore this email.</p>
-            <p>Sincerely,<br/><strong>BIOCELLA Team</strong></p>
-          </div>
-        `,
-      });
-    } catch (emailError) {
-      console.error("Email sending error:", emailError);
-    }
-
-    if (!didEmailSend(emailResult, email)) {
-      return res.status(HttpStatus.SERVICE_UNAVAILABLE).json({
-        message: "Registration could not be completed because finalize email was not sent. Please try again later.",
-        statusCode: HttpStatus.SERVICE_UNAVAILABLE,
+    const emailResult = await sendFinalizeSetupEmail(email, resetToken);
+    if (!emailResult.ok) {
+      return res.status(emailResult.statusCode).json({
+        message: emailResult.message,
+        statusCode: emailResult.statusCode,
       });
     }
 
