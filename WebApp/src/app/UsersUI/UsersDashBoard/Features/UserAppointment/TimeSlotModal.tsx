@@ -14,8 +14,11 @@ interface TimeSlotModalProps {
   date: Date;
   availability: {
     date: string;
+    unavailable?: boolean;
+    unavailableReason?: string | null;
     timeSlots: TimeSlot[];
   };
+  unavailableReason?: string | null;
   maxDuration: number;
   onClose: () => void;
   onSuccess: () => void;
@@ -24,6 +27,7 @@ interface TimeSlotModalProps {
 export default function TimeSlotModal({
   date,
   availability,
+  unavailableReason,
   maxDuration,
   onClose,
   onSuccess
@@ -34,6 +38,53 @@ export default function TimeSlotModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [userInfo, setUserInfo] = useState<any>(null);
+
+  const parseMinutes = (time: string) => {
+    const [hours, minutes] = time.split(':').map(Number);
+    return hours * 60 + minutes;
+  };
+
+  const toHourSlot = (time: string) => `${time.slice(0, 2)}:00`;
+
+  const formatHourWindow = (time: string) => {
+    const startMinutes = parseMinutes(time);
+    const endMinutes = startMinutes + 60;
+    const endHours = Math.floor(endMinutes / 60);
+    const endMins = endMinutes % 60;
+    return `${time} - ${String(endHours).padStart(2, '0')}:${String(endMins).padStart(2, '0')}`;
+  };
+
+  const allSlots = [...availability.timeSlots].sort(
+    (a, b) => parseMinutes(a.time) - parseMinutes(b.time)
+  );
+  const availableSlots = allSlots.filter((slot) => slot.available && !slot.booked);
+  const bookedHourSet = new Set(
+    availability.timeSlots
+      .filter((slot) => !slot.available || slot.booked)
+      .map((slot) => slot.time)
+  );
+
+  const earliestStartTime = allSlots[0]?.time || '09:00';
+  const latestStartSlot = allSlots[allSlots.length - 1]?.time || '16:00';
+  const latestStartMinutes = parseMinutes(latestStartSlot);
+  const latestEndMinutes = latestStartMinutes + 60;
+  const latestEndTime = `${String(Math.floor(latestEndMinutes / 60)).padStart(2, '0')}:${String(latestEndMinutes % 60).padStart(2, '0')}`;
+
+  const isHourBooked = (time: string) => bookedHourSet.has(toHourSlot(time));
+
+  const overlapsBookedHours = (startTime: string, endTime: string) => {
+    const start = parseMinutes(startTime);
+    const end = parseMinutes(endTime);
+    const coveredSlots = availability.timeSlots
+      .filter((slot) => {
+        const slotStart = parseMinutes(slot.time);
+        const slotEnd = slotStart + 60;
+        return start < slotEnd && end > slotStart;
+      })
+      .map((slot) => slot.time);
+
+    return coveredSlots.some((slot) => bookedHourSet.has(slot));
+  };
 
   useEffect(() => {
     fetchUserInfo();
@@ -77,26 +128,39 @@ export default function TimeSlotModal({
     }
   };
 
-  const getAvailableEndTimes = () => {
-    if (!selectedStartTime) return [];
-
-    const startHour = parseInt(selectedStartTime.split(':')[0]);
-    const maxEndHour = startHour + maxDuration;
-    const availableTimes: string[] = [];
-
-    availability.timeSlots.forEach(slot => {
-      const slotHour = parseInt(slot.time.split(':')[0]);
-      if (slotHour > startHour && slotHour <= maxEndHour && slot.available) {
-        availableTimes.push(slot.time);
-      }
-    });
-
-    return availableTimes;
-  };
-
   const handleSubmit = async () => {
+    if (availability.unavailable) {
+      setError(unavailableReason || availability.unavailableReason || 'This date is unavailable for booking.');
+      return;
+    }
+
     if (!selectedStartTime || !selectedEndTime || !purpose) {
       setError('Please select time slot and enter purpose');
+      return;
+    }
+
+    const startMinutes = parseMinutes(selectedStartTime);
+    const endMinutes = parseMinutes(selectedEndTime);
+    const openingMinutes = parseMinutes(earliestStartTime);
+    const closingMinutes = parseMinutes(latestEndTime);
+
+    if (startMinutes < openingMinutes || endMinutes > closingMinutes) {
+      setError(`Time must be within operating hours: ${earliestStartTime} to ${latestEndTime}.`);
+      return;
+    }
+
+    if (endMinutes <= startMinutes) {
+      setError('End time must be later than start time.');
+      return;
+    }
+
+    if (endMinutes - startMinutes > maxDuration * 60) {
+      setError(`Maximum appointment duration is ${maxDuration} hour(s).`);
+      return;
+    }
+
+    if (isHourBooked(selectedStartTime) || overlapsBookedHours(selectedStartTime, selectedEndTime)) {
+      setError('Selected time overlaps with booked slot(s). Please choose another range.');
       return;
     }
 
@@ -187,8 +251,6 @@ export default function TimeSlotModal({
     }
   };
 
-  const availableEndTimes = getAvailableEndTimes();
-
   // Compute what will be submitted (same logic as handleSubmit)
   const getSubmissionData = () => {
     let studentId = '';
@@ -259,48 +321,61 @@ export default function TimeSlotModal({
           {format(date, 'EEEE, MMMM dd, yyyy')}
         </p>
 
-        {/* Timeline */}
-        <div className={styles.timeline}>
-          <div className={styles.timelineScroll}>
-            {availability.timeSlots.map(slot => (
-              <div
-                key={slot.time}
-                className={`${styles.timeSlot} ${
-                  slot.booked ? styles.booked : styles.available
-                } ${selectedStartTime === slot.time ? styles.selected : ''}`}
-                onClick={() => {
-                  if (!slot.booked) {
-                    setSelectedStartTime(slot.time);
-                    setSelectedEndTime(null);
-                  }
-                }}
-              >
-                <span className={styles.timeLabel}>{slot.time}</span>
-                {slot.booked && <span className={styles.bookedBadge}>BOOKED</span>}
-              </div>
-            ))}
+        {(availability.unavailable || unavailableReason || availability.unavailableReason) && (
+          <div className={styles.error}>
+            This date is unavailable. {unavailableReason || availability.unavailableReason || ''}
           </div>
+        )}
+
+        <div className={styles.section}>
+          <label>Start Time</label>
+          <input
+            type="time"
+            step={60}
+            min={earliestStartTime}
+            max={latestStartSlot}
+            value={selectedStartTime || ''}
+            onChange={(e) => {
+              setSelectedStartTime(e.target.value || null);
+              setSelectedEndTime(null);
+              setError('');
+            }}
+            className={styles.textarea}
+          />
+          <p className={styles.dateInfo}>You can select by minute. Bookable hours start at {earliestStartTime}.</p>
         </div>
+
+        <div className={styles.section}>
+          <label>End Time (Max {maxDuration} hours from start)</label>
+          <input
+            type="time"
+            step={60}
+            min={selectedStartTime || earliestStartTime}
+            max={latestEndTime}
+            value={selectedEndTime || ''}
+            onChange={(e) => {
+              setSelectedEndTime(e.target.value || null);
+              setError('');
+            }}
+            className={styles.textarea}
+            disabled={!selectedStartTime}
+          />
+        </div>
+
+        {availability.timeSlots.length > 0 && (
+          <div className={styles.section}>
+            <label>Booked Hour Blocks</label>
+            <p className={styles.dateInfo}>
+              {availability.timeSlots
+                .filter((slot) => slot.booked)
+                .map((slot) => formatHourWindow(slot.time))
+                .join(', ') || 'None'}
+            </p>
+          </div>
+        )}
 
         {selectedStartTime && (
           <>
-            <div className={styles.section}>
-              <label>End Time (Max {maxDuration} hours from start)</label>
-              <div className={styles.endTimeSelectionGrid}>
-                {availableEndTimes.map(endTime => (
-                  <button
-                    key={endTime}
-                    className={`${styles.endTimeBtn} ${
-                      selectedEndTime === endTime ? styles.selectedEndTime : ''
-                    }`}
-                    onClick={() => setSelectedEndTime(endTime)}
-                  >
-                    {endTime}
-                  </button>
-                ))}
-              </div>
-            </div>
-
             {selectedEndTime && (
               <div className={styles.section}>
                 <label>Purpose of Visit *</label>

@@ -9,6 +9,30 @@ const toNumber = (value) => {
   return Number.isFinite(parsed) ? parsed : NaN;
 };
 
+const ALL_UNITS = ["mL", "L", "g", "kg", "mg", "μL", "pieces", "bottles"];
+const MASS_UNITS = ["g", "kg", "mg"];
+const VOLUME_UNITS = ["mL", "L", "μL"];
+
+const getAllowedUnitsForType = (type) => {
+  const normalized = String(type || "").trim().toLowerCase();
+
+  if (["agar", "protein", "salt", "dye", "stain", "enzyme", "antibody"].includes(normalized)) {
+    return MASS_UNITS;
+  }
+
+  if (["acid", "base", "buffer", "solvent"].includes(normalized)) {
+    return VOLUME_UNITS;
+  }
+
+  return ALL_UNITS;
+};
+
+const isTypeUnitValid = (type, unit) => {
+  const normalizedUnit = String(unit || "").trim();
+  if (!normalizedUnit) return false;
+  return getAllowedUnitsForType(type).includes(normalizedUnit);
+};
+
 // CREATE
 exports.create = async (req, res) => {
   try {
@@ -33,6 +57,12 @@ exports.create = async (req, res) => {
 
     if (parsedThreshold >= parsedQuantity) {
       return res.status(400).json({ error: "threshold must be less than quantity" });
+    }
+
+    if (!isTypeUnitValid(type, unit)) {
+      return res.status(400).json({
+        error: `Unit ${unit} is not valid for type ${type}. Allowed units: ${getAllowedUnitsForType(type).join(", ")}`,
+      });
     }
     
     // Create the chemical entry (master record)
@@ -113,14 +143,30 @@ exports.getById = async (req, res) => {
 exports.update = async (req, res) => {
   try {
     const parsedQuantity = toNumber(req.body.quantity);
+    const parsedThreshold = toNumber(req.body.threshold);
 
     if (!Number.isFinite(parsedQuantity) || parsedQuantity < 0) {
       return res.status(400).json({ error: "quantity must be 0 or greater" });
     }
 
+    if (!Number.isFinite(parsedThreshold) || parsedThreshold < 0) {
+      return res.status(400).json({ error: "threshold must be 0 or greater" });
+    }
+
+    if (parsedThreshold >= parsedQuantity) {
+      return res.status(400).json({ error: "threshold must be less than quantity" });
+    }
+
+    if (!isTypeUnitValid(req.body.type, req.body.unit)) {
+      return res.status(400).json({
+        error: `Unit ${req.body.unit} is not valid for type ${req.body.type}. Allowed units: ${getAllowedUnitsForType(req.body.type).join(", ")}`,
+      });
+    }
+
     const affected = await Reagent.updateReagent(req.params.id, {
       ...req.body,
       quantity: parsedQuantity,
+      threshold: parsedThreshold,
     });
     if (!affected) return res.status(404).json({ message: "Chemical not found" });
 

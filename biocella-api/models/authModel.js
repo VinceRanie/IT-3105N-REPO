@@ -66,8 +66,23 @@ exports.userExists = async (email) => {
 
 // READ - Get all non-admin users
 exports.getAllNonAdminUsers = async () => {
+  const [columnRows] = await db.execute(
+    `SELECT COUNT(*) AS count
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'user'
+       AND COLUMN_NAME = 'created_at'`
+  );
+
+  const hasCreatedAt = Number(columnRows?.[0]?.count || 0) > 0;
+
+  const createdAtSelect = hasCreatedAt
+    ? "COALESCE(created_at, NOW()) AS created_at"
+    : "NOW() AS created_at";
+
   const [rows] = await db.execute(
-    `SELECT user_id, email, first_name, last_name, department, course, role, is_setup_complete
+    `SELECT user_id, email, first_name, last_name, department, course, role, is_setup_complete,
+            ${createdAtSelect}
      FROM user
      WHERE role <> 'admin'`
   );
