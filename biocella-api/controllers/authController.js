@@ -27,14 +27,23 @@ const HttpStatus = {
   INTERNAL_SERVER_ERROR: 500,
 };
 
-const JWT_SECRET = process.env.JWT_TOKEN || "your-secret-key-change-in-production";
-const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_BASE_URL || "http://localhost:3000";
+const JWT_SECRET = process.env.JWT_TOKEN;
+if (!JWT_SECRET) {
+  throw new Error("JWT_TOKEN environment variable is required.");
+}
+
+const APP_BASE_URL =
+  process.env.NEXT_PUBLIC_APP_BASE_URL ||
+  (process.env.NODE_ENV !== "production" ? "http://localhost:3000" : null);
+if (!APP_BASE_URL) {
+  throw new Error("NEXT_PUBLIC_APP_BASE_URL is required in production.");
+}
 const RESET_LINK_TTL_MS = 60 * 60 * 1000; // 1 hour
 const RESET_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const googleOauthClient = new google.auth.OAuth2(
   process.env.GMAIL_CLIENT_ID,
   process.env.GMAIL_CLIENT_SECRET,
-  process.env.NEXT_PUBLIC_APP_BASE_URL || "http://localhost:3000"
+  APP_BASE_URL
 );
 
 const getAuthenticatedUserFromRequest = (req) => {
