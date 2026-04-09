@@ -19,8 +19,13 @@ type SummaryCard = {
 };
 
 type ChemicalItem = {
+  chemical_id?: number | string | null;
   quantity?: number | string | null;
   threshold?: number | string | null;
+};
+
+type BatchItem = {
+  chemical_id?: number | string | null;
 };
 
 type AppointmentItem = {
@@ -221,10 +226,11 @@ export default function AdminHome() {
         ...getAuthHeader(),
       };
 
-      const [microbialsResult, chemicalsResult, appointmentsResult, usersResult] =
+      const [microbialsResult, chemicalsResult, batchesResult, appointmentsResult, usersResult] =
         await Promise.allSettled([
           fetch(`${API_URL}/microbials?role=staff`, { headers }),
           fetch(`${API_URL}/chemicals`, { headers }),
+          fetch(`${API_URL}/batches`, { headers }),
           fetch(`${API_URL}/appointments`, { headers }),
           fetch(`${API_URL}/auth/users`, { headers }),
         ]);
@@ -241,19 +247,31 @@ export default function AdminHome() {
         }
       };
 
-      const [microbialsData, chemicalsData, appointmentsData, usersData] = await Promise.all([
+      const [microbialsData, chemicalsData, batchesData, appointmentsData, usersData] = await Promise.all([
         readJsonIfOk<unknown[]>(microbialsResult),
         readJsonIfOk<ChemicalItem[]>(chemicalsResult),
+        readJsonIfOk<BatchItem[]>(batchesResult),
         readJsonIfOk<AppointmentItem[]>(appointmentsResult),
         readJsonIfOk<UsersResponse>(usersResult),
       ]);
 
       const specimenCount = Array.isArray(microbialsData) ? microbialsData.length : 0;
       const chemicals = Array.isArray(chemicalsData) ? chemicalsData : [];
+      const batches = Array.isArray(batchesData) ? batchesData : [];
       const appointments = Array.isArray(appointmentsData) ? appointmentsData : [];
       const users = Array.isArray(usersData?.users) ? usersData.users : [];
 
-      const lowStockCount = chemicals.filter((chemical) => {
+      const activeChemicalIds = new Set(
+        batches
+          .map((batch) => toNumber(batch.chemical_id))
+          .filter((chemicalId) => chemicalId > 0)
+      );
+
+      const activeChemicals = chemicals.filter((chemical) =>
+        activeChemicalIds.has(toNumber(chemical.chemical_id))
+      );
+
+      const lowStockCount = activeChemicals.filter((chemical) => {
         return toNumber(chemical.quantity) <= toNumber(chemical.threshold);
       }).length;
 
@@ -269,7 +287,7 @@ export default function AdminHome() {
         setSummaryCards(
           createSummaryCards({
             specimenCount,
-            chemicalCount: chemicals.length,
+            chemicalCount: activeChemicals.length,
             lowStockCount,
             pendingAppointments: pendingAppointments.length,
             pendingToday,
