@@ -20,21 +20,73 @@ type SummaryCard = {
 
 type ChemicalItem = {
   chemical_id?: number | string | null;
+  type?: string | null;
   quantity?: number | string | null;
   threshold?: number | string | null;
 };
 
 type BatchItem = {
+  batch_id?: number | string | null;
   chemical_id?: number | string | null;
+  quantity?: number | string | null;
+  used_quantity?: number | string | null;
+  date_received?: string | Date | null;
 };
 
 type AppointmentItem = {
+  appointment_id?: number | string | null;
+  student_id?: string | null;
+  department?: string | null;
+  purpose?: string | null;
   status?: string | null;
   date?: string | Date | null;
+  pending_at?: string | Date | null;
+  approved_at?: string | Date | null;
+  denied_at?: string | Date | null;
+  ongoing_at?: string | Date | null;
+  visited_at?: string | Date | null;
 };
 
 type UsersResponse = {
-  users?: unknown[];
+  users?: UserItem[];
+};
+
+type UserItem = {
+  user_id?: number | string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  email?: string | null;
+  created_at?: string | Date | null;
+};
+
+type UsageLogItem = {
+  log_id?: number | string | null;
+  chemical_name?: string | null;
+  date_used?: string | Date | null;
+};
+
+type MicrobialItem = {
+  _id?: string;
+  code_name?: string | null;
+  created_at?: string | Date | null;
+};
+
+type ActivityEntry = {
+  id: string;
+  text: string;
+  time: string;
+  timestamp: number;
+};
+
+type InventoryChartEntry = {
+  name: string;
+  stock: number;
+};
+
+type ActivitySourceEntry = {
+  id: string;
+  text: string;
+  timestamp: number;
 };
 
 const DEFAULT_SUMMARY_CARDS: SummaryCard[] = [
@@ -80,7 +132,40 @@ const toNumber = (value: number | string | null | undefined) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+const parseTimestamp = (value: string | Date | null | undefined) => {
+  if (!value) return null;
+
+  const parsed = new Date(value);
+  const timestamp = parsed.getTime();
+  return Number.isNaN(timestamp) ? null : timestamp;
+};
+
 const formatCount = (value: number) => new Intl.NumberFormat().format(value);
+
+const formatRelativeTime = (timestamp: number) => {
+  const diffMs = Date.now() - timestamp;
+
+  if (diffMs < 60_000) {
+    return "just now";
+  }
+
+  const diffMinutes = Math.floor(diffMs / 60_000);
+  if (diffMinutes < 60) {
+    return `${diffMinutes} min ago`;
+  }
+
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) {
+    return `${diffHours} hr ago`;
+  }
+
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 7) {
+    return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
+  }
+
+  return new Date(timestamp).toLocaleDateString();
+};
 
 const isTodayLocal = (input: string | Date | null | undefined) => {
   if (!input) return false;
@@ -150,26 +235,161 @@ const createSummaryCards = ({
   ];
 };
 
+const getUserDisplayName = (user: UserItem) => {
+  const firstName = String(user.first_name || "").trim();
+  const lastName = String(user.last_name || "").trim();
+  const fullName = `${firstName} ${lastName}`.trim();
+
+  if (fullName) {
+    return fullName;
+  }
+
+  return user.email || "New user";
+};
+
+const getAppointmentLabel = (appointment: AppointmentItem) => {
+  return (
+    String(appointment.purpose || "").trim() ||
+    String(appointment.department || "").trim() ||
+    String(appointment.student_id || "").trim() ||
+    `#${appointment.appointment_id || "N/A"}`
+  );
+};
+
+const buildRecentActivities = ({
+  microbials,
+  users,
+  appointments,
+  usageLogs,
+}: {
+  microbials: MicrobialItem[];
+  users: UserItem[];
+  appointments: AppointmentItem[];
+  usageLogs: UsageLogItem[];
+}): ActivityEntry[] => {
+  const sourceEntries: ActivitySourceEntry[] = [];
+
+  microbials.forEach((microbial) => {
+    const timestamp = parseTimestamp(microbial.created_at);
+    if (!timestamp) return;
+
+    sourceEntries.push({
+      id: `specimen-${microbial._id || timestamp}`,
+      text: `New specimen added - ${microbial.code_name || "Unnamed specimen"}`,
+      timestamp,
+    });
+  });
+
+  users.forEach((user) => {
+    const timestamp = parseTimestamp(user.created_at);
+    if (!timestamp) return;
+
+    sourceEntries.push({
+      id: `user-${user.user_id || timestamp}`,
+      text: `User registered - ${getUserDisplayName(user)}`,
+      timestamp,
+    });
+  });
+
+  appointments.forEach((appointment) => {
+    const timestampCandidates: Array<{
+      label: string;
+      value: string | Date | null | undefined;
+    }> = [
+      { label: "Appointment completed", value: appointment.visited_at },
+      { label: "Appointment started", value: appointment.ongoing_at },
+      { label: "Appointment approved", value: appointment.approved_at },
+      { label: "Appointment denied", value: appointment.denied_at },
+      { label: "Appointment requested", value: appointment.pending_at },
+    ];
+
+    const withTimestamp = timestampCandidates
+      .map((candidate) => ({
+        label: candidate.label,
+        timestamp: parseTimestamp(candidate.value),
+      }))
+      .filter((candidate): candidate is { label: string; timestamp: number } => {
+        return candidate.timestamp !== null;
+      })
+      .sort((a, b) => b.timestamp - a.timestamp);
+
+    if (!withTimestamp.length) return;
+
+    const latest = withTimestamp[0];
+    sourceEntries.push({
+      id: `appointment-${appointment.appointment_id || latest.timestamp}`,
+      text: `${latest.label} - ${getAppointmentLabel(appointment)}`,
+      timestamp: latest.timestamp,
+    });
+  });
+
+  usageLogs.forEach((log) => {
+    const timestamp = parseTimestamp(log.date_used);
+    if (!timestamp) return;
+
+    sourceEntries.push({
+      id: `usage-${log.log_id || timestamp}`,
+      text: `Chemical stock updated - ${log.chemical_name || "Unknown reagent"}`,
+      timestamp,
+    });
+  });
+
+  return sourceEntries
+    .sort((a, b) => b.timestamp - a.timestamp)
+    .slice(0, 6)
+    .map((entry) => ({
+      ...entry,
+      time: formatRelativeTime(entry.timestamp),
+    }));
+};
+
+const buildInventoryChartData = ({
+  chemicals,
+  batches,
+}: {
+  chemicals: ChemicalItem[];
+  batches: BatchItem[];
+}): InventoryChartEntry[] => {
+  const chemicalById = new Map<number, ChemicalItem>();
+  chemicals.forEach((chemical) => {
+    const chemicalId = toNumber(chemical.chemical_id);
+    if (chemicalId > 0) {
+      chemicalById.set(chemicalId, chemical);
+    }
+  });
+
+  const typeTotals = new Map<string, { total: number; remaining: number }>();
+
+  batches.forEach((batch) => {
+    const chemicalId = toNumber(batch.chemical_id);
+    const chemical = chemicalById.get(chemicalId);
+    if (!chemical) return;
+
+    const typeName = String(chemical.type || "General").trim() || "General";
+    const total = Math.max(toNumber(batch.quantity), 0);
+    const used = Math.max(toNumber(batch.used_quantity), 0);
+    const remaining = Math.max(total - used, 0);
+
+    const current = typeTotals.get(typeName) || { total: 0, remaining: 0 };
+    current.total += total;
+    current.remaining += remaining;
+    typeTotals.set(typeName, current);
+  });
+
+  return Array.from(typeTotals.entries())
+    .map(([name, totals]) => {
+      const percentageLeft = totals.total > 0 ? (totals.remaining / totals.total) * 100 : 0;
+
+      return {
+        name,
+        stock: Number(percentageLeft.toFixed(1)),
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+};
+
 /* ================= SINGLE DATA OBJECT ================= */
 const dashboardData = {
-  activities: [
-    { text: "New specimen added — Amoeba proteus", time: "2 min ago" },
-    { text: "User registered — Maria Santos", time: "18 min ago" },
-    { text: "Appointment approved — Lab Room 3", time: "1 hr ago" },
-    { text: "Chemical stock updated — Ethanol 95%", time: "2 hrs ago" },
-    { text: "Specimen archived — Paramecium sp.", time: "3 hrs ago" },
-    { text: "Appointment completed — Dr. Reyes", time: "5 hrs ago" },
-  ],
-
-  inventory: [
-    { name: "Ethanol", stock: 85 },
-    { name: "HCl", stock: 42 },
-    { name: "NaOH", stock: 67 },
-    { name: "Methanol", stock: 23 },
-    { name: "Acetone", stock: 91 },
-    { name: "H₂SO₄", stock: 35 },
-  ],
-
   actions: [
     { label: "Add Specimen", icon: Microscope },
     { label: "Add Chemical Stock", icon: FlaskConical },
@@ -200,13 +420,13 @@ const getActivityConfig = (text: string) => {
   if (lower.includes("specimen")) {
     return { icon: Microscope, color: "text-[#113F67]", bg: "bg-purple-100" };
   }
-  if (lower.includes("user")) {
+  if (lower.includes("user") || lower.includes("registered")) {
     return { icon: Users, color: "text-[#113F67]", bg: "bg-green-100" };
   }
   if (lower.includes("appointment")) {
     return { icon: CalendarClock, color: "text-[#113F67]", bg: "bg-blue-100" };
   }
-  if (lower.includes("chemical") || lower.includes("stock")) {
+  if (lower.includes("chemical") || lower.includes("stock") || lower.includes("reagent")) {
     return { icon: Package, color: "text-[#113F67]", bg: "bg-orange-100" };
   }
 
@@ -216,6 +436,8 @@ const getActivityConfig = (text: string) => {
 /* ================= COMPONENT ================= */
 export default function AdminHome() {
   const [summaryCards, setSummaryCards] = useState<SummaryCard[]>(DEFAULT_SUMMARY_CARDS);
+  const [recentActivities, setRecentActivities] = useState<ActivityEntry[]>([]);
+  const [inventoryChartData, setInventoryChartData] = useState<InventoryChartEntry[]>([]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -226,13 +448,14 @@ export default function AdminHome() {
         ...getAuthHeader(),
       };
 
-      const [microbialsResult, chemicalsResult, batchesResult, appointmentsResult, usersResult] =
+      const [microbialsResult, chemicalsResult, batchesResult, appointmentsResult, usersResult, usageResult] =
         await Promise.allSettled([
           fetch(`${API_URL}/microbials?role=staff`, { headers }),
           fetch(`${API_URL}/chemicals`, { headers }),
           fetch(`${API_URL}/batches`, { headers }),
           fetch(`${API_URL}/appointments`, { headers }),
           fetch(`${API_URL}/auth/users`, { headers }),
+          fetch(`${API_URL}/usage`, { headers }),
         ]);
 
       const readJsonIfOk = async <T,>(result: PromiseSettledResult<Response>): Promise<T | null> => {
@@ -247,12 +470,13 @@ export default function AdminHome() {
         }
       };
 
-      const [microbialsData, chemicalsData, batchesData, appointmentsData, usersData] = await Promise.all([
-        readJsonIfOk<unknown[]>(microbialsResult),
+      const [microbialsData, chemicalsData, batchesData, appointmentsData, usersData, usageData] = await Promise.all([
+        readJsonIfOk<MicrobialItem[]>(microbialsResult),
         readJsonIfOk<ChemicalItem[]>(chemicalsResult),
         readJsonIfOk<BatchItem[]>(batchesResult),
         readJsonIfOk<AppointmentItem[]>(appointmentsResult),
         readJsonIfOk<UsersResponse>(usersResult),
+        readJsonIfOk<UsageLogItem[]>(usageResult),
       ]);
 
       const specimenCount = Array.isArray(microbialsData) ? microbialsData.length : 0;
@@ -260,6 +484,7 @@ export default function AdminHome() {
       const batches = Array.isArray(batchesData) ? batchesData : [];
       const appointments = Array.isArray(appointmentsData) ? appointmentsData : [];
       const users = Array.isArray(usersData?.users) ? usersData.users : [];
+      const usageLogs = Array.isArray(usageData) ? usageData : [];
 
       const activeChemicalIds = new Set(
         batches
@@ -283,6 +508,18 @@ export default function AdminHome() {
         return isTodayLocal(appointment.date);
       }).length;
 
+      const activities = buildRecentActivities({
+        microbials: Array.isArray(microbialsData) ? microbialsData : [],
+        users,
+        appointments,
+        usageLogs,
+      });
+
+      const inventoryData = buildInventoryChartData({
+        chemicals,
+        batches,
+      });
+
       if (!isCancelled) {
         setSummaryCards(
           createSummaryCards({
@@ -294,6 +531,8 @@ export default function AdminHome() {
             registeredUsers: users.length,
           })
         );
+        setRecentActivities(activities);
+        setInventoryChartData(inventoryData);
       }
     };
 
@@ -360,13 +599,13 @@ export default function AdminHome() {
             </h3>
 
             <div className="space-y-3">
-              {dashboardData.activities.map((a) => {
+              {recentActivities.map((a) => {
                 const config = getActivityConfig(a.text);
                 const Icon = config.icon;
 
                 return (
                   <div
-                    key={a.text}
+                    key={a.id}
                     className="flex items-start gap-3 p-2 rounded-lg hover:bg-gray-50 transition w-full"
                   >
                     <div className={`h-8 w-8 flex items-center justify-center rounded-md ${config.bg}`}>
@@ -380,6 +619,10 @@ export default function AdminHome() {
                   </div>
                 );
               })}
+
+              {recentActivities.length === 0 && (
+                <p className="text-sm text-gray-500">No recent activity yet.</p>
+              )}
             </div>
           </div>
         </div>
@@ -393,11 +636,18 @@ export default function AdminHome() {
 
             <div className="w-full h-[250px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={dashboardData.inventory} barSize={28}>
+                <BarChart data={inventoryChartData} barSize={28}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                   <XAxis dataKey="name" fontSize={11} tickLine={false} axisLine={false} />
-                  <YAxis fontSize={11} tickLine={false} axisLine={false} />
+                  <YAxis
+                    domain={[0, 100]}
+                    tickFormatter={(value: number) => `${value}%`}
+                    fontSize={11}
+                    tickLine={false}
+                    axisLine={false}
+                  />
                   <Tooltip
+                    formatter={(value: number | string) => [`${value}%`, "Stock Left"]}
                     contentStyle={{
                       borderRadius: "10px",
                       border: "1px solid #e5e7eb",
@@ -409,6 +659,10 @@ export default function AdminHome() {
                 </BarChart>
               </ResponsiveContainer>
             </div>
+
+            {inventoryChartData.length === 0 && (
+              <p className="text-sm text-gray-500 mt-2">No inventory data available.</p>
+            )}
           </div>
         </div>
       </div>
