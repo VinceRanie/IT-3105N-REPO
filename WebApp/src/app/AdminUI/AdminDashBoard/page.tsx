@@ -1167,7 +1167,7 @@ export default function AdminHome() {
           </div>
         </div>
       )}
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="rounded-2xl border border-white bg-white p-5 shadow-sm">
           <div className="pb-3">
             <h3 className="text-sm font-semibold text-gray-900">
               Specimen Overview

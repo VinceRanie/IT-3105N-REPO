@@ -52,8 +52,8 @@ const Form = () => {
       <div className="rounded-tl-2xl rounded-bl-2xl flex-1 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-l from-transparent to-background/10"></div>
         <Image
-          src="/UI/img/Laboratory.jpg"
-          alt="Scientific laboratory research"
+          src="/UI/img/Biobuilding.webp"
+         alt="USC Biology Building (Arnoldus Science Building)"
           className="w-full h-full rounded-tl-2xl rounded-bl-2xl object-cover"
           width={4000}     
           height={4000} 
