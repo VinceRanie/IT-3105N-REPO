@@ -40,14 +40,14 @@ const initializeGoogleAuth = () => {
     if (oauth2Client) {
       return; // Already initialized
     }
-    
+
     if (!google) {
       if (googleInitError) {
         throw new Error('googleapis module failed to load: ' + googleInitError.message);
       }
       throw new Error('googleapis module not available');
     }
-    
+
     if (!hasGmailOAuthConfig) {
       console.warn('Cannot initialize Google Auth: Gmail credentials are missing');
       return;
@@ -74,7 +74,6 @@ const initializeGoogleAuth = () => {
 // Create Gmail transporter with OAuth2
 const createTransporter = async () => {
   try {
-    // Initialize if needed
     if (!oauth2Client && hasGmailOAuthConfig) {
       initializeGoogleAuth();
     }
@@ -86,7 +85,7 @@ const createTransporter = async () => {
     const { credentials } = await oauth2Client.refreshAccessToken().catch((err) => {
       throw new Error('Failed to refresh access token: ' + err.message);
     });
-    
+
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
@@ -112,13 +111,19 @@ const createAppPasswordTransporter = async () => {
     throw new Error('App password transport not configured. Please set EMAIL_USER and EMAIL_PASS.');
   }
 
+  // Normalize app password: remove spaces (Google often displays as "abcd efgh ijkl mnop")
+  const appPassword = String(process.env.EMAIL_PASS || '').replace(/\s+/g, '');
+  if (!appPassword) {
+    throw new Error('App password transport not configured. Please set a valid EMAIL_PASS value.');
+  }
+
   return nodemailer.createTransport({
     host: 'smtp.gmail.com',
     port: 587,
     secure: false,
     auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS
+      user: String(process.env.EMAIL_USER || '').trim(),
+      pass: appPassword
     }
   });
 };
@@ -145,12 +150,17 @@ const sendEmail = async (mailOptions) => {
         if (!hasAppPasswordConfig) {
           throw oauthError;
         }
+        // fall through to app password below
       }
     }
 
-    if (!transporter) {
+    if (!transporter && hasAppPasswordConfig) {
       transporter = await createAppPasswordTransporter();
       senderEmail = process.env.EMAIL_USER;
+    }
+
+    if (!transporter) {
+      throw new Error('No email transport available.');
     }
 
     const info = await transporter.sendMail({
