@@ -390,6 +390,8 @@ export default function AdminReportsPage() {
         body: JSON.stringify({
           user_id: currentUserId,
           period,
+          range_start: dayKey(start),
+          range_end: dayKey(end),
           range_label: report.rangeLabel,
           report_payload: report,
         }),

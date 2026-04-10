@@ -48,6 +48,8 @@ exports.create = async (req, res) => {
   try {
     const userId = toUserId(req.body?.user_id);
     const period = req.body?.period;
+    const rangeStart = String(req.body?.range_start || "").trim();
+    const rangeEnd = String(req.body?.range_end || "").trim();
     const rangeLabel = String(req.body?.range_label || "").trim();
     const reportPayload = req.body?.report_payload;
 
@@ -57,6 +59,10 @@ exports.create = async (req, res) => {
 
     if (period !== "weekly" && period !== "monthly") {
       return res.status(400).json({ error: "Invalid period" });
+    }
+
+    if (!rangeStart || !rangeEnd) {
+      return res.status(400).json({ error: "range_start and range_end are required" });
     }
 
     if (!rangeLabel || !reportPayload || typeof reportPayload !== "object") {
@@ -75,15 +81,38 @@ exports.create = async (req, res) => {
       rangeLabel,
     };
 
-    await Report.createReport({
+    await Report.upsertReport({
       report_uuid: reportId,
       user_id: userId,
       period,
+      range_start: rangeStart,
+      range_end: rangeEnd,
       range_label: rangeLabel,
       report_payload: JSON.stringify(payloadToSave),
     });
 
-    return res.status(201).json({ report: payloadToSave });
+    const saved = await Report.getReportByWindow({
+      user_id: userId,
+      period,
+      range_start: rangeStart,
+      range_end: rangeEnd,
+    });
+
+    const parsed = saved ? parsePayload(saved.report_payload) : null;
+
+    if (!parsed) {
+      return res.status(500).json({ error: "Report saved but failed to load persisted payload" });
+    }
+
+    return res.status(200).json({
+      report: {
+        ...parsed,
+        id: saved.report_uuid,
+        period: saved.period,
+        rangeLabel: saved.range_label,
+        createdAt: parsed.createdAt || new Date(saved.created_at).toISOString(),
+      },
+    });
   } catch (err) {
     console.error("[ReportController] create error:", err);
     return res.status(500).json({ error: err.message || "Failed to save report" });
