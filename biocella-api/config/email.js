@@ -1,15 +1,23 @@
 const nodemailer = require('nodemailer');
 
-// Check if Gmail OAuth2 credentials are configured
-const hasGmailConfig = !!(
+// OAuth2 credentials for Gmail send
+const hasGmailOAuthConfig = !!(
   process.env.GMAIL_CLIENT_ID &&
   process.env.GMAIL_CLIENT_SECRET &&
   process.env.GMAIL_REFRESH_TOKEN &&
   process.env.GMAIL_USER
 );
 
-if (!hasGmailConfig) {
-  console.warn('⚠️  Warning: Gmail OAuth2 credentials not fully configured. Email notifications will be skipped.');
+// App password fallback credentials
+const hasAppPasswordConfig = !!(
+  process.env.EMAIL_USER && process.env.EMAIL_PASS
+);
+
+// Backward-compatible exported flag: true when either transport mode is available
+const hasGmailConfig = hasGmailOAuthConfig || hasAppPasswordConfig;
+
+if (!hasGmailOAuthConfig && !hasAppPasswordConfig) {
+  console.warn('⚠️  Warning: No email credentials configured. Email notifications will be skipped.');
 }
 
 // OAuth2 Configuration for Gmail (lazy loaded only when needed)
@@ -40,7 +48,7 @@ const initializeGoogleAuth = () => {
       throw new Error('googleapis module not available');
     }
     
-    if (!hasGmailConfig) {
+    if (!hasGmailOAuthConfig) {
       console.warn('Cannot initialize Google Auth: Gmail credentials are missing');
       return;
     }
@@ -67,7 +75,7 @@ const initializeGoogleAuth = () => {
 const createTransporter = async () => {
   try {
     // Initialize if needed
-    if (!oauth2Client && hasGmailConfig) {
+    if (!oauth2Client && hasGmailOAuthConfig) {
       initializeGoogleAuth();
     }
 
@@ -98,18 +106,53 @@ const createTransporter = async () => {
   }
 };
 
+// Create Gmail transporter with app password (fallback mode)
+const createAppPasswordTransporter = async () => {
+  if (!hasAppPasswordConfig) {
+    throw new Error('App password transport not configured. Please set EMAIL_USER and EMAIL_PASS.');
+  }
+
+  return nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false,
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS
+    }
+  });
+};
+
 // Helper function to send emails - NEVER crash the main process
 const sendEmail = async (mailOptions) => {
   try {
     if (!hasGmailConfig) {
-      console.warn('⚠️  Email sending skipped: Gmail credentials not configured');
+      console.warn('⚠️  Email sending skipped: no mail transport is configured');
       console.log(`📧 Email would have been sent to: ${mailOptions.to}`);
       console.log(`📧 Subject: ${mailOptions.subject}`);
       return { messageId: 'SKIPPED_NO_CONFIG' };
     }
 
-    const transporter = await createTransporter();
-    const senderEmail = process.env.EMAIL_USER || process.env.GMAIL_USER;
+    let transporter;
+    let senderEmail;
+
+    if (hasGmailOAuthConfig) {
+      try {
+        transporter = await createTransporter();
+        senderEmail = process.env.GMAIL_USER;
+      } catch (oauthError) {
+        console.warn('⚠️  OAuth transport failed, trying app password fallback:', oauthError.message);
+        if (!hasAppPasswordConfig) {
+          throw oauthError;
+        }
+      }
+    }
+
+    if (!transporter) {
+      transporter = await createAppPasswordTransporter();
+      senderEmail = process.env.EMAIL_USER;
+    }
+
     const info = await transporter.sendMail({
       from: `"BIOCELLA" <${senderEmail}>`,
       ...mailOptions
