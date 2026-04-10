@@ -187,7 +187,7 @@ export default function AppointmentBooking() {
       {/* Right: Form Section */}
       <div className="relative hidden md:block">
         <Image
-          src="/UI/img/BioOffice.webP"
+          src="/UI/img/BioOffice.webp"
           alt="USC Biology Laboratory (Arnoldus Science Building)"
           fill
           className="object-cover"
