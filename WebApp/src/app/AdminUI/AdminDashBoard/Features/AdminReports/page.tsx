@@ -26,6 +26,7 @@ type AppointmentItem = {
   appointment_id?: number | string | null;
   status?: string | null;
   date?: string | Date | null;
+  no_show_at?: string | Date | null;
 };
 
 type UsageItem = {
@@ -127,6 +128,20 @@ const inRange = (input: string | Date | null | undefined, start: Date, end: Date
   const date = parseDate(input);
   if (!date) return false;
   return date >= start && date <= end;
+};
+
+const getStatusLabel = (status: string) => {
+  const normalized = String(status || "unknown").toLowerCase();
+  if (normalized === "no_show") return "No-Show";
+  return normalized.replace(/_/g, " ");
+};
+
+const getAppointmentReportDate = (appointment: AppointmentItem) => {
+  const status = String(appointment.status || "").toLowerCase();
+  if (status === "no_show") {
+    return appointment.no_show_at || appointment.date || null;
+  }
+  return appointment.date || null;
 };
 
 const makeCsv = (report: ReportSnapshot) => {
@@ -305,7 +320,7 @@ export default function AdminReportsPage() {
       const batches = (batchesRes.ok ? await batchesRes.json() : []) as BatchItem[];
       const users = Array.isArray(usersData.users) ? usersData.users : [];
 
-      const appointmentsInRange = appointments.filter((a) => inRange(a.date, start, end));
+      const appointmentsInRange = appointments.filter((a) => inRange(getAppointmentReportDate(a), start, end));
       const usageInRange = usageLogs.filter((u) => inRange(u.date_used, start, end));
       const specimensInRange = microbials.filter((m) => inRange(m.created_at, start, end));
       const usersInRange = users.filter((u) => inRange(u.created_at, start, end));
@@ -319,7 +334,7 @@ export default function AdminReportsPage() {
 
       const statusMap = new Map<string, number>();
       appointmentsInRange.forEach((appointment) => {
-        const status = String(appointment.status || "unknown").toLowerCase();
+        const status = getStatusLabel(String(appointment.status || "unknown"));
         statusMap.set(status, (statusMap.get(status) || 0) + 1);
       });
 
@@ -341,7 +356,7 @@ export default function AdminReportsPage() {
       }
 
       appointmentsInRange.forEach((item) => {
-        const d = parseDate(item.date);
+        const d = parseDate(getAppointmentReportDate(item));
         if (!d) return;
         const record = dayMap.get(dayKey(d));
         if (record) record.appointments += 1;

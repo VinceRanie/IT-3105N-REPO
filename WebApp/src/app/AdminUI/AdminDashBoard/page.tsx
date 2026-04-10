@@ -48,13 +48,14 @@ type AppointmentItem = {
   denied_at?: string | Date | null;
   ongoing_at?: string | Date | null;
   visited_at?: string | Date | null;
+  no_show_at?: string | Date | null;
 };
 
 type DashboardAppointmentEntry = {
   id: string;
   time: string;
   title: string;
-  status: "ongoing" | "pending";
+  status: "ongoing" | "pending" | "no_show";
 };
 
 type UsersResponse = {
@@ -256,7 +257,7 @@ const formatAppointmentTitle = (appointment: AppointmentItem) => {
 
 const mapDashboardAppointment = (
   appointment: AppointmentItem,
-  status: "ongoing" | "pending"
+  status: "ongoing" | "pending" | "no_show"
 ): DashboardAppointmentEntry => {
   return {
     id: String(appointment.appointment_id || `${status}-${appointment.date || Date.now()}`),
@@ -381,6 +382,7 @@ const buildRecentActivities = ({
       label: string;
       value: string | Date | null | undefined;
     }> = [
+      { label: "Appointment marked as no-show", value: appointment.no_show_at },
       { label: "Appointment completed", value: appointment.visited_at },
       { label: "Appointment started", value: appointment.ongoing_at },
       { label: "Appointment approved", value: appointment.approved_at },
@@ -525,6 +527,7 @@ export default function AdminHome() {
   const [recentActivities, setRecentActivities] = useState<ActivityEntry[]>([]);
   const [inventoryChartData, setInventoryChartData] = useState<InventoryChartEntry[]>([]);
   const [todayOngoingAppointments, setTodayOngoingAppointments] = useState<DashboardAppointmentEntry[]>([]);
+  const [todayNoShowAppointments, setTodayNoShowAppointments] = useState<DashboardAppointmentEntry[]>([]);
   const [tomorrowPendingAppointments, setTomorrowPendingAppointments] = useState<DashboardAppointmentEntry[]>([]);
   const [showUnavailableModal, setShowUnavailableModal] = useState(false);
   const [unavailableDate, setUnavailableDate] = useState("");
@@ -753,6 +756,20 @@ export default function AdminHome() {
         })
         .map((appointment) => mapDashboardAppointment(appointment, "pending"));
 
+      const noShowToday = appointments
+        .filter((appointment) => {
+          return (
+            String(appointment.status || "").toLowerCase() === "no_show" &&
+            isTodayLocal(appointment.date)
+          );
+        })
+        .sort((a, b) => {
+          const aTime = parseTimestamp(a.date) ?? 0;
+          const bTime = parseTimestamp(b.date) ?? 0;
+          return aTime - bTime;
+        })
+        .map((appointment) => mapDashboardAppointment(appointment, "no_show"));
+
       const activities = buildRecentActivities({
         microbials: Array.isArray(microbialsData) ? microbialsData : [],
         users,
@@ -779,6 +796,7 @@ export default function AdminHome() {
         setRecentActivities(activities);
         setInventoryChartData(inventoryData);
         setTodayOngoingAppointments(ongoingToday);
+        setTodayNoShowAppointments(noShowToday);
         setTomorrowPendingAppointments(pendingTomorrow);
       }
     };
@@ -994,6 +1012,43 @@ export default function AdminHome() {
 
                   {todayOngoingAppointments.length === 0 && (
                     <p className="text-sm text-gray-500">No ongoing appointments for today.</p>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    No-Show Appointments Today
+                  </p>
+                  <span className="inline-flex items-center justify-center rounded-full bg-red-100 text-red-700 text-[10px] font-semibold px-2 py-0.5 min-w-6">
+                    {todayNoShowAppointments.length}
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  {todayNoShowAppointments.map((appointment) => (
+                    <div
+                      key={`today-no-show-${appointment.id}`}
+                      className="flex items-center justify-between py-2 border-b last:border-0 border-gray-200"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex items-center gap-1.5 text-gray-500">
+                          <Clock className="h-3.5 w-3.5" />
+                          <span className="text-xs font-medium">{appointment.time}</span>
+                        </div>
+
+                        <span className="text-sm text-gray-900 truncate">{appointment.title}</span>
+                      </div>
+
+                      <span className="text-[10px] px-2 py-1 rounded-full font-medium bg-red-100 text-red-700">
+                        no-show
+                      </span>
+                    </div>
+                  ))}
+
+                  {todayNoShowAppointments.length === 0 && (
+                    <p className="text-sm text-gray-500">No no-show appointments for today.</p>
                   )}
                 </div>
               </div>
