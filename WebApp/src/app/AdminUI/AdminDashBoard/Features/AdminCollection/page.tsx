@@ -6,7 +6,7 @@ import AdminCollection from "./AdminCollection";
 import AdminControls from "./AdminControls";
 import ProjectModal from "./ProjectModal";
 import SpecimenModal from "./SpecimenModal";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 interface Project {
   _id: string;
@@ -83,6 +83,8 @@ export default function AdminCollectionPage() {
   const [selectedSpecimen, setSelectedSpecimen] = useState<Specimen | null>(null);
   
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   // Fetch projects
   const fetchProjects = async () => {
@@ -121,6 +123,14 @@ export default function AdminCollectionPage() {
     fetchProjects();
     fetchSpecimens();
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get("modal") !== "add-specimen") return;
+
+    setSelectedSpecimen(null);
+    setIsSpecimenModalOpen(true);
+    router.replace(pathname, { scroll: false });
+  }, [pathname, router, searchParams]);
 
   // Project handlers
   const handleSaveProject = async (projectData: any) => {

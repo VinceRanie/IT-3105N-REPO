@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { API_URL } from "@/config/api";
 import { getAuthHeader } from "@/app/utils/authUtil";
+import { useRouter } from "next/navigation";
+import { format } from "date-fns";
 
 import { Microscope,FlaskConical,AlertTriangle,CalendarClock,Users,Package,QrCode,Clock,} from "lucide-react";
 
@@ -95,6 +97,12 @@ type ActivitySourceEntry = {
   id: string;
   text: string;
   timestamp: number;
+};
+
+type UnavailableDate = {
+  unavailable_id: number;
+  unavailable_date: string;
+  reason: string;
 };
 
 const DEFAULT_SUMMARY_CARDS: SummaryCard[] = [
@@ -468,10 +476,10 @@ const buildInventoryChartData = ({
 /* ================= SINGLE DATA OBJECT ================= */
 const dashboardData = {
   actions: [
-    { label: "Add Specimen", icon: Microscope },
-    { label: "Add Chemical Stock", icon: FlaskConical },
-    { label: "Create Appointment", icon: CalendarClock },
-    { label: "Print QR Code", icon: QrCode },
+    { id: "add-specimen", label: "Add Specimen", icon: Microscope },
+    { id: "add-chemical", label: "Add Chemical Stock", icon: FlaskConical },
+    { id: "set-unavailable", label: "Set Date Unavailable", icon: CalendarClock },
+    { id: "print-qr", label: "Print QR Code", icon: QrCode },
   ],
 
   appointments: [
@@ -512,11 +520,116 @@ const getActivityConfig = (text: string) => {
 
 /* ================= COMPONENT ================= */
 export default function AdminHome() {
+  const router = useRouter();
   const [summaryCards, setSummaryCards] = useState<SummaryCard[]>(DEFAULT_SUMMARY_CARDS);
   const [recentActivities, setRecentActivities] = useState<ActivityEntry[]>([]);
   const [inventoryChartData, setInventoryChartData] = useState<InventoryChartEntry[]>([]);
   const [todayOngoingAppointments, setTodayOngoingAppointments] = useState<DashboardAppointmentEntry[]>([]);
   const [tomorrowPendingAppointments, setTomorrowPendingAppointments] = useState<DashboardAppointmentEntry[]>([]);
+  const [showUnavailableModal, setShowUnavailableModal] = useState(false);
+  const [unavailableDate, setUnavailableDate] = useState("");
+  const [unavailableReason, setUnavailableReason] = useState("");
+  const [unavailableDates, setUnavailableDates] = useState<UnavailableDate[]>([]);
+  const [savingUnavailable, setSavingUnavailable] = useState(false);
+
+  const fetchUnavailableDates = async () => {
+    try {
+      const res = await fetch("/API/appointments/unavailable-dates");
+      if (!res.ok) {
+        throw new Error("Failed to fetch unavailable dates");
+      }
+      const data = await res.json();
+      setUnavailableDates(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Error fetching unavailable dates:", err);
+    }
+  };
+
+  const getCurrentUserId = (): number | null => {
+    try {
+      const fromUserData = localStorage.getItem("userData");
+      const fromUser = localStorage.getItem("user");
+      const raw = fromUserData || fromUser;
+      if (!raw) return null;
+
+      const parsed = JSON.parse(raw);
+      const id = Number(parsed.userId ?? parsed.user_id ?? parsed.id);
+      return Number.isFinite(id) ? id : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const handleSetUnavailableDate = async () => {
+    if (!unavailableDate || !unavailableReason.trim()) {
+      alert("Please select a date and provide a reason.");
+      return;
+    }
+
+    try {
+      setSavingUnavailable(true);
+      const response = await fetch("/API/appointments/unavailable-dates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date: unavailableDate,
+          reason: unavailableReason.trim(),
+          created_by_role: "admin",
+          created_by_user_id: getCurrentUserId(),
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || data.error || "Failed to mark date unavailable");
+      }
+
+      alert("Date marked unavailable. Notification payload queued for future system integration.");
+      setUnavailableDate("");
+      setUnavailableReason("");
+      fetchUnavailableDates();
+    } catch (err) {
+      console.error("Error marking date unavailable:", err);
+      alert(err instanceof Error ? err.message : "Failed to mark date unavailable");
+    } finally {
+      setSavingUnavailable(false);
+    }
+  };
+
+  const handleRemoveUnavailableDate = async (date: string) => {
+    try {
+      const response = await fetch(`/API/appointments/unavailable-dates/${encodeURIComponent(date)}`, {
+        method: "DELETE",
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || data.error || "Failed to remove unavailable date");
+      }
+
+      fetchUnavailableDates();
+    } catch (err) {
+      console.error("Error removing unavailable date:", err);
+      alert(err instanceof Error ? err.message : "Failed to remove unavailable date");
+    }
+  };
+
+  const handleQuickAction = (actionId: string) => {
+    if (actionId === "add-specimen") {
+      router.push("/AdminUI/AdminDashBoard/Features/AdminCollection?modal=add-specimen");
+      return;
+    }
+
+    if (actionId === "add-chemical") {
+      router.push("/AdminUI/AdminDashBoard/Features/AdminInventory?modal=add-chemical");
+      return;
+    }
+
+    if (actionId === "set-unavailable") {
+      setShowUnavailableModal(true);
+      fetchUnavailableDates();
+    }
+  };
 
   useEffect(() => {
     let isCancelled = false;
@@ -816,7 +929,8 @@ export default function AdminHome() {
 
                   return (
                     <button
-                      key={a.label}
+                      key={a.id}
+                      onClick={() => handleQuickAction(a.id)}
                       className="cursor-pointer flex flex-col items-center justify-center gap-2 py-4 text-xs font-medium rounded-xl border border-gray-200 hover:bg-gray-100 hover:border-[#113F67] transition-all duration-150"
                     >
                       <Icon className="h-5 w-5 text-[#113F67]" />
@@ -919,6 +1033,77 @@ export default function AdminHome() {
 
       {/* ROW 3 - TABLE */}
       <div>
+
+      {showUnavailableModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-2xl rounded-xl bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+              <h2 className="text-lg font-semibold text-gray-900">Set Date Unavailable</h2>
+              <button
+                onClick={() => setShowUnavailableModal(false)}
+                className="rounded-md px-2 py-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="space-y-4 px-5 py-4">
+              <p className="text-sm text-gray-600">
+                This blocks booking for students/faculty and prepares data for the upcoming notification system.
+              </p>
+
+              <div className="grid gap-3 md:grid-cols-3">
+                <input
+                  type="date"
+                  value={unavailableDate}
+                  onChange={(e) => setUnavailableDate(e.target.value)}
+                  className="rounded-md border border-gray-300 px-3 py-2"
+                />
+                <input
+                  type="text"
+                  value={unavailableReason}
+                  onChange={(e) => setUnavailableReason(e.target.value)}
+                  placeholder="Reason (e.g. lab maintenance)"
+                  className="rounded-md border border-gray-300 px-3 py-2 md:col-span-2"
+                />
+              </div>
+
+              <div>
+                <button
+                  onClick={handleSetUnavailableDate}
+                  disabled={savingUnavailable}
+                  className="rounded-md bg-orange-600 px-4 py-2 text-white hover:bg-orange-700 disabled:opacity-60"
+                >
+                  {savingUnavailable ? "Saving..." : "Mark Unavailable"}
+                </button>
+              </div>
+
+              <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+                {unavailableDates.length === 0 ? (
+                  <p className="text-sm text-gray-500">No blocked dates yet.</p>
+                ) : (
+                  unavailableDates.slice(0, 20).map((item) => (
+                    <div
+                      key={item.unavailable_id}
+                      className="flex items-center justify-between rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm"
+                    >
+                      <span>
+                        {format(new Date(`${item.unavailable_date}T00:00:00`), "MMM dd, yyyy")} - {item.reason}
+                      </span>
+                      <button
+                        onClick={() => handleRemoveUnavailableDate(item.unavailable_date)}
+                        className="font-semibold text-red-600 hover:text-red-700"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
         <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
           <div className="pb-3">
             <h3 className="text-sm font-semibold text-gray-900">
