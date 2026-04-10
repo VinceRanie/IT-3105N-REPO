@@ -127,8 +127,8 @@ export default function SignupForm() {
       {/* Right: Image Section */}
       <div className="relative hidden md:block">
         <Image
-          src="/UI/img/Laboratory.jpg"
-          alt="Scientific laboratory research"
+    src="/UI/img/BioOffice.webp"
+          alt="USC Biology Department Office"
           fill
           className="object-cover"
         />

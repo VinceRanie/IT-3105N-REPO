@@ -69,8 +69,8 @@ export default function LoginForm() {
       {/* Left: Image Section */}
       <div className="relative hidden md:block">
         <Image
-          src="/UI/img/Laboratory.jpg"
-          alt="Scientific laboratory research"
+          src="/UI/img/Biobuilding.webP"
+          alt="USC Biology Building (Arnoldus Science Building)"
           fill
           className="object-cover"
         />
