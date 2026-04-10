@@ -34,13 +34,20 @@ exports.isDateUnavailable = async (date) => {
 // READ ALL
 exports.getAllAppointments = async () => {
   const [rows] = await db.execute(
-    "SELECT * FROM appointment WHERE deleted_at IS NULL ORDER BY date DESC"
+    "SELECT * FROM appointment WHERE deleted_at IS NULL OR status = 'no_show' ORDER BY date DESC"
   );
   return rows;
 };
 
 // READ BY STATUS
 exports.getAppointmentsByStatus = async (status) => {
+  if (status === 'no_show') {
+    const [rows] = await db.execute(
+      "SELECT * FROM appointment WHERE status = 'no_show' ORDER BY date DESC"
+    );
+    return rows;
+  }
+
   const [rows] = await db.execute(
     "SELECT * FROM appointment WHERE status = ? AND deleted_at IS NULL ORDER BY date DESC",
     [status]
@@ -193,7 +200,11 @@ exports.getAppointmentsByDate = async (date) => {
 // SOFT DELETE (Mark as no-show)
 exports.softDeleteAppointment = async (id) => {
   const [result] = await db.execute(
-    "UPDATE appointment SET deleted_at = NOW() WHERE appointment_id = ? AND deleted_at IS NULL",
+    `UPDATE appointment
+     SET status = 'no_show', no_show_at = NOW(), deleted_at = NOW()
+     WHERE appointment_id = ?
+       AND deleted_at IS NULL
+       AND status IN ('approved', 'ongoing')`,
     [id]
   );
   return result.affectedRows;
@@ -202,7 +213,11 @@ exports.softDeleteAppointment = async (id) => {
 // AUTO-EXPIRE ONGOING APPOINTMENTS (cron job)
 exports.expireOldAppointments = async () => {
   const [result] = await db.execute(
-    "UPDATE appointment SET deleted_at = NOW() WHERE status = 'ongoing' AND date < NOW() AND deleted_at IS NULL"
+    `UPDATE appointment
+     SET status = 'no_show', no_show_at = NOW(), deleted_at = NOW()
+     WHERE status = 'ongoing'
+       AND deleted_at IS NULL
+       AND COALESCE(end_time, DATE_ADD(date, INTERVAL 1 HOUR)) < NOW()`
   );
   return result.affectedRows;
 };

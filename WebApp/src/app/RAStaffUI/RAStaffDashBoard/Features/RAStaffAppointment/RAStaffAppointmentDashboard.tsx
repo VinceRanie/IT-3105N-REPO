@@ -12,7 +12,7 @@ interface Appointment {
   purpose: string;
   date: string;
   end_time: string;
-  status: 'pending' | 'approved' | 'denied' | 'ongoing' | 'visited';
+  status: 'pending' | 'approved' | 'denied' | 'ongoing' | 'visited' | 'no_show';
   qr_code: string | null;
   admin_remarks: string | null;
   denial_reason?: string | null;
@@ -24,13 +24,13 @@ interface UnavailableDate {
   reason: string;
 }
 
-type TabType = 'pending' | 'ongoing' | 'visited' | 'denied';
+type TabType = 'pending' | 'ongoing' | 'visited' | 'denied' | 'no_show';
 
 export default function RAStaffAppointmentDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('pending');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
-  const [statusCounts, setStatusCounts] = useState({ pending: 0, ongoing: 0, visited: 0, denied: 0 });
+  const [statusCounts, setStatusCounts] = useState({ pending: 0, ongoing: 0, visited: 0, denied: 0, no_show: 0 });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -57,6 +57,7 @@ export default function RAStaffAppointmentDashboard() {
     { key: 'ongoing', label: 'Ongoing', color: 'blue' },
     { key: 'visited', label: 'Visited', color: 'green' },
     { key: 'denied', label: 'Denied', color: 'red' },
+    { key: 'no_show', label: 'No-Show', color: 'gray' },
   ];
 
   // Handle camera stream when available
@@ -240,7 +241,7 @@ export default function RAStaffAppointmentDashboard() {
       const data = await res.json();
       setAllAppointments(data);
 
-      const counts = { pending: 0, ongoing: 0, visited: 0, denied: 0 };
+      const counts = { pending: 0, ongoing: 0, visited: 0, denied: 0, no_show: 0 };
       data.forEach((apt: Appointment) => {
         if (apt.status in counts) {
           counts[apt.status as keyof typeof counts]++;
@@ -446,6 +447,7 @@ export default function RAStaffAppointmentDashboard() {
       denied: 'bg-red-100 text-red-800',
       ongoing: 'bg-blue-100 text-blue-800',
       visited: 'bg-purple-100 text-purple-800',
+      no_show: 'bg-gray-200 text-gray-700',
     };
     
     return (

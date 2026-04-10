@@ -11,7 +11,7 @@ interface Appointment {
   department: string;
   purpose: string;
   date: string;
-  status: 'pending' | 'approved' | 'denied' | 'ongoing' | 'visited';
+  status: 'pending' | 'approved' | 'denied' | 'ongoing' | 'visited' | 'no_show';
   qr_code: string | null;
   created_at: string;
   pending_at: string | null;
@@ -19,6 +19,7 @@ interface Appointment {
   denied_at: string | null;
   ongoing_at: string | null;
   visited_at: string | null;
+  no_show_at: string | null;
   denial_reason: string | null;
   admin_remarks: string | null;
 }
@@ -29,13 +30,13 @@ interface UnavailableDate {
   reason: string;
 }
 
-type TabType = 'pending' | 'ongoing' | 'visited' | 'denied';
+type TabType = 'pending' | 'ongoing' | 'visited' | 'denied' | 'no_show';
 
 export default function AdminAppointmentDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('pending');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
-  const [statusCounts, setStatusCounts] = useState({ pending: 0, ongoing: 0, visited: 0, denied: 0 });
+  const [statusCounts, setStatusCounts] = useState({ pending: 0, ongoing: 0, visited: 0, denied: 0, no_show: 0 });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
@@ -60,6 +61,7 @@ export default function AdminAppointmentDashboard() {
     { key: 'ongoing', label: 'Ongoing', color: 'blue' },
     { key: 'visited', label: 'Visited', color: 'green' },
     { key: 'denied', label: 'Denied', color: 'red' },
+    { key: 'no_show', label: 'No-Show', color: 'gray' },
   ];
 
   // Handle camera stream when it becomes available
@@ -310,7 +312,7 @@ export default function AdminAppointmentDashboard() {
         const errorMessage = error.error || `HTTP error! status: ${response.status}`;
         setError(errorMessage);
         setAllAppointments([]);
-        setStatusCounts({ pending: 0, ongoing: 0, visited: 0, denied: 0 });
+        setStatusCounts({ pending: 0, ongoing: 0, visited: 0, denied: 0, no_show: 0 });
       } else {
         const data = await response.json();
         console.log(`✅ Fetched ${data.data?.length || data.length || 0} total appointments`);
@@ -324,6 +326,7 @@ export default function AdminAppointmentDashboard() {
           ongoing: allAppts.filter((app: Appointment) => app.status === 'ongoing').length,
           visited: allAppts.filter((app: Appointment) => app.status === 'visited').length,
           denied: allAppts.filter((app: Appointment) => app.status === 'denied').length,
+          no_show: allAppts.filter((app: Appointment) => app.status === 'no_show').length,
         };
         
         console.log(`📊 Status counts:`, counts);
@@ -339,7 +342,7 @@ export default function AdminAppointmentDashboard() {
       console.error(errorMessage);
       setError(errorMessage);
       setAllAppointments([]);
-      setStatusCounts({ pending: 0, ongoing: 0, visited: 0, denied: 0 });
+      setStatusCounts({ pending: 0, ongoing: 0, visited: 0, denied: 0, no_show: 0 });
     } finally {
       setLoading(false);
     }
@@ -366,6 +369,7 @@ export default function AdminAppointmentDashboard() {
           ongoing: allAppts.filter((app: Appointment) => app.status === 'ongoing').length,
           visited: allAppts.filter((app: Appointment) => app.status === 'visited').length,
           denied: allAppts.filter((app: Appointment) => app.status === 'denied').length,
+          no_show: allAppts.filter((app: Appointment) => app.status === 'no_show').length,
         };
         
         setStatusCounts(counts);
@@ -698,6 +702,7 @@ export default function AdminAppointmentDashboard() {
       denied: 'bg-red-100 text-red-800',
       ongoing: 'bg-blue-100 text-blue-800',
       visited: 'bg-purple-100 text-purple-800',
+      no_show: 'bg-gray-200 text-gray-700',
     };
     
     return (
@@ -925,7 +930,7 @@ export default function AdminAppointmentDashboard() {
               </div>
 
               {/* Timestamps */}
-              <div className="mt-4 pt-4 border-t border-gray-200 text-xs text-gray-500 grid grid-cols-3 gap-2">
+              <div className="mt-4 pt-4 border-t border-gray-200 text-xs text-gray-500 grid grid-cols-4 gap-2">
                 {appointment.pending_at && (
                   <div>Pending: {format(new Date(appointment.pending_at), 'MMM dd, HH:mm')}</div>
                 )}
@@ -934,6 +939,9 @@ export default function AdminAppointmentDashboard() {
                 )}
                 {appointment.visited_at && (
                   <div>Visited: {format(new Date(appointment.visited_at), 'MMM dd, HH:mm')}</div>
+                )}
+                {appointment.no_show_at && (
+                  <div>No-Show: {format(new Date(appointment.no_show_at), 'MMM dd, HH:mm')}</div>
                 )}
               </div>
             </div>

@@ -14,6 +14,29 @@ try {
   };
 }
 
+const autoExpireOngoingAppointments = async () => {
+  try {
+    const expiredCount = await Appointment.expireOldAppointments();
+    if (expiredCount > 0) {
+      console.log(`⏰ Auto-marked ${expiredCount} appointment(s) as no-show`);
+    }
+  } catch (error) {
+    console.error('⚠️ Failed to auto-expire ongoing appointments:', error.message);
+  }
+};
+
+const hasAppointmentElapsed = (appointment) => {
+  const endCandidate = appointment.end_time
+    ? new Date(appointment.end_time)
+    : new Date(new Date(appointment.date).getTime() + (60 * 60 * 1000));
+
+  if (Number.isNaN(endCandidate.getTime())) {
+    return false;
+  }
+
+  return endCandidate.getTime() < Date.now();
+};
+
 // CREATE
 exports.create = async (req, res) => {
   try {
@@ -52,6 +75,7 @@ exports.create = async (req, res) => {
 exports.getAll = async (req, res) => {
   try {
     console.log('📋 Fetching all appointments');
+    await autoExpireOngoingAppointments();
     const appointments = await Appointment.getAllAppointments();
     console.log(`✅ Successfully fetched ${appointments.length} appointments`);
     res.json(appointments);
@@ -69,9 +93,10 @@ exports.getAll = async (req, res) => {
 exports.getByStatus = async (req, res) => {
   try {
     const { status } = req.params;
+    await autoExpireOngoingAppointments();
     
     // Validate status parameter to prevent SQL injection and invalid queries
-    const validStatuses = ['pending', 'approved', 'denied', 'ongoing', 'visited'];
+    const validStatuses = ['pending', 'approved', 'denied', 'ongoing', 'visited', 'no_show'];
     if (!validStatuses.includes(status.toLowerCase())) {
       console.warn(`⚠️ Invalid status requested: ${status}`);
       return res.status(400).json({ 
@@ -285,6 +310,14 @@ exports.verifyQR = async (req, res) => {
     if (appointment.qr_code !== qrCode) {
       console.warn('❌ QR code mismatch:', { stored: appointment.qr_code, provided: qrCode });
       return res.status(401).json({ message: "Invalid QR code" });
+    }
+
+    if (appointment.status === 'ongoing' && hasAppointmentElapsed(appointment)) {
+      await Appointment.softDeleteAppointment(appointment.appointment_id);
+      return res.status(410).json({
+        message: 'Appointment already ended and has been marked as no-show.',
+        currentStatus: 'no_show'
+      });
     }
     
     // Check if appointment is in ongoing status
@@ -579,7 +612,7 @@ exports.markNoShow = async (req, res) => {
   try {
     const affected = await Appointment.softDeleteAppointment(req.params.id);
     if (!affected) {
-      return res.status(404).json({ message: "Appointment not found or already deleted" });
+      return res.status(404).json({ message: "Appointment not found, already deleted, or not eligible for no-show" });
     }
     res.json({ message: "Appointment marked as no-show" });
   } catch (err) {
