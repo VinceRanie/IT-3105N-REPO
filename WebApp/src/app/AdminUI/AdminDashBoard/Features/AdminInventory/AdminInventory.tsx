@@ -7,7 +7,6 @@ import EditChemicalModal from "./EditChemicalModal";
 import DeleteConfirmModal from "./DeleteConfirmModal";
 import { Search, Plus, Edit, Trash2, ChevronLeft, ChevronRight, Package, ChevronUp, ChevronDown } from "lucide-react";
 import { API_URL } from "@/config/api";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 export default function AdminInventory() {
   const [chemicals, setChemicals] = useState<Chemical[]>([]);
@@ -34,9 +33,6 @@ export default function AdminInventory() {
   // Sorting
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
 
   // Fetch chemicals and batches from API
   const fetchChemicals = async () => {
@@ -71,11 +67,14 @@ export default function AdminInventory() {
   }, []);
 
   useEffect(() => {
-    if (searchParams.get("modal") !== "add-chemical") return;
+    if (typeof window === "undefined") return;
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("modal") !== "add-chemical") return;
 
     setIsAddModalOpen(true);
-    router.replace(pathname, { scroll: false });
-  }, [pathname, router, searchParams]);
+    window.history.replaceState({}, "", window.location.pathname);
+  }, []);
 
   // Search and filter logic
   useEffect(() => {
