@@ -66,6 +66,16 @@ export default function AdminInventory() {
     fetchChemicals();
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("modal") !== "add-chemical") return;
+
+    setIsAddModalOpen(true);
+    window.history.replaceState({}, "", window.location.pathname);
+  }, []);
+
   // Search and filter logic
   useEffect(() => {
     let result = chemicals;

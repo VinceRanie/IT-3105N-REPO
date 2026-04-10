@@ -14,16 +14,49 @@ try {
   };
 }
 
+const autoExpireOngoingAppointments = async () => {
+  try {
+    const expiredCount = await Appointment.expireOldAppointments();
+    if (expiredCount > 0) {
+      console.log(`⏰ Auto-marked ${expiredCount} appointment(s) as no-show`);
+    }
+  } catch (error) {
+    console.error('⚠️ Failed to auto-expire ongoing appointments:', error.message);
+  }
+};
+
+const hasAppointmentElapsed = (appointment) => {
+  const endCandidate = appointment.end_time
+    ? new Date(appointment.end_time)
+    : new Date(new Date(appointment.date).getTime() + (60 * 60 * 1000));
+
+  if (Number.isNaN(endCandidate.getTime())) {
+    return false;
+  }
+
+  return endCandidate.getTime() < Date.now();
+};
+
 // CREATE
 exports.create = async (req, res) => {
   try {
     console.log('[DEBUG] Create appointment - req.body:', JSON.stringify(req.body, null, 2));
+
+    // Reject booking on dates explicitly blocked by admin/RA
+    const blockedDate = await Appointment.isDateUnavailable(req.body.date);
+    if (blockedDate) {
+      return res.status(409).json({
+        error: "Selected date is unavailable",
+        unavailable: true,
+        reason: blockedDate.reason || null
+      });
+    }
     
-    // Check for schedule conflicts (check time range overlap on same date and same student)
-    const hasConflict = await Appointment.checkScheduleConflict(req.body.date, req.body.end_time, null, req.body.student_id);
+    // Global conflict check: no overlapping time range is allowed for any user on the same date.
+    const hasConflict = await Appointment.checkScheduleConflict(req.body.date, req.body.end_time, null, null);
     if (hasConflict) {
       return res.status(409).json({ 
-        error: "Schedule conflict: An appointment already exists at this time on this date" 
+        error: "Schedule conflict: This time range is already occupied by another appointment"
       });
     }
     
@@ -42,6 +75,7 @@ exports.create = async (req, res) => {
 exports.getAll = async (req, res) => {
   try {
     console.log('📋 Fetching all appointments');
+    await autoExpireOngoingAppointments();
     const appointments = await Appointment.getAllAppointments();
     console.log(`✅ Successfully fetched ${appointments.length} appointments`);
     res.json(appointments);
@@ -59,9 +93,10 @@ exports.getAll = async (req, res) => {
 exports.getByStatus = async (req, res) => {
   try {
     const { status } = req.params;
+    await autoExpireOngoingAppointments();
     
     // Validate status parameter to prevent SQL injection and invalid queries
-    const validStatuses = ['pending', 'approved', 'denied', 'ongoing', 'visited'];
+    const validStatuses = ['pending', 'approved', 'denied', 'ongoing', 'visited', 'no_show'];
     if (!validStatuses.includes(status.toLowerCase())) {
       console.warn(`⚠️ Invalid status requested: ${status}`);
       return res.status(400).json({ 
@@ -112,6 +147,20 @@ exports.approve = async (req, res) => {
   try {
     const appointment = await Appointment.getAppointmentWithUserEmail(req.params.id);
     if (!appointment) return res.status(404).json({ message: "Appointment not found" });
+
+    // Re-check for global schedule conflicts right before approval to avoid race conditions.
+    const hasConflict = await Appointment.checkScheduleConflict(
+      appointment.date,
+      appointment.end_time,
+      appointment.appointment_id,
+      null
+    );
+
+    if (hasConflict) {
+      return res.status(409).json({
+        message: "Cannot approve appointment due to schedule conflict with another approved/ongoing appointment."
+      });
+    }
     
     // Format date properly
     const appointmentDate = new Date(appointment.date);
@@ -262,6 +311,14 @@ exports.verifyQR = async (req, res) => {
       console.warn('❌ QR code mismatch:', { stored: appointment.qr_code, provided: qrCode });
       return res.status(401).json({ message: "Invalid QR code" });
     }
+
+    if (appointment.status === 'ongoing' && hasAppointmentElapsed(appointment)) {
+      await Appointment.softDeleteAppointment(appointment.appointment_id);
+      return res.status(410).json({
+        message: 'Appointment already ended and has been marked as no-show.',
+        currentStatus: 'no_show'
+      });
+    }
     
     // Check if appointment is in ongoing status
     if (appointment.status !== 'ongoing') {
@@ -326,14 +383,35 @@ exports.getAvailability = async (req, res) => {
       return res.status(400).json({ message: "Date parameter is required (YYYY-MM-DD)" });
     }
     
-    // Get all appointments for this date
-    const appointments = await Appointment.getAppointmentsByDate(date);
-    
+    const blockedDate = await Appointment.isDateUnavailable(date);
+
     // Time slots configuration (9 AM to 4 PM, 1-hour intervals)
     const timeSlots = [
       '09:00', '10:00', '11:00', '12:00', 
       '13:00', '14:00', '15:00', '16:00'
     ];
+
+    // If date is blocked, all slots are unavailable and include the reason
+    if (blockedDate) {
+      const unavailableSlots = timeSlots.map(time => ({
+        time,
+        available: false,
+        booked: true
+      }));
+
+      return res.json({
+        date,
+        unavailable: true,
+        unavailableReason: blockedDate.reason || null,
+        totalSlots: timeSlots.length,
+        bookedCount: timeSlots.length,
+        availableCount: 0,
+        timeSlots: unavailableSlots
+      });
+    }
+
+    // Get all appointments for this date
+    const appointments = await Appointment.getAppointmentsByDate(date);
     
     // Build booked times set - mark ALL hours covered by appointment duration
     const bookedTimes = new Set();
@@ -366,6 +444,8 @@ exports.getAvailability = async (req, res) => {
     
     res.json({
       date,
+      unavailable: false,
+      unavailableReason: null,
       totalSlots: timeSlots.length,
       bookedCount: bookedTimes.size,
       availableCount: timeSlots.length - bookedTimes.size,
@@ -386,32 +466,143 @@ exports.getCalendarOverview = async (req, res) => {
       return res.status(400).json({ message: "Month and year parameters are required" });
     }
     
-    const startDate = new Date(`${year}-${String(month).padStart(2, '0')}-01`);
-    const endDate = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0);
+    const toDateOnly = (value) => {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return null;
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    };
+
+    const monthNumber = Number(month);
+    const yearNumber = Number(year);
+    const startDate = new Date(yearNumber, monthNumber - 1, 1);
+    const endDate = new Date(yearNumber, monthNumber, 0);
+
+    const startDateStr = toDateOnly(startDate);
+    const endDateStr = toDateOnly(endDate);
+
+    if (!startDateStr || !endDateStr) {
+      return res.status(400).json({ error: "Invalid month/year values" });
+    }
     
     const appointments = await Appointment.getAppointmentsByDateRange(
-      startDate.toISOString().split('T')[0],
-      endDate.toISOString().split('T')[0]
+      startDateStr,
+      endDateStr
+    );
+    const unavailableDates = await Appointment.getUnavailableDates(
+      startDateStr,
+      endDateStr
     );
     
     // Group appointments by date
     const dateStatus = {};
     appointments.forEach(appt => {
-      const dateStr = appt.date.toISOString().split('T')[0];
+      const dateStr = toDateOnly(appt.date);
+      if (!dateStr) return;
+
       if (!dateStatus[dateStr]) {
         dateStatus[dateStr] = { total: 0, booked: 0, available: 0 };
       }
       dateStatus[dateStr].total++;
       dateStatus[dateStr].booked++;
     });
+
+    const blockedDateStatus = {};
+    unavailableDates.forEach(item => {
+      const dateStr = String(item.unavailable_date);
+      blockedDateStatus[dateStr] = {
+        reason: item.reason,
+        unavailable: true
+      };
+    });
     
     res.json({
       month,
       year,
-      daysWithAppointments: dateStatus
+      daysWithAppointments: dateStatus,
+      daysUnavailable: blockedDateStatus
     });
   } catch (err) {
     console.error('❌ Error fetching calendar overview:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// MARK DATE AS UNAVAILABLE (Admin/RA)
+exports.markDateUnavailable = async (req, res) => {
+  try {
+    const { date, reason, created_by_role, created_by_user_id } = req.body;
+
+    if (!date) {
+      return res.status(400).json({ message: "Date is required (YYYY-MM-DD)" });
+    }
+
+    if (!reason || !String(reason).trim()) {
+      return res.status(400).json({ message: "Reason is required" });
+    }
+
+    const existing = await Appointment.isDateUnavailable(date);
+    if (existing) {
+      return res.status(409).json({
+        message: "This date is already marked as unavailable",
+        date,
+        reason: existing.reason || null
+      });
+    }
+
+    const creatorId = Number(created_by_user_id);
+
+    await Appointment.upsertUnavailableDate({
+      date,
+      reason: String(reason).trim(),
+      created_by_role: created_by_role || null,
+      created_by_user_id: Number.isFinite(creatorId) ? creatorId : null
+    });
+
+    // Notification payload is intentionally returned for future integration.
+    res.status(201).json({
+      message: "Date marked as unavailable",
+      unavailable: true,
+      date,
+      reason: String(reason).trim(),
+      notificationPending: true
+    });
+  } catch (err) {
+    console.error('❌ Error marking date unavailable:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// LIST UNAVAILABLE DATES
+exports.getUnavailableDates = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const rows = await Appointment.getUnavailableDates(startDate || null, endDate || null);
+    res.json(rows);
+  } catch (err) {
+    console.error('❌ Error fetching unavailable dates:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// REMOVE UNAVAILABLE DATE
+exports.removeUnavailableDate = async (req, res) => {
+  try {
+    const { date } = req.params;
+    if (!date) {
+      return res.status(400).json({ message: "Date parameter is required" });
+    }
+
+    const affected = await Appointment.removeUnavailableDate(date);
+    if (!affected) {
+      return res.status(404).json({ message: "Unavailable date not found" });
+    }
+
+    res.json({ message: "Unavailable date removed", date, notificationPending: true });
+  } catch (err) {
+    console.error('❌ Error removing unavailable date:', err);
     res.status(500).json({ error: err.message });
   }
 };
@@ -421,7 +612,7 @@ exports.markNoShow = async (req, res) => {
   try {
     const affected = await Appointment.softDeleteAppointment(req.params.id);
     if (!affected) {
-      return res.status(404).json({ message: "Appointment not found or already deleted" });
+      return res.status(404).json({ message: "Appointment not found, already deleted, or not eligible for no-show" });
     }
     res.json({ message: "Appointment marked as no-show" });
   } catch (err) {

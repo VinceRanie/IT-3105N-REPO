@@ -11,7 +11,7 @@ interface Appointment {
   department: string;
   purpose: string;
   date: string;
-  status: 'pending' | 'approved' | 'denied' | 'ongoing' | 'visited';
+  status: 'pending' | 'approved' | 'denied' | 'ongoing' | 'visited' | 'no_show';
   qr_code: string | null;
   created_at: string;
   pending_at: string | null;
@@ -19,28 +19,41 @@ interface Appointment {
   denied_at: string | null;
   ongoing_at: string | null;
   visited_at: string | null;
+  no_show_at: string | null;
   denial_reason: string | null;
   admin_remarks: string | null;
 }
 
-type TabType = 'pending' | 'ongoing' | 'visited' | 'denied';
+interface UnavailableDate {
+  unavailable_id: number;
+  unavailable_date: string;
+  reason: string;
+}
+
+type TabType = 'pending' | 'ongoing' | 'visited' | 'denied' | 'no_show';
 
 export default function AdminAppointmentDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('pending');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
-  const [statusCounts, setStatusCounts] = useState({ pending: 0, ongoing: 0, visited: 0, denied: 0 });
+  const [statusCounts, setStatusCounts] = useState({ pending: 0, ongoing: 0, visited: 0, denied: 0, no_show: 0 });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState<'approve' | 'deny' | 'scan'>('approve');
   const [remarks, setRemarks] = useState('');
+  const [reason, setReason] = useState('');
   const [qrInput, setQrInput] = useState('');
   const [lastVerifiedQR, setLastVerifiedQR] = useState('');
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [cameraFacingMode, setCameraFacingMode] = useState<'environment' | 'user'>('environment');
+  const [unavailableDate, setUnavailableDate] = useState('');
+  const [unavailableReason, setUnavailableReason] = useState('');
+  const [unavailableDates, setUnavailableDates] = useState<UnavailableDate[]>([]);
+  const [savingUnavailable, setSavingUnavailable] = useState(false);
+  const [showUnavailablePanel, setShowUnavailablePanel] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const tabs: { key: TabType; label: string; color: string }[] = [
@@ -48,6 +61,7 @@ export default function AdminAppointmentDashboard() {
     { key: 'ongoing', label: 'Ongoing', color: 'blue' },
     { key: 'visited', label: 'Visited', color: 'green' },
     { key: 'denied', label: 'Denied', color: 'red' },
+    { key: 'no_show', label: 'No-Show', color: 'gray' },
   ];
 
   // Handle camera stream when it becomes available
@@ -112,7 +126,90 @@ export default function AdminAppointmentDashboard() {
   useEffect(() => {
     // On initial load, fetch all appointments to get status counts
     fetchAllAppointmentsAndCount();
+    fetchUnavailableDates();
   }, []);
+
+  const fetchUnavailableDates = async () => {
+    try {
+      const res = await fetch('/API/appointments/unavailable-dates');
+      if (!res.ok) {
+        throw new Error('Failed to fetch unavailable dates');
+      }
+      const data = await res.json();
+      setUnavailableDates(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Error fetching unavailable dates:', err);
+    }
+  };
+
+  const getCurrentUserId = (): number | null => {
+    try {
+      const fromUserData = localStorage.getItem('userData');
+      const fromUser = localStorage.getItem('user');
+      const raw = fromUserData || fromUser;
+      if (!raw) return null;
+
+      const parsed = JSON.parse(raw);
+      const id = Number(parsed.userId ?? parsed.user_id ?? parsed.id);
+      return Number.isFinite(id) ? id : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const handleSetUnavailableDate = async () => {
+    if (!unavailableDate || !unavailableReason.trim()) {
+      alert('Please select a date and provide a reason.');
+      return;
+    }
+
+    try {
+      setSavingUnavailable(true);
+      const response = await fetch('/API/appointments/unavailable-dates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date: unavailableDate,
+          reason: unavailableReason.trim(),
+          created_by_role: 'admin',
+          created_by_user_id: getCurrentUserId()
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || data.error || 'Failed to mark date unavailable');
+      }
+
+      alert('Date marked unavailable. Notification payload queued for future system integration.');
+      setUnavailableDate('');
+      setUnavailableReason('');
+      fetchUnavailableDates();
+    } catch (err) {
+      console.error('Error marking date unavailable:', err);
+      alert(err instanceof Error ? err.message : 'Failed to mark date unavailable');
+    } finally {
+      setSavingUnavailable(false);
+    }
+  };
+
+  const handleRemoveUnavailableDate = async (date: string) => {
+    try {
+      const response = await fetch(`/API/appointments/unavailable-dates/${encodeURIComponent(date)}`, {
+        method: 'DELETE'
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || data.error || 'Failed to remove unavailable date');
+      }
+
+      fetchUnavailableDates();
+    } catch (err) {
+      console.error('Error removing unavailable date:', err);
+      alert(err instanceof Error ? err.message : 'Failed to remove unavailable date');
+    }
+  };
 
   // Auto-verify when a valid appointment QR URL is detected
   useEffect(() => {
@@ -215,7 +312,7 @@ export default function AdminAppointmentDashboard() {
         const errorMessage = error.error || `HTTP error! status: ${response.status}`;
         setError(errorMessage);
         setAllAppointments([]);
-        setStatusCounts({ pending: 0, ongoing: 0, visited: 0, denied: 0 });
+        setStatusCounts({ pending: 0, ongoing: 0, visited: 0, denied: 0, no_show: 0 });
       } else {
         const data = await response.json();
         console.log(`✅ Fetched ${data.data?.length || data.length || 0} total appointments`);
@@ -229,6 +326,7 @@ export default function AdminAppointmentDashboard() {
           ongoing: allAppts.filter((app: Appointment) => app.status === 'ongoing').length,
           visited: allAppts.filter((app: Appointment) => app.status === 'visited').length,
           denied: allAppts.filter((app: Appointment) => app.status === 'denied').length,
+          no_show: allAppts.filter((app: Appointment) => app.status === 'no_show').length,
         };
         
         console.log(`📊 Status counts:`, counts);
@@ -244,7 +342,7 @@ export default function AdminAppointmentDashboard() {
       console.error(errorMessage);
       setError(errorMessage);
       setAllAppointments([]);
-      setStatusCounts({ pending: 0, ongoing: 0, visited: 0, denied: 0 });
+      setStatusCounts({ pending: 0, ongoing: 0, visited: 0, denied: 0, no_show: 0 });
     } finally {
       setLoading(false);
     }
@@ -271,6 +369,7 @@ export default function AdminAppointmentDashboard() {
           ongoing: allAppts.filter((app: Appointment) => app.status === 'ongoing').length,
           visited: allAppts.filter((app: Appointment) => app.status === 'visited').length,
           denied: allAppts.filter((app: Appointment) => app.status === 'denied').length,
+          no_show: allAppts.filter((app: Appointment) => app.status === 'no_show').length,
         };
         
         setStatusCounts(counts);
@@ -315,7 +414,7 @@ export default function AdminAppointmentDashboard() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          reason: remarks
+          reason: reason
         }),
       });
 
@@ -603,6 +702,7 @@ export default function AdminAppointmentDashboard() {
       denied: 'bg-red-100 text-red-800',
       ongoing: 'bg-blue-100 text-blue-800',
       visited: 'bg-purple-100 text-purple-800',
+      no_show: 'bg-gray-200 text-gray-700',
     };
     
     return (
@@ -627,6 +727,68 @@ export default function AdminAppointmentDashboard() {
         >
           📷 Scan QR Code
         </button>
+      </div>
+
+      <div className="mb-6 rounded-lg border border-orange-200 bg-orange-50 p-4">
+        <button
+          type="button"
+          onClick={() => setShowUnavailablePanel((prev) => !prev)}
+          className="w-full flex items-center justify-between text-left"
+        >
+          <h2 className="text-lg font-semibold text-orange-900">Set Date Unavailable</h2>
+          <span className="text-sm font-semibold text-orange-800">
+            {showUnavailablePanel ? 'Hide' : 'Show'} {showUnavailablePanel ? '▲' : '▼'}
+          </span>
+        </button>
+
+        {showUnavailablePanel && (
+          <>
+            <p className="text-sm text-orange-800 mb-4 mt-3">This blocks booking for students/faculty and prepares data for the upcoming notification system.</p>
+            <div className="grid gap-3 md:grid-cols-3">
+              <input
+                type="date"
+                value={unavailableDate}
+                onChange={(e) => setUnavailableDate(e.target.value)}
+                className="rounded-md border border-orange-300 px-3 py-2"
+              />
+              <input
+                type="text"
+                value={unavailableReason}
+                onChange={(e) => setUnavailableReason(e.target.value)}
+                placeholder="Reason (e.g. lab maintenance)"
+                className="rounded-md border border-orange-300 px-3 py-2 md:col-span-2"
+              />
+            </div>
+            <div className="mt-3 flex items-center gap-3">
+              <button
+                onClick={handleSetUnavailableDate}
+                disabled={savingUnavailable}
+                className="rounded-md bg-orange-600 px-4 py-2 text-white hover:bg-orange-700 disabled:opacity-60"
+              >
+                {savingUnavailable ? 'Saving...' : 'Mark Unavailable'}
+              </button>
+            </div>
+            <div className="mt-4 space-y-2">
+              {unavailableDates.length === 0 ? (
+                <p className="text-sm text-orange-700">No blocked dates yet.</p>
+              ) : (
+                unavailableDates.slice(0, 8).map((item) => (
+                  <div key={item.unavailable_id} className="flex items-center justify-between rounded-md bg-white px-3 py-2 text-sm border border-orange-100">
+                    <span>
+                      {format(new Date(`${item.unavailable_date}T00:00:00`), 'MMM dd, yyyy')} - {item.reason}
+                    </span>
+                    <button
+                      onClick={() => handleRemoveUnavailableDate(item.unavailable_date)}
+                      className="text-red-600 hover:text-red-700 font-semibold"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Tabs */}
@@ -768,7 +930,7 @@ export default function AdminAppointmentDashboard() {
               </div>
 
               {/* Timestamps */}
-              <div className="mt-4 pt-4 border-t border-gray-200 text-xs text-gray-500 grid grid-cols-3 gap-2">
+              <div className="mt-4 pt-4 border-t border-gray-200 text-xs text-gray-500 grid grid-cols-4 gap-2">
                 {appointment.pending_at && (
                   <div>Pending: {format(new Date(appointment.pending_at), 'MMM dd, HH:mm')}</div>
                 )}
@@ -777,6 +939,9 @@ export default function AdminAppointmentDashboard() {
                 )}
                 {appointment.visited_at && (
                   <div>Visited: {format(new Date(appointment.visited_at), 'MMM dd, HH:mm')}</div>
+                )}
+                {appointment.no_show_at && (
+                  <div>No-Show: {format(new Date(appointment.no_show_at), 'MMM dd, HH:mm')}</div>
                 )}
               </div>
             </div>

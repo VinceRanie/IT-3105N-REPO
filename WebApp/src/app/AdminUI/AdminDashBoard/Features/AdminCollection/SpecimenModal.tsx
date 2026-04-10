@@ -360,7 +360,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto p-4">
+    <div className="fixed inset-0 bg-white bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto p-4">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl my-8">
         <div className="flex items-center justify-between p-4 border-b sticky top-0 bg-white z-10">
           <h2 className="text-xl font-semibold text-[#113F67]">
@@ -391,7 +391,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
                   required
                   value={formData.project_id}
                   onChange={(e) => setFormData({ ...formData, project_id: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                  className="w-full px-3 py-2 border border-[#113F67] text-sm text-[#113F67] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
                 >
                   <option value="">Select a Project</option>
                   {projects.map((project) => (
@@ -412,7 +412,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
                   required
                   value={formData.code_name}
                   onChange={(e) => setFormData({ ...formData, code_name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                  className="w-full px-3 py-2 border border-[#113F67] text-sm text-[#113F67] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
                   placeholder="e.g., CBN1"
                 />
               </div>
@@ -426,7 +426,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
                   required
                   value={formData.classification}
                   onChange={(e) => setFormData({ ...formData, classification: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                  className="w-full px-3 py-2 border border-[#113F67] text-sm text-[#113F67] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
                 >
                   <option value="">Select Classification</option>
                   <option value="Bacteria">Bacteria</option>
@@ -465,7 +465,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
                   required
                   value={formData.source}
                   onChange={(e) => setFormData({ ...formData, source: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                  className="w-full px-3 py-2 border border-[#113F67] text-sm text-[#113F67] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
                   placeholder="e.g., Mangrove Sediment"
                 />
               </div>
@@ -480,7 +480,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
                   required
                   value={formData.date_accessed}
                   onChange={(e) => setFormData({ ...formData, date_accessed: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                  className="w-full px-3 py-2 border border-[#113F67] text-sm text-[#113F67] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
                 />
               </div>
 
@@ -493,7 +493,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
                   type="text"
                   value={formData.locale}
                   onChange={(e) => setFormData({ ...formData, locale: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                  className="w-full px-3 py-2 border border-[#113F67] text-sm text-[#113F67] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
                   placeholder="e.g., Bantayan Island, Cebu"
                 />
               </div>
@@ -507,7 +507,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
                   type="text"
                   value={formData.project_fund}
                   onChange={(e) => setFormData({ ...formData, project_fund: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                  className="w-full px-3 py-2 border border-[#113F67] text-sm text-[#113F67] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
                   placeholder="e.g., NRCP Sediment Project"
                 />
               </div>
@@ -519,7 +519,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
                 </label>
                 <div className="flex items-start gap-4">
                   <div className="flex-1">
-                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-[#113F67] transition-colors">
+                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-[#113F67] rounded-lg cursor-pointer hover:border-[#113F67] transition-colors">
                       <div className="flex flex-col items-center justify-center pt-5 pb-6">
                         <Upload className="w-8 h-8 mb-2 text-gray-400" />
                         <p className="mb-2 text-sm text-gray-500">
@@ -563,7 +563,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                  className="w-full px-3 py-2 border border-[#113F67] text-sm text-[#113F67] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
                   placeholder="Brief description of the specimen..."
                 />
               </div>
@@ -596,7 +596,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
                       type="file"
                       accept=".fasta,.fa,.fna,.ffn,.faa,.frn,.fas,.fsa,.seq,.txt,text/plain,application/octet-stream"
                       onChange={handleFastaChange}
-                      className="flex-1 text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                      className="rounded-lg cursor-pointer flex-1 border border-[#113F67] text-sm text-[#113F67] file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-[#113F67] file:text-white hover:file:bg-[#113F67]"
                     />
                     {fastaFile && (
                       <span className="text-sm text-green-600">{fastaFile.name}</span>
@@ -657,7 +657,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
                     type="text"
                     value={formData.accession_no}
                     onChange={(e) => setFormData({ ...formData, accession_no: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                    className="w-full px-3 py-2 border border-[#113F67] text-sm text-[#113F67] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
                     placeholder="e.g., HM015629"
                   />
                 </div>
@@ -672,7 +672,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
                     step="0.01"
                     value={formData.similarity_percent}
                     onChange={(e) => setFormData({ ...formData, similarity_percent: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                    className="w-full px-3 py-2 border border-[#113F67] text-sm text-[#113F67] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
                     placeholder="e.g., 95.16"
                   />
                 </div>
@@ -685,7 +685,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
             <button
               type="button"
               onClick={() => toggleSection('biochemical')}
-              className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
+              className=" w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
             >
               <span className="font-semibold text-gray-800">Biochemical Tests (21 tests)</span>
               {expandedSections.biochemical ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
@@ -701,7 +701,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
                     <select
                       value={formData.biochemical_tests[test as keyof typeof formData.biochemical_tests]}
                       onChange={(e) => handleBiochemicalChange(test, e.target.value)}
-                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-[#113F67]"
+                      className="w-full px-2 py-1.5 border border-[#113F67] text-sm text-[#113F67] rounded focus:outline-none focus:ring-1 focus:ring-[#113F67]"
                     >
                       <option value="">-</option>
                       <option value="+">Positive (+)</option>
@@ -720,7 +720,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
                       <select
                         value={formData.catalase}
                         onChange={(e) => setFormData({ ...formData, catalase: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                        className="w-full px-3 py-2 border border-[#113F67] text-sm text-[#113F67] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
                       >
                         <option value="">Select</option>
                         <option value="Positive">Positive</option>
@@ -734,7 +734,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
                       <select
                         value={formData.oxidase}
                         onChange={(e) => setFormData({ ...formData, oxidase: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                        className="w-full px-3 py-2 border border border-[#113F67] text-sm text-[#113F67] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
                       >
                         <option value="">Select</option>
                         <option value="Positive">Positive</option>
@@ -748,7 +748,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
                       <select
                         value={formData.hemolysis}
                         onChange={(e) => setFormData({ ...formData, hemolysis: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                        className="w-full px-3 py-2 border border-[#113F67] text-sm text-[#113F67] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
                       >
                         <option value="">Select</option>
                         <option value="Alpha-hemolysis">Alpha-hemolysis</option>
@@ -978,7 +978,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
                     type="text"
                     value={formData.growth_media}
                     onChange={(e) => setFormData({ ...formData, growth_media: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                    className="w-full px-3 py-2 border border-[#113F67] text-sm text-[#113F67] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
                     placeholder="e.g., Nutrient Agar, LB Broth"
                   />
                 </div>
@@ -989,7 +989,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
                     type="text"
                     value={formData.activity}
                     onChange={(e) => setFormData({ ...formData, activity: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                    className="w-full px-3 py-2 border border-[#113F67] text-sm text-[#113F67] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
                     placeholder="e.g., Active, Dormant"
                   />
                 </div>
@@ -1000,7 +1000,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
                     value={formData.special_reqs}
                     onChange={(e) => setFormData({ ...formData, special_reqs: e.target.value })}
                     rows={2}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                    className="w-full px-3 py-2 border border-[#113F67] text-sm text-[#113F67] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
                     placeholder="Temperature, pH, oxygen requirements, etc."
                   />
                 </div>
@@ -1011,7 +1011,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
                     value={formData.result}
                     onChange={(e) => setFormData({ ...formData, result: e.target.value })}
                     rows={2}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                    className="w-full px-3 py-2 border border-[#113F67] text-sm text-[#113F67] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
                     placeholder="Additional observations or results"
                   />
                 </div>
@@ -1073,11 +1073,11 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
           </div>
 
           {/* Form Actions */}
-          <div className="flex justify-end gap-3 pt-4 border-t sticky bottom-0 bg-white">
+          <div className="flex justify-end gap-3 pt-4 border-t sticky bottom-0 bg-transparent">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              className="cursor-pointer px-4 py-2 bg-white border border-[#113F67] text-sm text-[#113F67] rounded-lg hover:bg-gray-50 transition-colors"
             >
               Cancel
             </button>

@@ -19,16 +19,35 @@ exports.createAppointment = async (data) => {
   return result.insertId;
 };
 
+// CHECK IF DATE IS MARKED UNAVAILABLE
+exports.isDateUnavailable = async (date) => {
+  const [rows] = await db.execute(
+    `SELECT unavailable_id, unavailable_date, reason
+     FROM appointment_unavailable_dates
+     WHERE DATE(unavailable_date) = DATE(?) AND deleted_at IS NULL
+     LIMIT 1`,
+    [date]
+  );
+  return rows[0] || null;
+};
+
 // READ ALL
 exports.getAllAppointments = async () => {
   const [rows] = await db.execute(
-    "SELECT * FROM appointment WHERE deleted_at IS NULL ORDER BY date DESC"
+    "SELECT * FROM appointment WHERE deleted_at IS NULL OR status = 'no_show' ORDER BY date DESC"
   );
   return rows;
 };
 
 // READ BY STATUS
 exports.getAppointmentsByStatus = async (status) => {
+  if (status === 'no_show') {
+    const [rows] = await db.execute(
+      "SELECT * FROM appointment WHERE status = 'no_show' ORDER BY date DESC"
+    );
+    return rows;
+  }
+
   const [rows] = await db.execute(
     "SELECT * FROM appointment WHERE status = ? AND deleted_at IS NULL ORDER BY date DESC",
     [status]
@@ -181,7 +200,11 @@ exports.getAppointmentsByDate = async (date) => {
 // SOFT DELETE (Mark as no-show)
 exports.softDeleteAppointment = async (id) => {
   const [result] = await db.execute(
-    "UPDATE appointment SET deleted_at = NOW() WHERE appointment_id = ? AND deleted_at IS NULL",
+    `UPDATE appointment
+     SET status = 'no_show', no_show_at = NOW(), deleted_at = NOW()
+     WHERE appointment_id = ?
+       AND deleted_at IS NULL
+       AND status IN ('approved', 'ongoing')`,
     [id]
   );
   return result.affectedRows;
@@ -190,7 +213,68 @@ exports.softDeleteAppointment = async (id) => {
 // AUTO-EXPIRE ONGOING APPOINTMENTS (cron job)
 exports.expireOldAppointments = async () => {
   const [result] = await db.execute(
-    "UPDATE appointment SET deleted_at = NOW() WHERE status = 'ongoing' AND date < NOW() AND deleted_at IS NULL"
+    `UPDATE appointment
+     SET status = 'no_show', no_show_at = NOW(), deleted_at = NOW()
+     WHERE status = 'ongoing'
+       AND deleted_at IS NULL
+       AND COALESCE(end_time, DATE_ADD(date, INTERVAL 1 HOUR)) < NOW()`
+  );
+  return result.affectedRows;
+};
+
+// MARK DATE AS UNAVAILABLE (upsert by date)
+exports.upsertUnavailableDate = async ({ date, reason, created_by_role = null, created_by_user_id = null }) => {
+  const [result] = await db.execute(
+    `INSERT INTO appointment_unavailable_dates
+      (unavailable_date, reason, created_by_role, created_by_user_id)
+     VALUES (?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE
+      reason = VALUES(reason),
+      created_by_role = VALUES(created_by_role),
+      created_by_user_id = VALUES(created_by_user_id),
+      deleted_at = NULL,
+      updated_at = NOW()`,
+    [date, reason, created_by_role, created_by_user_id]
+  );
+  return result.affectedRows;
+};
+
+// LIST UNAVAILABLE DATES
+exports.getUnavailableDates = async (startDate = null, endDate = null) => {
+  let query = `SELECT unavailable_id,
+                      DATE_FORMAT(unavailable_date, '%Y-%m-%d') AS unavailable_date,
+                      reason,
+                      created_by_role,
+                      created_by_user_id,
+                      created_at,
+                      updated_at
+               FROM appointment_unavailable_dates
+               WHERE deleted_at IS NULL`;
+  const params = [];
+
+  if (startDate) {
+    query += " AND DATE(unavailable_date) >= DATE(?)";
+    params.push(startDate);
+  }
+
+  if (endDate) {
+    query += " AND DATE(unavailable_date) <= DATE(?)";
+    params.push(endDate);
+  }
+
+  query += " ORDER BY unavailable_date ASC";
+
+  const [rows] = await db.execute(query, params);
+  return rows;
+};
+
+// REMOVE UNAVAILABLE DATE
+exports.removeUnavailableDate = async (date) => {
+  const [result] = await db.execute(
+    `UPDATE appointment_unavailable_dates
+     SET deleted_at = NOW(), updated_at = NOW()
+     WHERE DATE(unavailable_date) = DATE(?) AND deleted_at IS NULL`,
+    [date]
   );
   return result.affectedRows;
 };

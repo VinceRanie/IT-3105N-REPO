@@ -24,7 +24,7 @@ export default function ForgotPasswordPage() {
 
       const data = await response.json();
       if (response.ok) {
-        setMessage({ text: data.message || "If an account exists, a reset link has been sent.", type: "success" });
+        setMessage({ text: data.message || "Email sent successfully", type: "success" });
       } else {
         setMessage({ text: data.message || "Failed to send reset link.", type: "error" });
       }
@@ -88,13 +88,7 @@ export default function ForgotPasswordPage() {
       </div>
 
       <div className="relative hidden md:block">
-        <Image
-          src="/UI/img/Laboratory.jpg"
-          alt="Scientific laboratory research"
-          fill
-          sizes="(max-width: 768px) 0px, 50vw"
-          className="object-cover"
-        />
+        <Image src="/UI/img/Laboratory.jpg" alt="Scientific laboratory research" fill className="object-cover" />
         <div className="absolute inset-0 bg-gradient-to-l from-transparent to-background/10" />
       </div>
     </div>
