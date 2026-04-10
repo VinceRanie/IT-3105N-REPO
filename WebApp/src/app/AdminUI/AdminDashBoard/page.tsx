@@ -6,7 +6,7 @@ import { getAuthHeader } from "@/app/utils/authUtil";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 
-import { Microscope,FlaskConical,AlertTriangle,CalendarClock,Users,Package,QrCode,Clock,} from "lucide-react";
+import { Microscope,FlaskConical,AlertTriangle,CalendarClock,Users,Package,BarChart3,Clock,Loader2,} from "lucide-react";
 
 import {BarChart,Bar,XAxis,YAxis,CartesianGrid,Tooltip,ResponsiveContainer,} from "recharts";
 
@@ -479,7 +479,7 @@ const dashboardData = {
     { id: "add-specimen", label: "Add Specimen", icon: Microscope },
     { id: "add-chemical", label: "Add Chemical Stock", icon: FlaskConical },
     { id: "set-unavailable", label: "Set Date Unavailable", icon: CalendarClock },
-    { id: "print-qr", label: "Print QR Code", icon: QrCode },
+    { id: "see-reports", label: "See Reports", icon: BarChart3 },
   ],
 
   appointments: [
@@ -531,6 +531,7 @@ export default function AdminHome() {
   const [unavailableReason, setUnavailableReason] = useState("");
   const [unavailableDates, setUnavailableDates] = useState<UnavailableDate[]>([]);
   const [savingUnavailable, setSavingUnavailable] = useState(false);
+  const [showReportsNavToast, setShowReportsNavToast] = useState(false);
 
   const fetchUnavailableDates = async () => {
     try {
@@ -628,6 +629,13 @@ export default function AdminHome() {
     if (actionId === "set-unavailable") {
       setShowUnavailableModal(true);
       fetchUnavailableDates();
+      return;
+    }
+
+    if (actionId === "see-reports") {
+      setShowReportsNavToast(true);
+      setTimeout(() => setShowReportsNavToast(false), 2500);
+      router.push("/AdminUI/AdminDashBoard/Features/AdminReports");
     }
   };
 
@@ -1148,6 +1156,15 @@ export default function AdminHome() {
           </div>
         </div>
       </div>
+
+      {showReportsNavToast && (
+        <div className="fixed right-4 top-20 z-50 rounded-lg border border-blue-200 bg-white px-3 py-2 shadow-md">
+          <div className="flex items-center gap-2 text-sm text-[#113F67]">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Opening Reports...
+          </div>
+        </div>
+      )}
 
     </div>
   );

@@ -6,8 +6,8 @@ export default function QuickActions(){
     const actions = [
         { label: "Add Specimen", icon: Microscope },
         { label: "Add Chemical Stock", icon: FlaskConical },
-        { label: "Create Appointment", icon: CalendarClock },
-        { label: "Print QR Code", icon: QrCode },
+        { label: "Set Date Unavailable", icon: CalendarClock },
+        { label: "See Reports", icon: QrCode },
       ];
   
       return (

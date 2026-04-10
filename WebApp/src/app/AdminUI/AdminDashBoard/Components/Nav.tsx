@@ -12,6 +12,7 @@ const navigation = [
   { name: "Collection", href: "/AdminUI/AdminDashBoard/Features/AdminCollection" },
   { name: "Inventory", href: "/AdminUI/AdminDashBoard/Features/AdminInventory" },
   { name: "Appointment", href: "/AdminUI/AdminDashBoard/Features/AdminAppointment" },
+  { name: "Reports", href: "/AdminUI/AdminDashBoard/Features/AdminReports" },
   { name: "Users", href: "/AdminUI/AdminDashBoard/Features/AdminUsers" },
 ]
 
