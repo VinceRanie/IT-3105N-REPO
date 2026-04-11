@@ -64,16 +64,28 @@ const didEmailSend = (result, expectedRecipient = "") => {
   if (result.error) return false;
   if (!result.messageId) return false;
   if (result.messageId === "SKIPPED_NO_CONFIG") return false;
+
+  // Gmail OAuth2 sometimes doesn't populate accepted/rejected arrays,
+  // so treat a valid messageId as success unless explicitly rejected.
   const accepted = Array.isArray(result.accepted)
     ? result.accepted.map((v) => String(v).toLowerCase())
     : [];
   const rejected = Array.isArray(result.rejected) ? result.rejected : [];
+
   if (rejected.length > 0) return false;
+
+  // If accepted is empty but we have a messageId, assume success
+  if (accepted.length === 0 && result.messageId) {
+    return true;
+  }
+
   if (expectedRecipient) {
     return accepted.includes(String(expectedRecipient).toLowerCase());
   }
+
   return true;
 };
+
 
 const sendFinalizeSetupEmail = async (email, resetToken) => {
   let emailResult;
@@ -404,13 +416,20 @@ exports.forgotPassword = async (req, res) => {
     const user = await authModel.getUserByEmail(email);
 
     if (!user) {
-      return res.status(HttpStatus.NOT_FOUND).json({
-        message: "Email is not registered.",
-        statusCode: HttpStatus.NOT_FOUND,
+      return res.status(HttpStatus.OK).json({
+        message: "If an account exists, a reset email will be sent.",
+        statusCode: HttpStatus.OK,
       });
     }
 
     const resetResult = await issuePasswordResetForUser(user);
+    if (!resetResult.ok && resetResult.statusCode === HttpStatus.SERVICE_UNAVAILABLE) {
+      return res.status(HttpStatus.OK).json({
+        message: "If an account exists, a reset email will be sent.",
+        statusCode: HttpStatus.OK,
+      });
+    }
+
     return res.status(resetResult.statusCode).json({
       message: resetResult.message,
       statusCode: resetResult.statusCode,
@@ -1057,6 +1076,23 @@ exports.verifyGoogleProfile = async (req, res) => {
     });
   } catch (error) {
     console.error("Verify Google Profile Error:", error);
+
+    const errorMessage = String(error?.message || "").toLowerCase();
+    const isClientTokenError =
+      error?.code === 401 ||
+      error?.code === 400 ||
+      errorMessage.includes("invalid") ||
+      errorMessage.includes("expired") ||
+      errorMessage.includes("token") ||
+      errorMessage.includes("jwt");
+
+    if (isClientTokenError) {
+      return res.status(HttpStatus.UNAUTHORIZED).json({
+        message: "Invalid or expired Google token.",
+        statusCode: HttpStatus.UNAUTHORIZED,
+      });
+    }
+
     return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
       message: "Failed to verify Google token.",
       error: error.message || error,
