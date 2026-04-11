@@ -11,20 +11,25 @@ export function requireEnv<T extends readonly string[]>(
 
   for (const key of keys as readonly T[number][]) {
     const value = process.env[key];
-    if (!value) {
-      console.error(`Server misconfiguration: ${key} is not set.`); // log server-side only
+
+    if (!value || value.trim() === "") {
+      console.error(`Server misconfiguration: ${key} is not set.`);
+
       return {
         ok: false,
         response: NextResponse.json(
           {
-            message: "Internal server error.", // generic message to client
+            message:
+              process.env.NODE_ENV !== "production"
+                ? `${key} is missing`
+                : "Internal server error.",
           },
           { status: 500 }
         ),
       };
     }
 
-    values[key] = value;
+    values[key] = value.trim();
   }
 
   return {

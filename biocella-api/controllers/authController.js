@@ -64,16 +64,28 @@ const didEmailSend = (result, expectedRecipient = "") => {
   if (result.error) return false;
   if (!result.messageId) return false;
   if (result.messageId === "SKIPPED_NO_CONFIG") return false;
+
+  // Gmail OAuth2 sometimes doesn't populate accepted/rejected arrays,
+  // so treat a valid messageId as success unless explicitly rejected.
   const accepted = Array.isArray(result.accepted)
     ? result.accepted.map((v) => String(v).toLowerCase())
     : [];
   const rejected = Array.isArray(result.rejected) ? result.rejected : [];
+
   if (rejected.length > 0) return false;
+
+  // If accepted is empty but we have a messageId, assume success
+  if (accepted.length === 0 && result.messageId) {
+    return true;
+  }
+
   if (expectedRecipient) {
     return accepted.includes(String(expectedRecipient).toLowerCase());
   }
+
   return true;
 };
+
 
 const sendFinalizeSetupEmail = async (email, resetToken) => {
   let emailResult;
