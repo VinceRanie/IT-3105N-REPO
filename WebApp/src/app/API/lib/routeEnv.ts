@@ -4,6 +4,8 @@ type RequiredEnvResult<T extends readonly string[]> =
   | { ok: true; values: Record<T[number], string> }
   | { ok: false; response: NextResponse };
 
+const normalizeEnvValue = (value: string) => value.replace(/\/+$/, "");
+
 export function requireEnv<T extends readonly string[]>(
   keys: T
 ): RequiredEnvResult<T> {
@@ -29,7 +31,7 @@ export function requireEnv<T extends readonly string[]>(
       };
     }
 
-    values[key] = value.trim();
+    values[key] = normalizeEnvValue(value);
   }
 
   return {
