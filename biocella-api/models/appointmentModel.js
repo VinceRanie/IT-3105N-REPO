@@ -6,17 +6,111 @@ const crypto = require('crypto');
 exports.createAppointment = async (data) => {
   console.log('[DEBUG] createAppointment received data:', JSON.stringify(data, null, 2));
   
-  const { user_id, student_id, department, purpose, date, end_time } = data;
+  const {
+    user_id,
+    student_id,
+    department,
+    purpose,
+    date,
+    end_time,
+    appointment_source = 'internal',
+    requester_name = null,
+    requester_email = null,
+    requester_phone = null,
+    requester_ip = null
+  } = data;
   const status = 'pending';
   const qr_code = null; // Will be generated upon approval
   
-  console.log('[DEBUG] Extracted values:', { user_id, student_id, department, purpose, date, end_time });
+  console.log('[DEBUG] Extracted values:', {
+    user_id,
+    student_id,
+    department,
+    purpose,
+    date,
+    end_time,
+    appointment_source,
+    requester_email,
+    requester_ip
+  });
   
   const [result] = await db.execute(
-    "INSERT INTO appointment (user_id, student_id, department, purpose, date, end_time, status, qr_code, pending_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())",
-    [user_id, student_id, department, purpose, date, end_time, status, qr_code]
+    `INSERT INTO appointment (
+      user_id,
+      student_id,
+      department,
+      purpose,
+      date,
+      end_time,
+      status,
+      qr_code,
+      pending_at,
+      appointment_source,
+      requester_name,
+      requester_email,
+      requester_phone,
+      requester_ip
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?)`,
+    [
+      user_id,
+      student_id,
+      department,
+      purpose,
+      date,
+      end_time,
+      status,
+      qr_code,
+      appointment_source,
+      requester_name,
+      requester_email,
+      requester_phone,
+      requester_ip
+    ]
   );
   return result.insertId;
+};
+
+exports.countRecentOutsiderByEmail = async (email, hours = 24) => {
+  const [rows] = await db.execute(
+    `SELECT COUNT(*) AS total
+     FROM appointment
+     WHERE appointment_source = 'outsider'
+       AND requester_email = ?
+       AND created_at >= DATE_SUB(NOW(), INTERVAL ? HOUR)`,
+    [email, hours]
+  );
+
+  return Number(rows[0]?.total || 0);
+};
+
+exports.countRecentOutsiderByIp = async (ip, minutes = 15) => {
+  if (!ip) return 0;
+
+  const [rows] = await db.execute(
+    `SELECT COUNT(*) AS total
+     FROM appointment
+     WHERE appointment_source = 'outsider'
+       AND requester_ip = ?
+       AND created_at >= DATE_SUB(NOW(), INTERVAL ? MINUTE)`,
+    [ip, minutes]
+  );
+
+  return Number(rows[0]?.total || 0);
+};
+
+exports.countUpcomingOutsiderByEmail = async (email) => {
+  const [rows] = await db.execute(
+    `SELECT COUNT(*) AS total
+     FROM appointment
+     WHERE appointment_source = 'outsider'
+       AND requester_email = ?
+       AND deleted_at IS NULL
+       AND status IN ('pending', 'approved', 'ongoing')
+       AND date >= NOW()`,
+    [email]
+  );
+
+  return Number(rows[0]?.total || 0);
 };
 
 // CHECK IF DATE IS MARKED UNAVAILABLE

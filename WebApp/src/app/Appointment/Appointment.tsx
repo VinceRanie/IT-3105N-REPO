@@ -2,23 +2,34 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
-import {useRouter} from "next/navigation"
+import { useRouter } from 'next/navigation';
 import { Calendar, Clock, FileText, CheckCircle, Mail, User } from 'lucide-react';
 
 interface AppointmentFormData {
+  requester_name: string;
+  requester_email: string;
+  requester_phone: string;
+  department: string;
   date: string;
   time: string;
   purpose: string;
+  website: string;
 }
 
 export default function AppointmentBooking() {
   const [formData, setFormData] = useState<AppointmentFormData>({
+    requester_name: '',
+    requester_email: '',
+    requester_phone: '',
+    department: 'External Visitor',
     date: '',
     time: '',
     purpose: '',
+    website: '',
   });
-
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -28,34 +39,85 @@ export default function AppointmentBooking() {
       ...prev,
       [name]: value,
     }));
+    setError('');
   };
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (formData.date && formData.time && formData.purpose) {
-      console.log('Appointment scheduled:', formData);
+
+    if (!formData.requester_name || !formData.requester_email || !formData.date || !formData.time || !formData.purpose) {
+      setError('Please complete all required fields.');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const startDateTime = `${formData.date}T${formData.time}:00`;
+      const start = new Date(startDateTime);
+
+      if (Number.isNaN(start.getTime())) {
+        setError('Please select a valid date and time.');
+        return;
+      }
+
+      const end = new Date(start.getTime() + 60 * 60 * 1000);
+
+      const response = await fetch('/API/appointments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          appointment_source: 'outsider',
+          requester_name: formData.requester_name,
+          requester_email: formData.requester_email,
+          requester_phone: formData.requester_phone || null,
+          department: formData.department || 'External Visitor',
+          purpose: formData.purpose,
+          date: start.toISOString().slice(0, 19).replace('T', ' '),
+          end_time: end.toISOString().slice(0, 19).replace('T', ' '),
+          website: formData.website
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || data.message || 'Unable to submit appointment.');
+        return;
+      }
+
       setSubmitted(true);
-      setFormData({ date: '', time: '', purpose: '' });
-      setTimeout(() => setSubmitted(false), 3000);
+      setFormData({
+        requester_name: '',
+        requester_email: '',
+        requester_phone: '',
+        department: 'External Visitor',
+        date: '',
+        time: '',
+        purpose: '',
+        website: '',
+      });
+      setTimeout(() => setSubmitted(false), 4500);
+    } catch (err) {
+      setError('Network error while submitting appointment. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
-
-  const handleInputChange = (field: string, value: string | boolean) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-  };
   const router = useRouter();
+
   return (
     <div className="min-h-screen grid grid-cols-1 md:grid-cols-2 ease-in-out duration-300">
-      {/* Left: Image Section */}
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-white shadow-xl rounded-2xl overflow-hidden">
         
         {/* Header */}
         <div className="bg-[#113F67] p-6 text-white">
-          <h1 className="text-2xl font-bold">Schedule Appointment</h1>
+          <h1 className="text-2xl font-bold">Book An External Appointment</h1>
           <p className="text-sm opacity-80 mt-1">
-            Set up your meeting with us
+            For visitors outside USC. No login required.
           </p>
         </div>
 
@@ -65,7 +127,13 @@ export default function AppointmentBooking() {
 {submitted && (
   <div className="flex items-center gap-2 bg-green-50 border border-green-200 text-green-700 p-3 rounded-lg text-sm">
     <CheckCircle size={18} />
-    Appointment scheduled successfully!
+    Appointment submitted. We will review and send updates by email.
+  </div>
+)}
+
+{error && (
+  <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg text-sm">
+    {error}
   </div>
 )}
 
@@ -79,8 +147,8 @@ export default function AppointmentBooking() {
     </label>
     <input
       type="email"
-      name="email"
-      // value={formData.email}
+      name="requester_email"
+      value={formData.requester_email}
       onChange={handleChange}
       required
       className="w-full border border-[#113F67]/30 rounded-md px-3 py-2  focus:outline-none focus:ring-2 focus:ring-[#113F67]/30"
@@ -94,14 +162,40 @@ export default function AppointmentBooking() {
     </label>
     <input
       type="text"
-      name="name"
-      // value={formData.name}
+      name="requester_name"
+      value={formData.requester_name}
       onChange={handleChange}
       required
       className="w-full border border-[#113F67]/30 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#113F67]/30"
     />
   </div>
 
+</div>
+
+<div>
+  <label className="text-sm font-semibold text-[#113F67] mb-1 block">
+    Phone (optional)
+  </label>
+  <input
+    type="text"
+    name="requester_phone"
+    value={formData.requester_phone}
+    onChange={handleChange}
+    className="w-full border border-[#113F67]/30 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#113F67]/30"
+  />
+</div>
+
+<div className="hidden" aria-hidden="true">
+  <label htmlFor="website">Website</label>
+  <input
+    id="website"
+    type="text"
+    name="website"
+    value={formData.website}
+    onChange={handleChange}
+    tabIndex={-1}
+    autoComplete="off"
+  />
 </div>
 
 {/* Date */}
@@ -153,15 +247,16 @@ export default function AppointmentBooking() {
 {/* Button */}
 <button
   type="submit"
-  className="cursor-pointer w-full bg-[#113F67] hover:bg-[#0d2f4d] text-white font-semibold py-2 rounded-md transition"
+  disabled={loading}
+  className="cursor-pointer w-full bg-[#113F67] hover:bg-[#0d2f4d] text-white font-semibold py-2 rounded-md transition disabled:opacity-60"
 >
-  Schedule Appointment
+  {loading ? 'Submitting...' : 'Submit Appointment'}
 </button>
 </form>
        
         {/* Footer */}
         <div className="border-t border-[#113F67] text-center text-xs text-gray-500 py-4 bg-gray-50">
-        We'll confirm your appointment within 24 hours
+        We usually confirm within 24 hours.
         <div className="text-center pt-4 border-t border-gray-200">
             <button
               type="button"
@@ -172,8 +267,9 @@ export default function AppointmentBooking() {
             </button>
             <p className="text-sm text-gray-400 mt-2">or</p>
             <p className="text-sm text-gray-600">
+                type="button"
               Don&apos;t have an account?{' '}
-
+                onClick={() => router.push('/signup')}
               <button
                 className="text-[#113F67] hover:text-[#0a2a4a] font-medium transition-colors cursor-pointer hover:underline"
                 onClick={()=>router.push("/signup")}
