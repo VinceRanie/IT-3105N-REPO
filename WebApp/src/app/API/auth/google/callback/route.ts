@@ -10,6 +10,8 @@ export async function GET(request: NextRequest) {
   const env = requireEnv([
     "NEXT_PUBLIC_API_URL",
     "NEXT_PUBLIC_APP_BASE_URL",
+    "GMAIL_CLIENT_ID",
+    "GMAIL_CLIENT_SECRET",
   ] as const);
   if (!env.ok) return env.response;
 
@@ -17,8 +19,8 @@ export async function GET(request: NextRequest) {
   const APP_BASE_URL = env.values.NEXT_PUBLIC_APP_BASE_URL;
 
   const oauth2Client = new google.auth.OAuth2(
-    process.env.GMAIL_CLIENT_ID,
-    process.env.GMAIL_CLIENT_SECRET,
+    env.values.GMAIL_CLIENT_ID,
+    env.values.GMAIL_CLIENT_SECRET,
     `${APP_BASE_URL}/API/auth/google/callback`
   );
 

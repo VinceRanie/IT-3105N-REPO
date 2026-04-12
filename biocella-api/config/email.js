@@ -173,7 +173,7 @@ const sendEmail = async (mailOptions) => {
     if (!transporter) throw new Error('No email transport available.');
 
     const info = await transporter.sendMail({
-      from: `"BIOCELLA" <${senderEmail}>`,
+      from: `"BIOCELLA" <${process.env.GMAIL_USER}>`,
       ...mailOptions
     });
     console.log('📧 Email sent successfully:', info.messageId);
