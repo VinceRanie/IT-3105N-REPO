@@ -1,6 +1,7 @@
 "use client"
 import Image from "next/image";
 import {useRouter} from "next/navigation"
+import Chatbot from "./ChatBot"
 
 const Form = () => {
   const router = useRouter();
@@ -58,7 +59,7 @@ const Form = () => {
           width={4000}     
           height={4000} 
         />
-        
+        <Chatbot/>
         {/* Floating Elements */}
   
       </div>
