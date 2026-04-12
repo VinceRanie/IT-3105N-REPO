@@ -6,17 +6,111 @@ const crypto = require('crypto');
 exports.createAppointment = async (data) => {
   console.log('[DEBUG] createAppointment received data:', JSON.stringify(data, null, 2));
   
-  const { user_id, student_id, department, purpose, date, end_time } = data;
+  const {
+    user_id,
+    student_id,
+    department,
+    purpose,
+    date,
+    end_time,
+    appointment_source = 'internal',
+    requester_name = null,
+    requester_email = null,
+    requester_phone = null,
+    requester_ip = null
+  } = data;
   const status = 'pending';
   const qr_code = null; // Will be generated upon approval
   
-  console.log('[DEBUG] Extracted values:', { user_id, student_id, department, purpose, date, end_time });
+  console.log('[DEBUG] Extracted values:', {
+    user_id,
+    student_id,
+    department,
+    purpose,
+    date,
+    end_time,
+    appointment_source,
+    requester_email,
+    requester_ip
+  });
   
   const [result] = await db.execute(
-    "INSERT INTO appointment (user_id, student_id, department, purpose, date, end_time, status, qr_code, pending_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())",
-    [user_id, student_id, department, purpose, date, end_time, status, qr_code]
+    `INSERT INTO appointment (
+      user_id,
+      student_id,
+      department,
+      purpose,
+      date,
+      end_time,
+      status,
+      qr_code,
+      pending_at,
+      appointment_source,
+      requester_name,
+      requester_email,
+      requester_phone,
+      requester_ip
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?)`,
+    [
+      user_id,
+      student_id,
+      department,
+      purpose,
+      date,
+      end_time,
+      status,
+      qr_code,
+      appointment_source,
+      requester_name,
+      requester_email,
+      requester_phone,
+      requester_ip
+    ]
   );
   return result.insertId;
+};
+
+exports.countRecentOutsiderByEmail = async (email, hours = 24) => {
+  const [rows] = await db.execute(
+    `SELECT COUNT(*) AS total
+     FROM appointment
+     WHERE appointment_source = 'outsider'
+       AND requester_email = ?
+       AND created_at >= DATE_SUB(NOW(), INTERVAL ? HOUR)`,
+    [email, hours]
+  );
+
+  return Number(rows[0]?.total || 0);
+};
+
+exports.countRecentOutsiderByIp = async (ip, minutes = 15) => {
+  if (!ip) return 0;
+
+  const [rows] = await db.execute(
+    `SELECT COUNT(*) AS total
+     FROM appointment
+     WHERE appointment_source = 'outsider'
+       AND requester_ip = ?
+       AND created_at >= DATE_SUB(NOW(), INTERVAL ? MINUTE)`,
+    [ip, minutes]
+  );
+
+  return Number(rows[0]?.total || 0);
+};
+
+exports.countUpcomingOutsiderByEmail = async (email) => {
+  const [rows] = await db.execute(
+    `SELECT COUNT(*) AS total
+     FROM appointment
+     WHERE appointment_source = 'outsider'
+       AND requester_email = ?
+       AND deleted_at IS NULL
+       AND status IN ('pending', 'approved', 'ongoing')
+       AND date >= NOW()`,
+    [email]
+  );
+
+  return Number(rows[0]?.total || 0);
 };
 
 // CHECK IF DATE IS MARKED UNAVAILABLE
@@ -34,13 +128,20 @@ exports.isDateUnavailable = async (date) => {
 // READ ALL
 exports.getAllAppointments = async () => {
   const [rows] = await db.execute(
-    "SELECT * FROM appointment WHERE deleted_at IS NULL ORDER BY date DESC"
+    "SELECT * FROM appointment WHERE deleted_at IS NULL OR status = 'no_show' ORDER BY date DESC"
   );
   return rows;
 };
 
 // READ BY STATUS
 exports.getAppointmentsByStatus = async (status) => {
+  if (status === 'no_show') {
+    const [rows] = await db.execute(
+      "SELECT * FROM appointment WHERE status = 'no_show' ORDER BY date DESC"
+    );
+    return rows;
+  }
+
   const [rows] = await db.execute(
     "SELECT * FROM appointment WHERE status = ? AND deleted_at IS NULL ORDER BY date DESC",
     [status]
@@ -193,7 +294,11 @@ exports.getAppointmentsByDate = async (date) => {
 // SOFT DELETE (Mark as no-show)
 exports.softDeleteAppointment = async (id) => {
   const [result] = await db.execute(
-    "UPDATE appointment SET deleted_at = NOW() WHERE appointment_id = ? AND deleted_at IS NULL",
+    `UPDATE appointment
+     SET status = 'no_show', no_show_at = NOW(), deleted_at = NOW()
+     WHERE appointment_id = ?
+       AND deleted_at IS NULL
+       AND status IN ('approved', 'ongoing')`,
     [id]
   );
   return result.affectedRows;
@@ -202,7 +307,11 @@ exports.softDeleteAppointment = async (id) => {
 // AUTO-EXPIRE ONGOING APPOINTMENTS (cron job)
 exports.expireOldAppointments = async () => {
   const [result] = await db.execute(
-    "UPDATE appointment SET deleted_at = NOW() WHERE status = 'ongoing' AND date < NOW() AND deleted_at IS NULL"
+    `UPDATE appointment
+     SET status = 'no_show', no_show_at = NOW(), deleted_at = NOW()
+     WHERE status = 'ongoing'
+       AND deleted_at IS NULL
+       AND COALESCE(end_time, DATE_ADD(date, INTERVAL 1 HOUR)) < NOW()`
   );
   return result.affectedRows;
 };

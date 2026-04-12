@@ -6,12 +6,15 @@ import jsQR from 'jsqr';
 
 interface Appointment {
   appointment_id: number;
-  user_id: number;
-  student_id: string;
+  user_id: number | null;
+  student_id: string | null;
   department: string;
   purpose: string;
   date: string;
-  status: 'pending' | 'approved' | 'denied' | 'ongoing' | 'visited';
+  appointment_source?: 'internal' | 'outsider';
+  requester_name?: string | null;
+  requester_email?: string | null;
+  status: 'pending' | 'approved' | 'denied' | 'ongoing' | 'visited' | 'no_show';
   qr_code: string | null;
   created_at: string;
   pending_at: string | null;
@@ -19,6 +22,7 @@ interface Appointment {
   denied_at: string | null;
   ongoing_at: string | null;
   visited_at: string | null;
+  no_show_at: string | null;
   denial_reason: string | null;
   admin_remarks: string | null;
 }
@@ -29,15 +33,17 @@ interface UnavailableDate {
   reason: string;
 }
 
-type TabType = 'pending' | 'ongoing' | 'visited' | 'denied';
+type TabType = 'pending' | 'ongoing' | 'visited' | 'denied' | 'no_show';
+type AudienceFilter = 'all' | 'internal' | 'outsider';
 
 export default function AdminAppointmentDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('pending');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
-  const [statusCounts, setStatusCounts] = useState({ pending: 0, ongoing: 0, visited: 0, denied: 0 });
+  const [statusCounts, setStatusCounts] = useState({ pending: 0, ongoing: 0, visited: 0, denied: 0, no_show: 0 });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [audienceFilter, setAudienceFilter] = useState<AudienceFilter>('all');
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState<'approve' | 'deny' | 'scan'>('approve');
@@ -60,6 +66,7 @@ export default function AdminAppointmentDashboard() {
     { key: 'ongoing', label: 'Ongoing', color: 'blue' },
     { key: 'visited', label: 'Visited', color: 'green' },
     { key: 'denied', label: 'Denied', color: 'red' },
+    { key: 'no_show', label: 'No-Show', color: 'gray' },
   ];
 
   // Handle camera stream when it becomes available
@@ -238,11 +245,14 @@ export default function AdminAppointmentDashboard() {
   useEffect(() => {
     // When tab changes, update the displayed appointments for that tab
     if (allAppointments.length > 0) {
-      const tabAppointments = allAppointments.filter((app: Appointment) => app.status === activeTab);
+      const tabAppointments = allAppointments.filter((app: Appointment) => {
+        const source = app.appointment_source || 'internal';
+        return app.status === activeTab && (audienceFilter === 'all' || source === audienceFilter);
+      });
       setAppointments(tabAppointments);
       setError(null);
     }
-  }, [activeTab, allAppointments]);
+  }, [activeTab, allAppointments, audienceFilter]);
 
   // Retry helper with exponential backoff
   const fetchWithRetry = async (
@@ -310,7 +320,7 @@ export default function AdminAppointmentDashboard() {
         const errorMessage = error.error || `HTTP error! status: ${response.status}`;
         setError(errorMessage);
         setAllAppointments([]);
-        setStatusCounts({ pending: 0, ongoing: 0, visited: 0, denied: 0 });
+        setStatusCounts({ pending: 0, ongoing: 0, visited: 0, denied: 0, no_show: 0 });
       } else {
         const data = await response.json();
         console.log(`✅ Fetched ${data.data?.length || data.length || 0} total appointments`);
@@ -324,13 +334,17 @@ export default function AdminAppointmentDashboard() {
           ongoing: allAppts.filter((app: Appointment) => app.status === 'ongoing').length,
           visited: allAppts.filter((app: Appointment) => app.status === 'visited').length,
           denied: allAppts.filter((app: Appointment) => app.status === 'denied').length,
+          no_show: allAppts.filter((app: Appointment) => app.status === 'no_show').length,
         };
         
         console.log(`📊 Status counts:`, counts);
         setStatusCounts(counts);
         
         // Filter for active tab
-        const tabAppointments = allAppts.filter((app: Appointment) => app.status === activeTab);
+        const tabAppointments = allAppts.filter((app: Appointment) => {
+          const source = app.appointment_source || 'internal';
+          return app.status === activeTab && (audienceFilter === 'all' || source === audienceFilter);
+        });
         setAppointments(tabAppointments);
         setError(null);
       }
@@ -339,7 +353,7 @@ export default function AdminAppointmentDashboard() {
       console.error(errorMessage);
       setError(errorMessage);
       setAllAppointments([]);
-      setStatusCounts({ pending: 0, ongoing: 0, visited: 0, denied: 0 });
+      setStatusCounts({ pending: 0, ongoing: 0, visited: 0, denied: 0, no_show: 0 });
     } finally {
       setLoading(false);
     }
@@ -366,12 +380,16 @@ export default function AdminAppointmentDashboard() {
           ongoing: allAppts.filter((app: Appointment) => app.status === 'ongoing').length,
           visited: allAppts.filter((app: Appointment) => app.status === 'visited').length,
           denied: allAppts.filter((app: Appointment) => app.status === 'denied').length,
+          no_show: allAppts.filter((app: Appointment) => app.status === 'no_show').length,
         };
         
         setStatusCounts(counts);
         
         // Update current tab display
-        const tabAppointments = allAppts.filter((app: Appointment) => app.status === activeTab);
+        const tabAppointments = allAppts.filter((app: Appointment) => {
+          const source = app.appointment_source || 'internal';
+          return app.status === activeTab && (audienceFilter === 'all' || source === audienceFilter);
+        });
         setAppointments(tabAppointments);
       }
     } catch (error) {
@@ -698,6 +716,7 @@ export default function AdminAppointmentDashboard() {
       denied: 'bg-red-100 text-red-800',
       ongoing: 'bg-blue-100 text-blue-800',
       visited: 'bg-purple-100 text-purple-800',
+      no_show: 'bg-gray-200 text-gray-700',
     };
     
     return (
@@ -810,6 +829,27 @@ export default function AdminAppointmentDashboard() {
         ))}
       </div>
 
+      <div className="mb-4 flex flex-wrap gap-2">
+        <button
+          onClick={() => setAudienceFilter('all')}
+          className={`px-3 py-1.5 rounded-md text-sm font-medium ${audienceFilter === 'all' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-700'}`}
+        >
+          All Audiences
+        </button>
+        <button
+          onClick={() => setAudienceFilter('internal')}
+          className={`px-3 py-1.5 rounded-md text-sm font-medium ${audienceFilter === 'internal' ? 'bg-blue-700 text-white' : 'bg-blue-50 text-blue-700'}`}
+        >
+          Internal (Student/Faculty)
+        </button>
+        <button
+          onClick={() => setAudienceFilter('outsider')}
+          className={`px-3 py-1.5 rounded-md text-sm font-medium ${audienceFilter === 'outsider' ? 'bg-emerald-700 text-white' : 'bg-emerald-50 text-emerald-700'}`}
+        >
+          Outsider
+        </button>
+      </div>
+
       {/* Error Alert */}
       {error && (
         <div className="mb-6 p-4 bg-amber-50 border-2 border-amber-300 rounded-lg">
@@ -870,9 +910,14 @@ export default function AdminAppointmentDashboard() {
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
                     <h3 className="text-lg font-semibold text-gray-800">
-                      Student ID: {appointment.student_id}
+                      {appointment.appointment_source === 'outsider'
+                        ? `Visitor: ${appointment.requester_name || appointment.requester_email || 'External Visitor'}`
+                        : `Student ID: ${appointment.student_id}`}
                     </h3>
                     {getStatusBadge(appointment.status)}
+                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${appointment.appointment_source === 'outsider' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'}`}>
+                      {(appointment.appointment_source || 'internal').toUpperCase()}
+                    </span>
                   </div>
                   
                   <div className="grid grid-cols-2 gap-4 text-sm text-gray-600 mb-3">
@@ -886,6 +931,11 @@ export default function AdminAppointmentDashboard() {
                     <div className="col-span-2">
                       <span className="font-medium">Purpose:</span> {appointment.purpose}
                     </div>
+                    {appointment.requester_email && (
+                      <div className="col-span-2">
+                        <span className="font-medium">Contact:</span> {appointment.requester_email}
+                      </div>
+                    )}
                   </div>
 
                   {appointment.denial_reason && (
@@ -925,7 +975,7 @@ export default function AdminAppointmentDashboard() {
               </div>
 
               {/* Timestamps */}
-              <div className="mt-4 pt-4 border-t border-gray-200 text-xs text-gray-500 grid grid-cols-3 gap-2">
+              <div className="mt-4 pt-4 border-t border-gray-200 text-xs text-gray-500 grid grid-cols-4 gap-2">
                 {appointment.pending_at && (
                   <div>Pending: {format(new Date(appointment.pending_at), 'MMM dd, HH:mm')}</div>
                 )}
@@ -934,6 +984,9 @@ export default function AdminAppointmentDashboard() {
                 )}
                 {appointment.visited_at && (
                   <div>Visited: {format(new Date(appointment.visited_at), 'MMM dd, HH:mm')}</div>
+                )}
+                {appointment.no_show_at && (
+                  <div>No-Show: {format(new Date(appointment.no_show_at), 'MMM dd, HH:mm')}</div>
                 )}
               </div>
             </div>
