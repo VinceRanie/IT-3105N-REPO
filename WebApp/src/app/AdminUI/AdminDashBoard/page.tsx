@@ -38,6 +38,9 @@ type BatchItem = {
 type AppointmentItem = {
   appointment_id?: number | string | null;
   student_id?: string | null;
+  requester_name?: string | null;
+  requester_email?: string | null;
+  appointment_source?: string | null;
   department?: string | null;
   purpose?: string | null;
   status?: string | null;
@@ -55,6 +58,7 @@ type DashboardAppointmentEntry = {
   id: string;
   time: string;
   title: string;
+  source: "internal" | "outsider";
   status: "ongoing" | "pending" | "no_show";
 };
 
@@ -242,9 +246,21 @@ const formatAppointmentTime = (
 };
 
 const formatAppointmentTitle = (appointment: AppointmentItem) => {
+  const source = String(appointment.appointment_source || "internal").toLowerCase();
   const purpose = String(appointment.purpose || "").trim();
   const department = String(appointment.department || "").trim();
   const studentId = String(appointment.student_id || "").trim();
+  const requesterName = String(appointment.requester_name || "").trim();
+  const requesterEmail = String(appointment.requester_email || "").trim();
+
+  if (source === "outsider") {
+    const visitor = requesterName || requesterEmail || "External Visitor";
+    if (purpose && department) {
+      return `${visitor} - ${purpose} (${department})`;
+    }
+    if (purpose) return `${visitor} - ${purpose}`;
+    return visitor;
+  }
 
   if (purpose && department) {
     return `${purpose} - ${department}`;
@@ -259,10 +275,16 @@ const mapDashboardAppointment = (
   appointment: AppointmentItem,
   status: "ongoing" | "pending" | "no_show"
 ): DashboardAppointmentEntry => {
+  const source =
+    String(appointment.appointment_source || "internal").toLowerCase() === "outsider"
+      ? "outsider"
+      : "internal";
+
   return {
     id: String(appointment.appointment_id || `${status}-${appointment.date || Date.now()}`),
     time: formatAppointmentTime(appointment.date, appointment.end_time),
     title: formatAppointmentTitle(appointment),
+    source,
     status,
   };
 };
@@ -272,6 +294,8 @@ const createSummaryCards = ({
   chemicalCount,
   lowStockCount,
   pendingAppointments,
+  pendingInternal,
+  pendingOutsider,
   pendingToday,
   registeredUsers,
 }: {
@@ -279,6 +303,8 @@ const createSummaryCards = ({
   chemicalCount: number;
   lowStockCount: number;
   pendingAppointments: number;
+  pendingInternal: number;
+  pendingOutsider: number;
   pendingToday: number;
   registeredUsers: number;
 }): SummaryCard[] => {
@@ -307,7 +333,7 @@ const createSummaryCards = ({
     {
       title: "Pending Appointments",
       value: formatCount(pendingAppointments),
-      sub: `${formatCount(pendingToday)} today`,
+      sub: `${formatCount(pendingToday)} today | I:${formatCount(pendingInternal)} O:${formatCount(pendingOutsider)}`,
       icon: CalendarClock,
       trend: "neutral",
     },
@@ -334,6 +360,17 @@ const getUserDisplayName = (user: UserItem) => {
 };
 
 const getAppointmentLabel = (appointment: AppointmentItem) => {
+  const source = String(appointment.appointment_source || "internal").toLowerCase();
+
+  if (source === "outsider") {
+    return (
+      String(appointment.requester_name || "").trim() ||
+      String(appointment.requester_email || "").trim() ||
+      String(appointment.purpose || "").trim() ||
+      `#${appointment.appointment_id || "N/A"}`
+    );
+  }
+
   return (
     String(appointment.purpose || "").trim() ||
     String(appointment.department || "").trim() ||
@@ -724,6 +761,14 @@ export default function AdminHome() {
         return String(appointment.status || "").toLowerCase() === "pending";
       });
 
+      const pendingInternal = pendingAppointments.filter((appointment) => {
+        return String(appointment.appointment_source || "internal").toLowerCase() !== "outsider";
+      }).length;
+
+      const pendingOutsider = pendingAppointments.filter((appointment) => {
+        return String(appointment.appointment_source || "internal").toLowerCase() === "outsider";
+      }).length;
+
       const pendingToday = pendingAppointments.filter((appointment) => {
         return isTodayLocal(appointment.date);
       }).length;
@@ -789,6 +834,8 @@ export default function AdminHome() {
             chemicalCount: activeChemicals.length,
             lowStockCount,
             pendingAppointments: pendingAppointments.length,
+            pendingInternal,
+            pendingOutsider,
             pendingToday,
             registeredUsers: users.length,
           })
@@ -1002,6 +1049,9 @@ export default function AdminHome() {
                         </div>
 
                         <span className="text-sm text-gray-900 truncate">{appointment.title}</span>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${appointment.source === "outsider" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-700"}`}>
+                          {appointment.source}
+                        </span>
                       </div>
 
                       <span className="text-[10px] px-2 py-1 rounded-full font-medium bg-green-100 text-green-600">
@@ -1039,6 +1089,9 @@ export default function AdminHome() {
                         </div>
 
                         <span className="text-sm text-gray-900 truncate">{appointment.title}</span>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${appointment.source === "outsider" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-700"}`}>
+                          {appointment.source}
+                        </span>
                       </div>
 
                       <span className="text-[10px] px-2 py-1 rounded-full font-medium bg-red-100 text-red-700">
@@ -1076,6 +1129,9 @@ export default function AdminHome() {
                         </div>
 
                         <span className="text-sm text-gray-900 truncate">{appointment.title}</span>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${appointment.source === "outsider" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-700"}`}>
+                          {appointment.source}
+                        </span>
                       </div>
 
                       <span className="text-[10px] px-2 py-1 rounded-full font-medium bg-yellow-100 text-yellow-700">
