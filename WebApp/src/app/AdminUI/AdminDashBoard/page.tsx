@@ -1341,7 +1341,7 @@ export default function AdminHome() {
           </div>
         </div>
       )}
-
+ </div>
     </div>
   );
 }
