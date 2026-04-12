@@ -140,13 +140,6 @@ const DEFAULT_SUMMARY_CARDS: SummaryCard[] = [
     trend: "neutral",
   },
   {
-    title: "Outsider Appointments (Today)",
-    value: "0",
-    sub: "External visitors",
-    icon: Users,
-    trend: "neutral",
-  },
-  {
     title: "Registered Users",
     value: "0",
     sub: "Total active accounts",
@@ -304,7 +297,6 @@ const createSummaryCards = ({
   pendingInternal,
   pendingOutsider,
   pendingToday,
-  outsiderToday,
   registeredUsers,
 }: {
   specimenCount: number;
@@ -314,7 +306,6 @@ const createSummaryCards = ({
   pendingInternal: number;
   pendingOutsider: number;
   pendingToday: number;
-  outsiderToday: number;
   registeredUsers: number;
 }): SummaryCard[] => {
   return [
@@ -345,13 +336,6 @@ const createSummaryCards = ({
       sub: `${formatCount(pendingToday)} today | I:${formatCount(pendingInternal)} O:${formatCount(pendingOutsider)}`,
       icon: CalendarClock,
       trend: "neutral",
-    },
-    {
-      title: "Outsider Appointments (Today)",
-      value: formatCount(outsiderToday),
-      sub: "External visitors",
-      icon: Users,
-      trend: outsiderToday > 0 ? "up" : "neutral",
     },
     {
       title: "Registered Users",
@@ -789,13 +773,6 @@ export default function AdminHome() {
         return isTodayLocal(appointment.date);
       }).length;
 
-      const outsiderToday = appointments.filter((appointment) => {
-        return (
-          String(appointment.appointment_source || "internal").toLowerCase() === "outsider" &&
-          isTodayLocal(appointment.date)
-        );
-      }).length;
-
       const ongoingToday = appointments
         .filter((appointment) => {
           return (
@@ -860,7 +837,6 @@ export default function AdminHome() {
             pendingInternal,
             pendingOutsider,
             pendingToday,
-            outsiderToday,
             registeredUsers: users.length,
           })
         );
@@ -889,7 +865,7 @@ export default function AdminHome() {
       </p>
 
       {/* SUMMARY CARDS */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         {summaryCards.map((card) => (
           <div
             key={card.title}
@@ -1131,6 +1107,12 @@ export default function AdminHome() {
               </div>
 
               <div>
+                {(() => {
+                  const outsiderTomorrowCount = tomorrowPendingAppointments.filter(
+                    (appointment) => appointment.source === "outsider"
+                  ).length;
+
+                  return (
                 <div className="flex items-center gap-2 mb-2">
                   <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                     Pending Appointments for Tomorrow
@@ -1138,7 +1120,12 @@ export default function AdminHome() {
                   <span className="inline-flex items-center justify-center rounded-full bg-yellow-100 text-yellow-700 text-[10px] font-semibold px-2 py-0.5 min-w-6">
                     {tomorrowPendingAppointments.length}
                   </span>
+                  <span className="inline-flex items-center justify-center rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-semibold px-2 py-0.5 min-w-6">
+                    O: {outsiderTomorrowCount}
+                  </span>
                 </div>
+                  );
+                })()}
 
                 <div className="space-y-2">
                   {tomorrowPendingAppointments.map((appointment) => (
