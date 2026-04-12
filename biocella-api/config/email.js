@@ -15,14 +15,9 @@ const hasGmailOAuthConfig = !!(
   process.env.GMAIL_USER
 );
 
-// App password fallback credentials
-const hasAppPasswordConfig = !!(
-  process.env.EMAIL_USER && process.env.EMAIL_PASS
-);
+const hasGmailConfig = hasGmailOAuthConfig;
 
-const hasGmailConfig = hasGmailOAuthConfig || hasAppPasswordConfig;
-
-if (!hasGmailOAuthConfig && !hasAppPasswordConfig) {
+if (!hasGmailOAuthConfig) {
   console.warn('⚠️  Warning: No email credentials configured. Email notifications will be skipped.');
 }
 
@@ -119,30 +114,6 @@ const createTransporter = async () => {
   }
 };
 
-
-const createAppPasswordTransporter = async () => {
-  if (!hasAppPasswordConfig) {
-    throw new Error('App password transport not configured. Please set EMAIL_USER and EMAIL_PASS.');
-  }
-
-  const appPassword = String(process.env.EMAIL_PASS || '').replace(/\s+/g, '');
-  if (!appPassword) {
-    throw new Error('App password transport not configured. Please set a valid EMAIL_PASS value.');
-  }
-
-  return nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 587,
-    secure: false,
-    auth: {
-      user: String(process.env.EMAIL_USER || '').trim(),
-      pass: appPassword
-    },
-    tls: { rejectUnauthorized: true },
-    connectionTimeout: 10000
-  });
-};
-
 const sendEmail = async (mailOptions) => {
   try {
     if (!hasGmailConfig) {
@@ -152,25 +123,7 @@ const sendEmail = async (mailOptions) => {
       return { messageId: 'SKIPPED_NO_CONFIG' };
     }
 
-    let transporter;
-    let senderEmail;
-
-    if (hasGmailOAuthConfig) {
-      try {
-        transporter = await createTransporter();
-        senderEmail = process.env.GMAIL_USER;
-      } catch (oauthError) {
-        console.warn('⚠️  OAuth transport failed, trying app password fallback:', oauthError.message);
-        if (!hasAppPasswordConfig) throw oauthError;
-      }
-    }
-
-    if (!transporter && hasAppPasswordConfig) {
-      transporter = await createAppPasswordTransporter();
-      senderEmail = process.env.EMAIL_USER;
-    }
-
-    if (!transporter) throw new Error('No email transport available.');
+    const transporter = await createTransporter();
 
     const info = await transporter.sendMail({
       from: `"BIOCELLA" <${process.env.GMAIL_USER}>`,
