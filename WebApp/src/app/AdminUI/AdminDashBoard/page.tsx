@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import { API_URL } from "@/config/api";
 import { getAuthHeader } from "@/app/utils/authUtil";
+import { useRouter } from "next/navigation";
+import { format } from "date-fns";
 
-import { Microscope,FlaskConical,AlertTriangle,CalendarClock,Users,Package,QrCode,Clock,} from "lucide-react";
+import { Microscope,FlaskConical,AlertTriangle,CalendarClock,Users,Package,BarChart3,Clock,Loader2,} from "lucide-react";
 
 import {BarChart,Bar,XAxis,YAxis,CartesianGrid,Tooltip,ResponsiveContainer,} from "recharts";
 
@@ -36,15 +38,28 @@ type BatchItem = {
 type AppointmentItem = {
   appointment_id?: number | string | null;
   student_id?: string | null;
+  requester_name?: string | null;
+  requester_email?: string | null;
+  appointment_source?: string | null;
   department?: string | null;
   purpose?: string | null;
   status?: string | null;
   date?: string | Date | null;
+  end_time?: string | Date | null;
   pending_at?: string | Date | null;
   approved_at?: string | Date | null;
   denied_at?: string | Date | null;
   ongoing_at?: string | Date | null;
   visited_at?: string | Date | null;
+  no_show_at?: string | Date | null;
+};
+
+type DashboardAppointmentEntry = {
+  id: string;
+  time: string;
+  title: string;
+  source: "internal" | "outsider";
+  status: "ongoing" | "pending" | "no_show";
 };
 
 type UsersResponse = {
@@ -56,7 +71,15 @@ type UserItem = {
   first_name?: string | null;
   last_name?: string | null;
   email?: string | null;
+  role?: string | null;
   created_at?: string | Date | null;
+};
+
+type UserRoleSummary = {
+  activeUsers: number;
+  researchAssistants: number;
+  faculty: number;
+  students: number;
 };
 
 type UsageLogItem = {
@@ -87,6 +110,12 @@ type ActivitySourceEntry = {
   id: string;
   text: string;
   timestamp: number;
+};
+
+type UnavailableDate = {
+  unavailable_id: number;
+  unavailable_date: string;
+  reason: string;
 };
 
 const DEFAULT_SUMMARY_CARDS: SummaryCard[] = [
@@ -181,11 +210,100 @@ const isTodayLocal = (input: string | Date | null | undefined) => {
   );
 };
 
+const isTomorrowLocal = (input: string | Date | null | undefined) => {
+  if (!input) return false;
+
+  const parsedDate = new Date(input);
+  if (Number.isNaN(parsedDate.getTime())) return false;
+
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  return (
+    parsedDate.getFullYear() === tomorrow.getFullYear() &&
+    parsedDate.getMonth() === tomorrow.getMonth() &&
+    parsedDate.getDate() === tomorrow.getDate()
+  );
+};
+
+const formatAppointmentTime = (
+  dateInput: string | Date | null | undefined,
+  endInput?: string | Date | null
+) => {
+  if (!dateInput) return "Time TBD";
+
+  const start = new Date(dateInput);
+  if (Number.isNaN(start.getTime())) return "Time TBD";
+
+  const startText = start.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+  if (!endInput) return startText;
+
+  const end = new Date(endInput);
+  if (Number.isNaN(end.getTime())) return startText;
+
+  const endText = end.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+  return `${startText} - ${endText}`;
+};
+
+const formatAppointmentTitle = (appointment: AppointmentItem) => {
+  const source = String(appointment.appointment_source || "internal").toLowerCase();
+  const purpose = String(appointment.purpose || "").trim();
+  const department = String(appointment.department || "").trim();
+  const studentId = String(appointment.student_id || "").trim();
+  const requesterName = String(appointment.requester_name || "").trim();
+  const requesterEmail = String(appointment.requester_email || "").trim();
+
+  if (source === "outsider") {
+    const visitor = requesterName || requesterEmail || "External Visitor";
+    if (purpose && department) {
+      return `${visitor} - ${purpose} (${department})`;
+    }
+    if (purpose) return `${visitor} - ${purpose}`;
+    return visitor;
+  }
+
+  if (purpose && department) {
+    return `${purpose} - ${department}`;
+  }
+  if (purpose) return purpose;
+  if (department) return department;
+  if (studentId) return `Student ${studentId}`;
+  return `Appointment #${appointment.appointment_id || "N/A"}`;
+};
+
+const mapDashboardAppointment = (
+  appointment: AppointmentItem,
+  status: "ongoing" | "pending" | "no_show"
+): DashboardAppointmentEntry => {
+  const source =
+    String(appointment.appointment_source || "internal").toLowerCase() === "outsider"
+      ? "outsider"
+      : "internal";
+
+  return {
+    id: String(appointment.appointment_id || `${status}-${appointment.date || Date.now()}`),
+    time: formatAppointmentTime(appointment.date, appointment.end_time),
+    title: formatAppointmentTitle(appointment),
+    source,
+    status,
+  };
+};
+
 const createSummaryCards = ({
   specimenCount,
   chemicalCount,
   lowStockCount,
   pendingAppointments,
+  pendingInternal,
+  pendingOutsider,
   pendingToday,
   registeredUsers,
 }: {
@@ -193,6 +311,8 @@ const createSummaryCards = ({
   chemicalCount: number;
   lowStockCount: number;
   pendingAppointments: number;
+  pendingInternal: number;
+  pendingOutsider: number;
   pendingToday: number;
   registeredUsers: number;
 }): SummaryCard[] => {
@@ -221,7 +341,7 @@ const createSummaryCards = ({
     {
       title: "Pending Appointments",
       value: formatCount(pendingAppointments),
-      sub: `${formatCount(pendingToday)} today`,
+      sub: `Today ${formatCount(pendingToday)} | Internal ${formatCount(pendingInternal)} | Outsider ${formatCount(pendingOutsider)}`,
       icon: CalendarClock,
       trend: "neutral",
     },
@@ -248,6 +368,17 @@ const getUserDisplayName = (user: UserItem) => {
 };
 
 const getAppointmentLabel = (appointment: AppointmentItem) => {
+  const source = String(appointment.appointment_source || "internal").toLowerCase();
+
+  if (source === "outsider") {
+    return (
+      String(appointment.requester_name || "").trim() ||
+      String(appointment.requester_email || "").trim() ||
+      String(appointment.purpose || "").trim() ||
+      `#${appointment.appointment_id || "N/A"}`
+    );
+  }
+
   return (
     String(appointment.purpose || "").trim() ||
     String(appointment.department || "").trim() ||
@@ -296,6 +427,7 @@ const buildRecentActivities = ({
       label: string;
       value: string | Date | null | undefined;
     }> = [
+      { label: "Appointment marked as no-show", value: appointment.no_show_at },
       { label: "Appointment completed", value: appointment.visited_at },
       { label: "Appointment started", value: appointment.ongoing_at },
       { label: "Appointment approved", value: appointment.approved_at },
@@ -391,10 +523,10 @@ const buildInventoryChartData = ({
 /* ================= SINGLE DATA OBJECT ================= */
 const dashboardData = {
   actions: [
-    { label: "Add Specimen", icon: Microscope },
-    { label: "Add Chemical Stock", icon: FlaskConical },
-    { label: "Create Appointment", icon: CalendarClock },
-    { label: "Print QR Code", icon: QrCode },
+    { id: "add-specimen", label: "Add Specimen", icon: Microscope },
+    { id: "add-chemical", label: "Add Chemical Stock", icon: FlaskConical },
+    { id: "set-unavailable", label: "Set Date Unavailable", icon: CalendarClock },
+    { id: "see-reports", label: "See Reports", icon: BarChart3 },
   ],
 
   appointments: [
@@ -435,9 +567,131 @@ const getActivityConfig = (text: string) => {
 
 /* ================= COMPONENT ================= */
 export default function AdminHome() {
+  const router = useRouter();
   const [summaryCards, setSummaryCards] = useState<SummaryCard[]>(DEFAULT_SUMMARY_CARDS);
   const [recentActivities, setRecentActivities] = useState<ActivityEntry[]>([]);
   const [inventoryChartData, setInventoryChartData] = useState<InventoryChartEntry[]>([]);
+  const [todayOngoingAppointments, setTodayOngoingAppointments] = useState<DashboardAppointmentEntry[]>([]);
+  const [todayNoShowAppointments, setTodayNoShowAppointments] = useState<DashboardAppointmentEntry[]>([]);
+  const [tomorrowPendingAppointments, setTomorrowPendingAppointments] = useState<DashboardAppointmentEntry[]>([]);
+  const [showUnavailableModal, setShowUnavailableModal] = useState(false);
+  const [unavailableDate, setUnavailableDate] = useState("");
+  const [unavailableReason, setUnavailableReason] = useState("");
+  const [unavailableDates, setUnavailableDates] = useState<UnavailableDate[]>([]);
+  const [savingUnavailable, setSavingUnavailable] = useState(false);
+  const [showReportsNavToast, setShowReportsNavToast] = useState(false);
+  const [userRoleSummary, setUserRoleSummary] = useState<UserRoleSummary>({
+    activeUsers: 0,
+    researchAssistants: 0,
+    faculty: 0,
+    students: 0,
+  });
+
+  const fetchUnavailableDates = async () => {
+    try {
+      const res = await fetch("/API/appointments/unavailable-dates");
+      if (!res.ok) {
+        throw new Error("Failed to fetch unavailable dates");
+      }
+      const data = await res.json();
+      setUnavailableDates(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Error fetching unavailable dates:", err);
+    }
+  };
+
+  const getCurrentUserId = (): number | null => {
+    try {
+      const fromUserData = localStorage.getItem("userData");
+      const fromUser = localStorage.getItem("user");
+      const raw = fromUserData || fromUser;
+      if (!raw) return null;
+
+      const parsed = JSON.parse(raw);
+      const id = Number(parsed.userId ?? parsed.user_id ?? parsed.id);
+      return Number.isFinite(id) ? id : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const handleSetUnavailableDate = async () => {
+    if (!unavailableDate || !unavailableReason.trim()) {
+      alert("Please select a date and provide a reason.");
+      return;
+    }
+
+    try {
+      setSavingUnavailable(true);
+      const response = await fetch("/API/appointments/unavailable-dates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date: unavailableDate,
+          reason: unavailableReason.trim(),
+          created_by_role: "admin",
+          created_by_user_id: getCurrentUserId(),
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || data.error || "Failed to mark date unavailable");
+      }
+
+      alert("Date marked unavailable. Notification payload queued for future system integration.");
+      setUnavailableDate("");
+      setUnavailableReason("");
+      fetchUnavailableDates();
+    } catch (err) {
+      console.error("Error marking date unavailable:", err);
+      alert(err instanceof Error ? err.message : "Failed to mark date unavailable");
+    } finally {
+      setSavingUnavailable(false);
+    }
+  };
+
+  const handleRemoveUnavailableDate = async (date: string) => {
+    try {
+      const response = await fetch(`/API/appointments/unavailable-dates/${encodeURIComponent(date)}`, {
+        method: "DELETE",
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || data.error || "Failed to remove unavailable date");
+      }
+
+      fetchUnavailableDates();
+    } catch (err) {
+      console.error("Error removing unavailable date:", err);
+      alert(err instanceof Error ? err.message : "Failed to remove unavailable date");
+    }
+  };
+
+  const handleQuickAction = (actionId: string) => {
+    if (actionId === "add-specimen") {
+      router.push("/AdminUI/AdminDashBoard/Features/AdminCollection?modal=add-specimen");
+      return;
+    }
+
+    if (actionId === "add-chemical") {
+      router.push("/AdminUI/AdminDashBoard/Features/AdminInventory?modal=add-chemical");
+      return;
+    }
+
+    if (actionId === "set-unavailable") {
+      setShowUnavailableModal(true);
+      fetchUnavailableDates();
+      return;
+    }
+
+    if (actionId === "see-reports") {
+      setShowReportsNavToast(true);
+      setTimeout(() => setShowReportsNavToast(false), 2500);
+      router.push("/AdminUI/AdminDashBoard/Features/AdminReports");
+    }
+  };
 
   useEffect(() => {
     let isCancelled = false;
@@ -496,17 +750,95 @@ export default function AdminHome() {
         activeChemicalIds.has(toNumber(chemical.chemical_id))
       );
 
+      const remainingByChemicalId = new Map<number, number>();
+      batches.forEach((batch) => {
+        const chemicalId = toNumber(batch.chemical_id);
+        if (chemicalId <= 0) return;
+
+        const total = Math.max(toNumber(batch.quantity), 0);
+        const used = Math.max(toNumber(batch.used_quantity), 0);
+        const remaining = Math.max(total - used, 0);
+
+        remainingByChemicalId.set(
+          chemicalId,
+          (remainingByChemicalId.get(chemicalId) || 0) + remaining
+        );
+      });
+
       const lowStockCount = activeChemicals.filter((chemical) => {
-        return toNumber(chemical.quantity) <= toNumber(chemical.threshold);
+        const chemicalId = toNumber(chemical.chemical_id);
+        const remainingQuantity = remainingByChemicalId.get(chemicalId) ?? toNumber(chemical.quantity);
+        return remainingQuantity <= toNumber(chemical.threshold);
       }).length;
 
       const pendingAppointments = appointments.filter((appointment) => {
         return String(appointment.status || "").toLowerCase() === "pending";
       });
 
+      const pendingInternal = pendingAppointments.filter((appointment) => {
+        return String(appointment.appointment_source || "internal").toLowerCase() !== "outsider";
+      }).length;
+
+      const pendingOutsider = pendingAppointments.filter((appointment) => {
+        return String(appointment.appointment_source || "internal").toLowerCase() === "outsider";
+      }).length;
+
       const pendingToday = pendingAppointments.filter((appointment) => {
         return isTodayLocal(appointment.date);
       }).length;
+
+      const researchAssistants = users.filter(
+        (user) => String(user.role || "").toLowerCase() === "staff"
+      ).length;
+      const faculty = users.filter(
+        (user) => String(user.role || "").toLowerCase() === "faculty"
+      ).length;
+      const students = users.filter(
+        (user) => String(user.role || "").toLowerCase() === "student"
+      ).length;
+      const activeUsers = researchAssistants + faculty + students;
+
+      const ongoingToday = appointments
+        .filter((appointment) => {
+          return (
+            String(appointment.status || "").toLowerCase() === "ongoing" &&
+            isTodayLocal(appointment.date)
+          );
+        })
+        .sort((a, b) => {
+          const aTime = parseTimestamp(a.date) ?? 0;
+          const bTime = parseTimestamp(b.date) ?? 0;
+          return aTime - bTime;
+        })
+        .map((appointment) => mapDashboardAppointment(appointment, "ongoing"));
+
+      const pendingTomorrow = appointments
+        .filter((appointment) => {
+          return (
+            String(appointment.status || "").toLowerCase() === "pending" &&
+            isTomorrowLocal(appointment.date)
+          );
+        })
+        .sort((a, b) => {
+          const aTime = parseTimestamp(a.date) ?? 0;
+          const bTime = parseTimestamp(b.date) ?? 0;
+          return aTime - bTime;
+        })
+        .map((appointment) => mapDashboardAppointment(appointment, "pending"));
+
+      const noShowToday = appointments
+        .filter((appointment) => {
+          return (
+            String(appointment.status || "").toLowerCase() === "no_show" &&
+            isTodayLocal(appointment.date)
+          );
+        })
+        .sort((a, b) => {
+          const aTime = parseTimestamp(a.date) ?? 0;
+          const bTime = parseTimestamp(b.date) ?? 0;
+          return aTime - bTime;
+        })
+        .map((appointment) => mapDashboardAppointment(appointment, "no_show"));
 
       const activities = buildRecentActivities({
         microbials: Array.isArray(microbialsData) ? microbialsData : [],
@@ -527,12 +859,23 @@ export default function AdminHome() {
             chemicalCount: activeChemicals.length,
             lowStockCount,
             pendingAppointments: pendingAppointments.length,
+            pendingInternal,
+            pendingOutsider,
             pendingToday,
             registeredUsers: users.length,
           })
         );
         setRecentActivities(activities);
         setInventoryChartData(inventoryData);
+        setTodayOngoingAppointments(ongoingToday);
+        setTodayNoShowAppointments(noShowToday);
+        setTomorrowPendingAppointments(pendingTomorrow);
+        setUserRoleSummary({
+          activeUsers,
+          researchAssistants,
+          faculty,
+          students,
+        });
       }
     };
 
@@ -586,6 +929,29 @@ export default function AdminHome() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* USER ROLE OVERVIEW */}
+      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm mb-6">
+        <h3 className="text-sm font-semibold text-gray-900 mb-4">User Role Overview</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+            <p className="text-xs uppercase text-gray-500">Active Users</p>
+            <p className="text-2xl font-bold text-[#113F67]">{formatCount(userRoleSummary.activeUsers)}</p>
+          </div>
+          <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+            <p className="text-xs uppercase text-gray-500">Research Assistants</p>
+            <p className="text-2xl font-bold text-[#113F67]">{formatCount(userRoleSummary.researchAssistants)}</p>
+          </div>
+          <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+            <p className="text-xs uppercase text-gray-500">Faculty</p>
+            <p className="text-2xl font-bold text-[#113F67]">{formatCount(userRoleSummary.faculty)}</p>
+          </div>
+          <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+            <p className="text-xs uppercase text-gray-500">Students</p>
+            <p className="text-2xl font-bold text-[#113F67]">{formatCount(userRoleSummary.students)}</p>
+          </div>
+        </div>
       </div>
 
       {/* ROW 1 */}
@@ -690,7 +1056,8 @@ export default function AdminHome() {
 
                   return (
                     <button
-                      key={a.label}
+                      key={a.id}
+                      onClick={() => handleQuickAction(a.id)}
                       className="cursor-pointer flex flex-col items-center justify-center gap-2 py-4 text-xs font-medium rounded-xl border border-gray-200 hover:bg-gray-100 hover:border-[#113F67] transition-all duration-150"
                     >
                       <Icon className="h-5 w-5 text-[#113F67]" />
@@ -712,29 +1079,137 @@ export default function AdminHome() {
               </h3>
             </div>
 
-            <div className="space-y-3">
-              {dashboardData.appointments.map((a, i) => (
-                <div key={i} className="flex items-center justify-between py-2 border-b last:border-0 border-gray-200">
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-1.5 text-gray-500">
-                      <Clock className="h-3.5 w-3.5" />
-                      <span className="text-xs font-medium w-16">{a.time}</span>
-                    </div>
-
-                    <span className="text-sm text-gray-900">{a.title}</span>
-                  </div>
-
-                  <span
-                    className={`text-[10px] px-2 py-1 rounded-full font-medium ${
-                      a.status === "confirmed"
-                        ? "bg-green-100 text-green-600"
-                        : "bg-yellow-100 text-yellow-600"
-                    }`}
-                  >
-                    {a.status}
+            <div className="space-y-4">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Ongoing Appointments Today
+                  </p>
+                  <span className="inline-flex items-center justify-center rounded-full bg-green-100 text-green-700 text-[10px] font-semibold px-2 py-0.5 min-w-6">
+                    {todayOngoingAppointments.length}
                   </span>
                 </div>
-              ))}
+
+                <div className="space-y-2">
+                  {todayOngoingAppointments.map((appointment) => (
+                    <div
+                      key={`today-${appointment.id}`}
+                      className="flex items-center justify-between py-2 border-b last:border-0 border-gray-200"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex items-center gap-1.5 text-gray-500">
+                          <Clock className="h-3.5 w-3.5" />
+                          <span className="text-xs font-medium">{appointment.time}</span>
+                        </div>
+
+                        <span className="text-sm text-gray-900 truncate">{appointment.title}</span>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${appointment.source === "outsider" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-700"}`}>
+                          {appointment.source}
+                        </span>
+                      </div>
+
+                      <span className="text-[10px] px-2 py-1 rounded-full font-medium bg-green-100 text-green-600">
+                        ongoing
+                      </span>
+                    </div>
+                  ))}
+
+                  {todayOngoingAppointments.length === 0 && (
+                    <p className="text-sm text-gray-500">No ongoing appointments for today.</p>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    No-Show Appointments Today
+                  </p>
+                  <span className="inline-flex items-center justify-center rounded-full bg-red-100 text-red-700 text-[10px] font-semibold px-2 py-0.5 min-w-6">
+                    {todayNoShowAppointments.length}
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  {todayNoShowAppointments.map((appointment) => (
+                    <div
+                      key={`today-no-show-${appointment.id}`}
+                      className="flex items-center justify-between py-2 border-b last:border-0 border-gray-200"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex items-center gap-1.5 text-gray-500">
+                          <Clock className="h-3.5 w-3.5" />
+                          <span className="text-xs font-medium">{appointment.time}</span>
+                        </div>
+
+                        <span className="text-sm text-gray-900 truncate">{appointment.title}</span>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${appointment.source === "outsider" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-700"}`}>
+                          {appointment.source}
+                        </span>
+                      </div>
+
+                      <span className="text-[10px] px-2 py-1 rounded-full font-medium bg-red-100 text-red-700">
+                        no-show
+                      </span>
+                    </div>
+                  ))}
+
+                  {todayNoShowAppointments.length === 0 && (
+                    <p className="text-sm text-gray-500">No no-show appointments for today.</p>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                {(() => {
+                  const outsiderTomorrowCount = tomorrowPendingAppointments.filter(
+                    (appointment) => appointment.source === "outsider"
+                  ).length;
+
+                  return (
+                <div className="flex items-center gap-2 mb-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Pending Appointments for Tomorrow
+                  </p>
+                  <span className="inline-flex items-center justify-center rounded-full bg-yellow-100 text-yellow-700 text-[10px] font-semibold px-2 py-0.5 min-w-6">
+                    {tomorrowPendingAppointments.length}
+                  </span>
+                  <span className="inline-flex items-center justify-center rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-semibold px-2 py-0.5 min-w-6">
+                    Outsider: {outsiderTomorrowCount}
+                  </span>
+                </div>
+                  );
+                })()}
+
+                <div className="space-y-2">
+                  {tomorrowPendingAppointments.map((appointment) => (
+                    <div
+                      key={`tomorrow-${appointment.id}`}
+                      className="flex items-center justify-between py-2 border-b last:border-0 border-gray-200"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex items-center gap-1.5 text-gray-500">
+                          <Clock className="h-3.5 w-3.5" />
+                          <span className="text-xs font-medium">{appointment.time}</span>
+                        </div>
+
+                        <span className="text-sm text-gray-900 truncate">{appointment.title}</span>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${appointment.source === "outsider" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-700"}`}>
+                          {appointment.source}
+                        </span>
+                      </div>
+
+                      <span className="text-[10px] px-2 py-1 rounded-full font-medium bg-yellow-100 text-yellow-700">
+                        pending
+                      </span>
+                    </div>
+                  ))}
+
+                  {tomorrowPendingAppointments.length === 0 && (
+                    <p className="text-sm text-gray-500">No pending appointments for tomorrow.</p>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -742,7 +1217,78 @@ export default function AdminHome() {
 
       {/* ROW 3 - TABLE */}
       <div>
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+
+      {showUnavailableModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-2xl rounded-xl bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+              <h2 className="text-lg font-semibold text-gray-900">Set Date Unavailable</h2>
+              <button
+                onClick={() => setShowUnavailableModal(false)}
+                className="rounded-md px-2 py-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="space-y-4 px-5 py-4">
+              <p className="text-sm text-gray-600">
+                This blocks booking for students/faculty and prepares data for the upcoming notification system.
+              </p>
+
+              <div className="grid gap-3 md:grid-cols-3">
+                <input
+                  type="date"
+                  value={unavailableDate}
+                  onChange={(e) => setUnavailableDate(e.target.value)}
+                  className="rounded-md border border-gray-300 px-3 py-2"
+                />
+                <input
+                  type="text"
+                  value={unavailableReason}
+                  onChange={(e) => setUnavailableReason(e.target.value)}
+                  placeholder="Reason (e.g. lab maintenance)"
+                  className="rounded-md border border-gray-300 px-3 py-2 md:col-span-2"
+                />
+              </div>
+
+              <div>
+                <button
+                  onClick={handleSetUnavailableDate}
+                  disabled={savingUnavailable}
+                  className="rounded-md bg-orange-600 px-4 py-2 text-white hover:bg-orange-700 disabled:opacity-60"
+                >
+                  {savingUnavailable ? "Saving..." : "Mark Unavailable"}
+                </button>
+              </div>
+
+              <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+                {unavailableDates.length === 0 ? (
+                  <p className="text-sm text-gray-500">No blocked dates yet.</p>
+                ) : (
+                  unavailableDates.slice(0, 20).map((item) => (
+                    <div
+                      key={item.unavailable_id}
+                      className="flex items-center justify-between rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm"
+                    >
+                      <span>
+                        {format(new Date(`${item.unavailable_date}T00:00:00`), "MMM dd, yyyy")} - {item.reason}
+                      </span>
+                      <button
+                        onClick={() => handleRemoveUnavailableDate(item.unavailable_date)}
+                        className="font-semibold text-red-600 hover:text-red-700"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+        <div className="rounded-2xl border border-white bg-white p-5 shadow-sm">
           <div className="pb-3">
             <h3 className="text-sm font-semibold text-gray-900">
               Specimen Overview
@@ -786,6 +1332,15 @@ export default function AdminHome() {
           </div>
         </div>
       </div>
+
+      {showReportsNavToast && (
+        <div className="fixed right-4 top-20 z-50 rounded-lg border border-blue-200 bg-white px-3 py-2 shadow-md">
+          <div className="flex items-center gap-2 text-sm text-[#113F67]">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Opening Reports...
+          </div>
+        </div>
+      )}
 
     </div>
   );

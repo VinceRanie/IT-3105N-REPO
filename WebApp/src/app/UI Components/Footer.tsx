@@ -42,7 +42,7 @@ export default function Footer() {
           <span>+639 664 288 917</span>
         </a>
 
-        <a href="#" className="flex items-center space-x-2">
+        <a href="https://www.facebook.com/USCBioDept" target="_blank" className="flex items-center space-x-2">
           <Facebook size={18} />
           <span>USC Biology</span>
         </a>

@@ -12,6 +12,7 @@ const navigation = [
   { name: "Collection", href: "/AdminUI/AdminDashBoard/Features/AdminCollection" },
   { name: "Inventory", href: "/AdminUI/AdminDashBoard/Features/AdminInventory" },
   { name: "Appointment", href: "/AdminUI/AdminDashBoard/Features/AdminAppointment" },
+  { name: "Reports", href: "/AdminUI/AdminDashBoard/Features/AdminReports" },
   { name: "Users", href: "/AdminUI/AdminDashBoard/Features/AdminUsers" },
 ]
 
@@ -20,8 +21,22 @@ export default function Navbar() {
   const [profileOpen, setProfileOpen] = useState(false)
   const pathname = usePathname() 
 
-  const isActive = (href: string) => pathname === href
 
+  const isActive = (href: string) => {
+    const pathParts = pathname.split("/")
+    const hrefParts = href.split("/")
+  
+    // Dashboard (no /Features/)
+    if (!href.includes("/Features/")) {
+      return pathname === href
+    }
+  
+    // Get module name (e.g., AdminCollection)
+    const currentModule = pathParts[4]
+    const targetModule = hrefParts[4]
+  
+    return currentModule === targetModule
+  }
   const handleLogout = async () => {
     try {
       await fetch('/API/auth/logout', {

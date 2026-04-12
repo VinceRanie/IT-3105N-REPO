@@ -100,8 +100,8 @@ export default function FinalizeSignup({
       {/* Left Side Image */}
       <div className="relative hidden md:block">
         <Image
-          src="/UI/img/Laboratory.jpg"
-          alt="Laboratory Background"
+          src="/UI/img/BioOffice.webp"
+          alt="USC Biology Department Office"
           fill
           className="object-cover"
         />
