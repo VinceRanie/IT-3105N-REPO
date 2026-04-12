@@ -71,7 +71,15 @@ type UserItem = {
   first_name?: string | null;
   last_name?: string | null;
   email?: string | null;
+  role?: string | null;
   created_at?: string | Date | null;
+};
+
+type UserRoleSummary = {
+  activeUsers: number;
+  researchAssistants: number;
+  faculty: number;
+  students: number;
 };
 
 type UsageLogItem = {
@@ -572,6 +580,12 @@ export default function AdminHome() {
   const [unavailableDates, setUnavailableDates] = useState<UnavailableDate[]>([]);
   const [savingUnavailable, setSavingUnavailable] = useState(false);
   const [showReportsNavToast, setShowReportsNavToast] = useState(false);
+  const [userRoleSummary, setUserRoleSummary] = useState<UserRoleSummary>({
+    activeUsers: 0,
+    researchAssistants: 0,
+    faculty: 0,
+    students: 0,
+  });
 
   const fetchUnavailableDates = async () => {
     try {
@@ -773,6 +787,17 @@ export default function AdminHome() {
         return isTodayLocal(appointment.date);
       }).length;
 
+      const researchAssistants = users.filter(
+        (user) => String(user.role || "").toLowerCase() === "staff"
+      ).length;
+      const faculty = users.filter(
+        (user) => String(user.role || "").toLowerCase() === "faculty"
+      ).length;
+      const students = users.filter(
+        (user) => String(user.role || "").toLowerCase() === "student"
+      ).length;
+      const activeUsers = researchAssistants + faculty + students;
+
       const ongoingToday = appointments
         .filter((appointment) => {
           return (
@@ -845,6 +870,12 @@ export default function AdminHome() {
         setTodayOngoingAppointments(ongoingToday);
         setTodayNoShowAppointments(noShowToday);
         setTomorrowPendingAppointments(pendingTomorrow);
+        setUserRoleSummary({
+          activeUsers,
+          researchAssistants,
+          faculty,
+          students,
+        });
       }
     };
 
@@ -898,6 +929,29 @@ export default function AdminHome() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* USER ROLE OVERVIEW */}
+      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm mb-6">
+        <h3 className="text-sm font-semibold text-gray-900 mb-4">User Role Overview</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+            <p className="text-xs uppercase text-gray-500">Active Users</p>
+            <p className="text-2xl font-bold text-[#113F67]">{formatCount(userRoleSummary.activeUsers)}</p>
+          </div>
+          <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+            <p className="text-xs uppercase text-gray-500">Research Assistants</p>
+            <p className="text-2xl font-bold text-[#113F67]">{formatCount(userRoleSummary.researchAssistants)}</p>
+          </div>
+          <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+            <p className="text-xs uppercase text-gray-500">Faculty</p>
+            <p className="text-2xl font-bold text-[#113F67]">{formatCount(userRoleSummary.faculty)}</p>
+          </div>
+          <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+            <p className="text-xs uppercase text-gray-500">Students</p>
+            <p className="text-2xl font-bold text-[#113F67]">{formatCount(userRoleSummary.students)}</p>
+          </div>
+        </div>
       </div>
 
       {/* ROW 1 */}

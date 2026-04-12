@@ -315,7 +315,6 @@ export default function AdminInventory() {
           <table className="w-full">
             <thead className="bg-[#113F67] text-white">
               <tr>
-                <SortableHeader column="chemical_id" label="Chem ID" />
                 <th className="px-6 py-3 text-left text-sm font-semibold">Batch ID</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold">Lot Groups</th>
                 <SortableHeader column="name" label="Name" />
@@ -332,7 +331,7 @@ export default function AdminInventory() {
             <tbody className="divide-y divide-gray-200">
               {currentItems.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={11} className="px-6 py-8 text-center text-gray-500">
                     No chemicals found
                   </td>
                 </tr>
@@ -353,9 +352,6 @@ export default function AdminInventory() {
                       isLowStock(chemical) ? "bg-red-50" : ""
                     }`}
                   >
-                    <td className="px-6 py-4 text-sm text-gray-900">
-                      {chemical.chemical_id}
-                    </td>
                     <td className="px-6 py-4 text-sm text-gray-900 font-semibold">
                       {chemicalBatch?.batch_id || 'N/A'}
                     </td>
