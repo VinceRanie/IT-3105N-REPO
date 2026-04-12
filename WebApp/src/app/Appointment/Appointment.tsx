@@ -267,12 +267,11 @@ export default function AppointmentBooking() {
             </button>
             <p className="text-sm text-gray-400 mt-2">or</p>
             <p className="text-sm text-gray-600">
-                type="button"
               Don&apos;t have an account?{' '}
-                onClick={() => router.push('/signup')}
               <button
+                type="button"
                 className="text-[#113F67] hover:text-[#0a2a4a] font-medium transition-colors cursor-pointer hover:underline"
-                onClick={()=>router.push("/signup")}
+                onClick={() => router.push('/signup')}
               >Sign up</button>
             </p>
           </div>
