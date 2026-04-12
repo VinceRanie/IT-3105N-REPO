@@ -109,9 +109,8 @@ const sendEmail = async (mailOptions) => {
     }
 
     const transporter = await createTransporter();
-    const senderEmail = process.env.EMAIL_USER || process.env.GMAIL_USER;
     const info = await transporter.sendMail({
-      from: `"BIOCELLA" <${senderEmail}>`,
+      from: `"BIOCELLA" <${process.env.GMAIL_USER}>`,
       ...mailOptions
     });
     console.log('📧 Email sent successfully:', info.messageId);
