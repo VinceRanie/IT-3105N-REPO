@@ -66,6 +66,16 @@ export default function AdminInventory() {
     fetchChemicals();
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("modal") !== "add-chemical") return;
+
+    setIsAddModalOpen(true);
+    window.history.replaceState({}, "", window.location.pathname);
+  }, []);
+
   // Search and filter logic
   useEffect(() => {
     let result = chemicals;
@@ -233,16 +243,20 @@ export default function AdminInventory() {
 
   return (
     <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-4xl font-bold text-[#113F67]">ADMIN INVENTORY</h1>
-        <button
-          onClick={() => setIsAddModalOpen(true)}
-          className="flex items-center gap-2 bg-[#113F67] text-white px-4 py-2 rounded-lg hover:bg-[#0d2f4d] transition-colors"
-        >
-          <Plus size={20} />
-          Add Chemical
-        </button>
-      </div>
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
+      <h2 className="text-2xl font-bold text-[#113F67]">
+    ADMIN INVENTORY
+  </h2>
+
+
+  <button
+    onClick={() => setIsAddModalOpen(true)}
+    className="flex items-center justify-center gap-2 bg-[#113F67] text-white px-4 py-2 rounded-lg hover:bg-[#0d2f4d] transition-colors w-full sm:w-auto"
+  >
+    <Plus size={20} />
+    Add Chemical
+  </button>
+</div>
 
       {/* Search and Filter Section */}
       <div className="bg-white rounded-lg shadow-md p-4 mb-6">
@@ -293,9 +307,6 @@ export default function AdminInventory() {
         </div>
 
         {/* Results count */}
-        <div className="mt-3 text-sm text-gray-600">
-          Showing {currentItems.length} of {sortedChemicals.length} chemicals
-        </div>
       </div>
 
       {/* Table */}
@@ -304,7 +315,6 @@ export default function AdminInventory() {
           <table className="w-full">
             <thead className="bg-[#113F67] text-white">
               <tr>
-                <SortableHeader column="chemical_id" label="Chem ID" />
                 <th className="px-6 py-3 text-left text-sm font-semibold">Batch ID</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold">Lot Groups</th>
                 <SortableHeader column="name" label="Name" />
@@ -321,7 +331,7 @@ export default function AdminInventory() {
             <tbody className="divide-y divide-gray-200">
               {currentItems.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={11} className="px-6 py-8 text-center text-gray-500">
                     No chemicals found
                   </td>
                 </tr>
@@ -342,9 +352,6 @@ export default function AdminInventory() {
                       isLowStock(chemical) ? "bg-red-50" : ""
                     }`}
                   >
-                    <td className="px-6 py-4 text-sm text-gray-900">
-                      {chemical.chemical_id}
-                    </td>
                     <td className="px-6 py-4 text-sm text-gray-900 font-semibold">
                       {chemicalBatch?.batch_id || 'N/A'}
                     </td>
@@ -441,7 +448,9 @@ export default function AdminInventory() {
             </tbody>
           </table>
         </div>
-
+        <div className="mt-3 text-sm text-gray-600">
+          Showing {currentItems.length} of {sortedChemicals.length} chemicals
+        </div>
         {/* Pagination */}
         {totalPages > 1 && (
           <div className="bg-gray-50 px-6 py-4 flex items-center justify-between border-t border-gray-200">

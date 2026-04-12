@@ -23,6 +23,7 @@ router.use('/appointments', require('./appointmentRoutes'));
 router.use('/chemicals', require('./chemicalRoutes'));
 router.use('/batches', require('./batchRoutes'));
 router.use('/usage', require('./usageRoutes'));
+router.use('/reports', require('./reportRoutes'));
 
 //Blaast
 router.post('/submit', blastController.runBlast);

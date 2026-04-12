@@ -212,8 +212,6 @@ export default function AdminInventory() {
           <table className="w-full">
             <thead className="bg-[#113F67] text-white">
               <tr>
-                <th className="px-6 py-3 text-left text-sm font-semibold">Chem ID</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold">Batch ID</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold">Name</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold">Type</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold">Quantity</th>
@@ -221,13 +219,12 @@ export default function AdminInventory() {
                 <th className="px-6 py-3 text-left text-sm font-semibold">Location</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold">Exp. Date</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold">Status</th>
-                <th className="px-6 py-3 text-center text-sm font-semibold">QR Code</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {currentItems.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
                     No chemicals found
                   </td>
                 </tr>
@@ -241,12 +238,6 @@ export default function AdminInventory() {
                       isLowStock(chemical) ? "bg-red-50" : ""
                     }`}
                   >
-                    <td className="px-6 py-4 text-sm text-gray-900">
-                      {chemical.chemical_id}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-900 font-semibold">
-                      {chemicalBatch?.batch_id || 'N/A'}
-                    </td>
                     <td className="px-6 py-4 text-sm font-medium text-gray-900">
                       {chemical.name}
                     </td>
@@ -276,29 +267,6 @@ export default function AdminInventory() {
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                           In Stock
                         </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-center">
-                      {chemicalBatch?.qr_code ? (
-                        <button
-                          onClick={() => {
-                            const link = document.createElement('a');
-                            link.href = chemicalBatch.qr_code!;
-                            link.download = `batch_${chemicalBatch.batch_id}_qr.png`;
-                            link.click();
-                          }}
-                          className="inline-block"
-                          title="Download QR Code"
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img 
-                            src={chemicalBatch.qr_code} 
-                            alt={`QR Code for ${chemical.name}`}
-                            className="w-12 h-12 mx-auto hover:scale-110 transition-transform cursor-pointer"
-                          />
-                        </button>
-                      ) : (
-                        <span className="text-gray-400 text-xs">No QR</span>
                       )}
                     </td>
                   </tr>
