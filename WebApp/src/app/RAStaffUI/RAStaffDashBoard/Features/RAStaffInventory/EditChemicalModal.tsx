@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { X } from "lucide-react";
 import { Chemical } from "./types";
 import { API_URL } from "@/config/api";
@@ -14,6 +14,24 @@ interface EditChemicalModalProps {
 }
 
 type EditChemicalFormData = Omit<Chemical, 'chemical_id' | 'last_updated'>;
+
+const ALL_UNITS = ["mL", "L", "g", "kg", "mg", "μL", "pieces", "bottles"] as const;
+const MASS_UNITS = ["g", "kg", "mg"] as const;
+const VOLUME_UNITS = ["mL", "L", "μL"] as const;
+
+const getAllowedUnitsForType = (type: string) => {
+  const normalized = type.trim().toLowerCase();
+
+  if (["agar", "protein", "salt", "dye", "stain", "enzyme", "antibody"].includes(normalized)) {
+    return [...MASS_UNITS];
+  }
+
+  if (["acid", "base", "buffer", "solvent"].includes(normalized)) {
+    return [...VOLUME_UNITS];
+  }
+
+  return [...ALL_UNITS];
+};
 
 export default function EditChemicalModal({
   isOpen,
@@ -30,6 +48,7 @@ export default function EditChemicalModal({
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const allowedUnits = useMemo(() => getAllowedUnitsForType(formData.type), [formData.type]);
 
   // Update form data when chemical prop changes
   useEffect(() => {
@@ -42,12 +61,22 @@ export default function EditChemicalModal({
     });
   }, [chemical]);
 
+  useEffect(() => {
+    if (!allowedUnits.includes(formData.unit as (typeof allowedUnits)[number])) {
+      setFormData((prev) => ({ ...prev, unit: allowedUnits[0] }));
+    }
+  }, [allowedUnits, formData.unit]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
     try {
+      if (!allowedUnits.includes(formData.unit as (typeof allowedUnits)[number])) {
+        throw new Error(`Selected unit is not valid for type ${formData.type}.`);
+      }
+
       // Update chemical
       console.log('Updating chemical with data:', formData);
       const response = await fetch(
@@ -193,15 +222,13 @@ export default function EditChemicalModal({
                 required
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
               >
-                <option value="mL">mL</option>
-                <option value="L">L</option>
-                <option value="g">g</option>
-                <option value="kg">kg</option>
-                <option value="mg">mg</option>
-                <option value="μL">μL</option>
-                <option value="pieces">pieces</option>
-                <option value="bottles">bottles</option>
+                {allowedUnits.map((unit) => (
+                  <option key={unit} value={unit}>{unit}</option>
+                ))}
               </select>
+              <p className="mt-1 text-xs text-gray-500">
+                Unit options are filtered based on selected type.
+              </p>
             </div>
 
             {/* Threshold */}

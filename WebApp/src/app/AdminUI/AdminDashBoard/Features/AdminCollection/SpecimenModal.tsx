@@ -574,7 +574,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
           <div className="mb-6 border rounded-lg">
             <button
               type="button"
-              // onClick={() => toggleSection('molecular')}
+              onClick={() => toggleSection('molecular')}
               className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
             >
               <span className="flex items-center gap-2 font-semibold text-gray-800">
@@ -684,7 +684,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
           <div className="mb-6 border rounded-lg">
             <button
               type="button"
-              // onClick={() => toggleSection('biochemical')}
+              onClick={() => toggleSection('biochemical')}
               className=" w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
             >
               <span className="font-semibold text-gray-800">Biochemical Tests (21 tests)</span>
@@ -1023,7 +1023,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
           <div className="mb-6 border rounded-lg">
             <button
               type="button"
-              // onClick={() => toggleSection('custom')}
+              onClick={() => toggleSection('custom')}
               className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
             >
               <span className="font-semibold text-gray-800">Additional Custom Fields</span>

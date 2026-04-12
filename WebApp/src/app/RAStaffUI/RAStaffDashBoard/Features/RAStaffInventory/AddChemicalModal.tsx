@@ -22,6 +22,24 @@ interface ExistingBatch {
   lot_number?: string | null;
 }
 
+const ALL_UNITS = ["mL", "L", "g", "kg", "mg", "μL", "pieces", "bottles"] as const;
+const MASS_UNITS = ["g", "kg", "mg"] as const;
+const VOLUME_UNITS = ["mL", "L", "μL"] as const;
+
+const getAllowedUnitsForType = (type: string) => {
+  const normalized = type.trim().toLowerCase();
+
+  if (["agar", "protein", "salt", "dye", "stain", "enzyme", "antibody"].includes(normalized)) {
+    return [...MASS_UNITS];
+  }
+
+  if (["acid", "base", "buffer", "solvent"].includes(normalized)) {
+    return [...VOLUME_UNITS];
+  }
+
+  return [...ALL_UNITS];
+};
+
 export default function AddChemicalModal({
   isOpen,
   onClose,
@@ -73,6 +91,14 @@ export default function AddChemicalModal({
   const resolvedType = useMemo(() => {
     return formData.type === "Other" ? customType.trim() : formData.type;
   }, [formData.type, customType]);
+
+  const allowedUnits = useMemo(() => getAllowedUnitsForType(resolvedType), [resolvedType]);
+
+  useEffect(() => {
+    if (!allowedUnits.includes(formData.unit as (typeof allowedUnits)[number])) {
+      setFormData((prev) => ({ ...prev, unit: allowedUnits[0] }));
+    }
+  }, [allowedUnits, formData.unit]);
 
   const lotSuggestions = useMemo(() => {
     const normalizedName = formData.name.trim().toLowerCase();
@@ -134,6 +160,10 @@ export default function AddChemicalModal({
         throw new Error("Lot Number is required.");
       }
 
+      if (!allowedUnits.includes(formData.unit as (typeof allowedUnits)[number])) {
+        throw new Error(`Selected unit is not valid for type ${resolvedType || formData.type}.`);
+      }
+
       const payload = {
         ...formData,
         type: resolvedType,
@@ -158,7 +188,7 @@ export default function AddChemicalModal({
         name: "",
         type: "General",
         quantity: 0,
-        unit: "mL",
+        unit: ALL_UNITS[0],
         threshold: 0,
         expiration_date: "",
         location: "",
@@ -312,15 +342,13 @@ export default function AddChemicalModal({
                 required
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
               >
-                <option value="mL">mL</option>
-                <option value="L">L</option>
-                <option value="g">g</option>
-                <option value="kg">kg</option>
-                <option value="mg">mg</option>
-                <option value="μL">μL</option>
-                <option value="pieces">pieces</option>
-                <option value="bottles">bottles</option>
+                {allowedUnits.map((unit) => (
+                  <option key={unit} value={unit}>{unit}</option>
+                ))}
               </select>
+              <p className="mt-1 text-xs text-gray-500">
+                Unit options are filtered based on selected type.
+              </p>
             </div>
 
             {/* Threshold */}

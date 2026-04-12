@@ -122,6 +122,17 @@ export default function AdminCollectionPage() {
     fetchSpecimens();
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("modal") !== "add-specimen") return;
+
+    setSelectedSpecimen(null);
+    setIsSpecimenModalOpen(true);
+    window.history.replaceState({}, "", window.location.pathname);
+  }, []);
+
   // Project handlers
   const handleSaveProject = async (projectData: any) => {
     try {
