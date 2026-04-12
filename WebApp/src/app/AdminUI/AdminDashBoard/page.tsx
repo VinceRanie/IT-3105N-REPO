@@ -333,7 +333,7 @@ const createSummaryCards = ({
     {
       title: "Pending Appointments",
       value: formatCount(pendingAppointments),
-      sub: `${formatCount(pendingToday)} today | I:${formatCount(pendingInternal)} O:${formatCount(pendingOutsider)}`,
+      sub: `Today ${formatCount(pendingToday)} | Internal ${formatCount(pendingInternal)} | Outsider ${formatCount(pendingOutsider)}`,
       icon: CalendarClock,
       trend: "neutral",
     },
@@ -1121,7 +1121,7 @@ export default function AdminHome() {
                     {tomorrowPendingAppointments.length}
                   </span>
                   <span className="inline-flex items-center justify-center rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-semibold px-2 py-0.5 min-w-6">
-                    O: {outsiderTomorrowCount}
+                    Outsider: {outsiderTomorrowCount}
                   </span>
                 </div>
                   );
