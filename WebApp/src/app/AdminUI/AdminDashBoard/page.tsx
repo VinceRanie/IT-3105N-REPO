@@ -140,6 +140,13 @@ const DEFAULT_SUMMARY_CARDS: SummaryCard[] = [
     trend: "neutral",
   },
   {
+    title: "Outsider Appointments (Today)",
+    value: "0",
+    sub: "External visitors",
+    icon: Users,
+    trend: "neutral",
+  },
+  {
     title: "Registered Users",
     value: "0",
     sub: "Total active accounts",
@@ -297,6 +304,7 @@ const createSummaryCards = ({
   pendingInternal,
   pendingOutsider,
   pendingToday,
+  outsiderToday,
   registeredUsers,
 }: {
   specimenCount: number;
@@ -306,6 +314,7 @@ const createSummaryCards = ({
   pendingInternal: number;
   pendingOutsider: number;
   pendingToday: number;
+  outsiderToday: number;
   registeredUsers: number;
 }): SummaryCard[] => {
   return [
@@ -336,6 +345,13 @@ const createSummaryCards = ({
       sub: `${formatCount(pendingToday)} today | I:${formatCount(pendingInternal)} O:${formatCount(pendingOutsider)}`,
       icon: CalendarClock,
       trend: "neutral",
+    },
+    {
+      title: "Outsider Appointments (Today)",
+      value: formatCount(outsiderToday),
+      sub: "External visitors",
+      icon: Users,
+      trend: outsiderToday > 0 ? "up" : "neutral",
     },
     {
       title: "Registered Users",
@@ -773,6 +789,13 @@ export default function AdminHome() {
         return isTodayLocal(appointment.date);
       }).length;
 
+      const outsiderToday = appointments.filter((appointment) => {
+        return (
+          String(appointment.appointment_source || "internal").toLowerCase() === "outsider" &&
+          isTodayLocal(appointment.date)
+        );
+      }).length;
+
       const ongoingToday = appointments
         .filter((appointment) => {
           return (
@@ -837,6 +860,7 @@ export default function AdminHome() {
             pendingInternal,
             pendingOutsider,
             pendingToday,
+            outsiderToday,
             registeredUsers: users.length,
           })
         );
@@ -865,7 +889,7 @@ export default function AdminHome() {
       </p>
 
       {/* SUMMARY CARDS */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
         {summaryCards.map((card) => (
           <div
             key={card.title}
