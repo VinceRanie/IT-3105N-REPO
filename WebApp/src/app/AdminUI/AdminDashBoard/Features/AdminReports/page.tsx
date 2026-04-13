@@ -192,80 +192,186 @@ const downloadTextFile = (filename: string, content: string, mimeType: string) =
   URL.revokeObjectURL(url);
 };
 
-const exportReportPdf = (report: ReportSnapshot) => {
-  const doc = new jsPDF();
-  let y = 16;
-
-  doc.setFontSize(16);
-  doc.text("BIOCELLA - Reporting and Analytics", 14, y);
-  y += 8;
-
-  doc.setFontSize(10);
-  doc.text(`Generated: ${new Date(report.createdAt).toLocaleString()}`, 14, y);
-  y += 6;
-  doc.text(`Period: ${report.period.toUpperCase()} | Range: ${report.rangeLabel}`, 14, y);
-  y += 10;
-
-  doc.setFontSize(12);
-  doc.text("Summary", 14, y);
-  y += 7;
-  doc.setFontSize(10);
-  doc.text(`Appointments: ${report.summary.appointments}`, 14, y);
-  y += 6;
-  doc.text(`Internal Appointments: ${report.summary.internalAppointments ?? 0}`, 14, y);
-  y += 6;
-  doc.text(`Outsider Appointments: ${report.summary.outsiderAppointments ?? 0}`, 14, y);
-  y += 6;
-  doc.text(`Usage Logs: ${report.summary.usageLogs}`, 14, y);
-  y += 6;
-  doc.text(`New Specimens: ${report.summary.newSpecimens}`, 14, y);
-  y += 6;
-  doc.text(`New Users: ${report.summary.newUsers}`, 14, y);
-  y += 6;
-  doc.text(`Active Chemicals: ${report.summary.activeChemicals}`, 14, y);
-  y += 10;
-
-  doc.setFontSize(12);
-  doc.text("Appointment Status Breakdown", 14, y);
-  y += 7;
-  doc.setFontSize(10);
-  report.statusBreakdown.forEach((item) => {
-    doc.text(`${item.name}: ${item.value}`, 14, y);
-    y += 6;
-  });
-
-  y += 4;
-  doc.setFontSize(12);
-  doc.text("Appointment Source Breakdown", 14, y);
-  y += 7;
-  doc.setFontSize(10);
-  (report.appointmentSourceBreakdown || []).forEach((item) => {
-    doc.text(`${item.name}: ${item.value}`, 14, y);
-    y += 6;
-  });
-
-  if (y > 250) {
-    doc.addPage();
-    y = 16;
+const toImageDataUrl = async (path: string) => {
+  const response = await fetch(path);
+  if (!response.ok) {
+    throw new Error("Unable to load report logo");
   }
 
-  y += 4;
-  doc.setFontSize(12);
-  doc.text("Activity Timeline", 14, y);
-  y += 7;
-  doc.setFontSize(10);
-  report.activityByDay.forEach((item) => {
-    if (y > 280) {
-      doc.addPage();
-      y = 16;
+  const blob = await response.blob();
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      if (typeof reader.result === "string") {
+        resolve(reader.result);
+        return;
+      }
+      reject(new Error("Unable to convert report logo"));
+    };
+    reader.onerror = () => reject(new Error("Unable to read report logo"));
+    reader.readAsDataURL(blob);
+  });
+};
+
+const exportReportPdf = async (report: ReportSnapshot) => {
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 14;
+  const contentWidth = pageWidth - margin * 2;
+  const printedAt = new Date();
+
+  const addDivider = (y: number) => {
+    doc.setDrawColor(214, 222, 231);
+    doc.setLineWidth(0.4);
+    doc.line(margin, y, pageWidth - margin, y);
+  };
+
+  const ensureRoom = (currentY: number, needed: number) => {
+    if (currentY + needed <= pageHeight - 20) {
+      return currentY;
     }
-    doc.text(
-      `${item.day} | Appointments: ${item.appointments} | Usage: ${item.usageLogs} | Specimens: ${item.specimens} | Users: ${item.users}`,
-      14,
-      y
-    );
+    doc.addPage();
+    return margin;
+  };
+
+  const noShowCount = report.statusBreakdown.reduce((count, item) => {
+    const normalized = item.name.toLowerCase().replace(/\s+/g, "-");
+    return normalized === "no-show" ? count + item.value : count;
+  }, 0);
+
+  let y = margin;
+  const logoWidth = 16;
+  const logoHeight = 16;
+
+  try {
+    const logoDataUrl = await toImageDataUrl("/UI/img/logo-biocella.png");
+    doc.addImage(logoDataUrl, "PNG", margin, y - 1, logoWidth, logoHeight);
+  } catch {
+    doc.setDrawColor(17, 63, 103);
+    doc.setLineWidth(0.5);
+    doc.rect(margin, y, logoWidth, logoHeight);
+    doc.setFontSize(8);
+    doc.setTextColor(17, 63, 103);
+    doc.text("LOGO", margin + 3.5, y + 9.5);
+  }
+
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(17, 63, 103);
+  doc.setFontSize(18);
+  doc.text("BIOCELLA Analytics Report", margin + logoWidth + 4, y + 6);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(67, 84, 99);
+  doc.text(`Date Range: ${report.rangeLabel}`, margin + logoWidth + 4, y + 12);
+  y += 22;
+
+  addDivider(y);
+  y += 7;
+
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(17, 63, 103);
+  doc.setFontSize(12);
+  doc.text("Summary", margin, y);
+  y += 6;
+
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(24, 39, 51);
+  doc.setFontSize(10.5);
+  doc.text(`New Users: ${report.summary.newUsers}`, margin, y);
+  y += 5.5;
+  doc.text(`Appointments: ${report.summary.appointments}`, margin, y);
+  y += 5.5;
+  doc.text(`No-Shows: ${noShowCount}`, margin, y);
+  y += 8;
+
+  addDivider(y);
+  y += 7;
+
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(17, 63, 103);
+  doc.setFontSize(12);
+  doc.text("Charts", margin, y);
+  y += 6;
+
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(24, 39, 51);
+  doc.setFontSize(10.5);
+  doc.text("- Appointments per Day (Line Chart)", margin, y);
+  y += 5.5;
+  doc.text("- User Activity (Bar Chart)", margin, y);
+  y += 5.5;
+  doc.text("- No-show Rate (Pie Chart)", margin, y);
+  y += 8;
+
+  addDivider(y);
+  y += 7;
+
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(17, 63, 103);
+  doc.setFontSize(12);
+  doc.text("Detailed Table", margin, y);
+  y += 6;
+
+  const drawTableHeader = (tableY: number) => {
+    doc.setFillColor(235, 242, 247);
+    doc.rect(margin, tableY, contentWidth, 7, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(17, 63, 103);
+    doc.setFontSize(9.5);
+    doc.text("Date", margin + 2, tableY + 4.8);
+    doc.text("User", margin + 42, tableY + 4.8);
+    doc.text("Action", margin + 84, tableY + 4.8);
+    doc.text("Status", margin + 148, tableY + 4.8);
+  };
+
+  const detailedRows = report.activityByDay.flatMap((item) => {
+    return [
+      [item.day, "System", "Appointments", String(item.appointments)],
+      [item.day, "System", "Usage Logs", String(item.usageLogs)],
+      [item.day, "System", "New Specimens", String(item.specimens)],
+      [item.day, "System", "New Users", String(item.users)],
+    ];
+  });
+
+  y = ensureRoom(y, 20);
+  drawTableHeader(y);
+  y += 7;
+
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(24, 39, 51);
+  doc.setFontSize(9.2);
+
+  detailedRows.forEach((row, index) => {
+    y = ensureRoom(y, 6.5);
+    if (y === margin) {
+      drawTableHeader(y);
+      y += 7;
+    }
+
+    if (index % 2 === 0) {
+      doc.setFillColor(248, 251, 253);
+      doc.rect(margin, y, contentWidth, 6, "F");
+    }
+
+    const [date, user, action, status] = row;
+    doc.text(String(date), margin + 2, y + 4.2);
+    doc.text(String(user), margin + 42, y + 4.2);
+    doc.text(String(action), margin + 84, y + 4.2);
+    doc.text(String(status), margin + 148, y + 4.2);
     y += 6;
   });
+
+  const footerText = `Printed by Biocella on ${printedAt.toLocaleDateString()} ${printedAt.toLocaleTimeString()}`;
+  const pages = doc.getNumberOfPages();
+  for (let page = 1; page <= pages; page += 1) {
+    doc.setPage(page);
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(8.5);
+    doc.setTextColor(108, 117, 125);
+    doc.text(footerText, margin, pageHeight - 8);
+  }
 
   doc.save(`biocella-report-${report.period}-${report.id}.pdf`);
 };
