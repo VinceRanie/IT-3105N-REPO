@@ -384,24 +384,11 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
       });
     }
 
-    // Footer with logo on first page and branding
-    const logoUrl = '/UI/img/BiocellaLogo.png';
-    const logoData = await getImageBase64(logoUrl);
+    // Footer branding
     
     const pageCount = doc.getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
       doc.setPage(i);
-      
-      // Add logo to top right corner on first page only
-      if (i === 1 && logoData) {
-        try {
-          const logoWidth = 30;
-          const logoHeight = 20;
-          doc.addImage(logoData, 'PNG', pageWidth - margin - logoWidth, 8, logoWidth, logoHeight);
-        } catch (error) {
-          console.error("Error adding logo to PDF:", error);
-        }
-      }
       
       // Add footer text
       doc.setFontSize(8);
