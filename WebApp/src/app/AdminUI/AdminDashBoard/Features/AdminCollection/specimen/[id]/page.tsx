@@ -301,16 +301,16 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
         }
       };
 
-      const logoData = await getImageBase64('/UI/img/logo-biocella.png');
+      const headerLogoData = await getImageBase64('/UI/img/logo-biocella.png');
 
       // Header
-      if (logoData) {
-        doc.addImage(logoData, 'PNG', margin, yPos - 4, 12, 12);
+      if (headerLogoData) {
+        doc.addImage(headerLogoData, 'PNG', margin, yPos - 4, 12, 12);
       }
 
       doc.setFontSize(18);
       doc.setFont("helvetica", "bold");
-      doc.text("BIOCELLA Specimen Overview", logoData ? margin + 16 : margin, yPos + 4);
+      doc.text("BIOCELLA Specimen Overview", headerLogoData ? margin + 16 : margin, yPos + 4);
       yPos += 12;
 
       // Horizontal line
