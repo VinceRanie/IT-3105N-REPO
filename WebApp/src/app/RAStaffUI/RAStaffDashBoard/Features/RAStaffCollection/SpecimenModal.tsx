@@ -85,6 +85,19 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
 
   const [classificationOption, setClassificationOption] = useState("");
   const [customClassification, setCustomClassification] = useState("");
+  const [customFieldModal, setCustomFieldModal] = useState<{
+    open: boolean;
+    section: SectionKey;
+    label: string;
+    type: CustomFieldType;
+    error: string;
+  }>({
+    open: false,
+    section: "basic",
+    label: "",
+    type: "text",
+    error: "",
+  });
 
   const [formData, setFormData] = useState({
     // Required fields
@@ -304,42 +317,41 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
     });
   };
 
-  const addCustomField = (section: SectionKey) => {
-    const fieldName = prompt("Enter custom field title:");
-    if (!fieldName || !fieldName.trim()) return;
+  const openCustomFieldModal = (section: SectionKey) => {
+    setCustomFieldModal({
+      open: true,
+      section,
+      label: "",
+      type: section === "biochemical" ? "status" : "text",
+      error: "",
+    });
+  };
 
-    const suggestedType = section === "biochemical" ? "status" : "text";
-    const requestedType = prompt(
-      "Choose input type: text, textarea, status, file",
-      suggestedType
-    );
+  const closeCustomFieldModal = () => {
+    setCustomFieldModal((prev) => ({
+      ...prev,
+      open: false,
+      label: "",
+      error: "",
+    }));
+  };
 
-    if (!requestedType) return;
-
-    const normalized = requestedType.trim().toLowerCase();
-    const typeMap: Record<string, CustomFieldType> = {
-      text: "text",
-      string: "text",
-      textarea: "textarea",
-      longtext: "textarea",
-      status: "status",
-      select: "status",
-      file: "file",
-    };
-
-    const inputType = typeMap[normalized];
-    if (!inputType) {
-      alert("Invalid type. Use text, textarea, status, or file.");
+  const addCustomField = () => {
+    const fieldName = customFieldModal.label.trim();
+    if (!fieldName) {
+      setCustomFieldModal((prev) => ({ ...prev, error: "Field title is required." }));
       return;
     }
 
+    const section = customFieldModal.section;
+    const inputType = customFieldModal.type;
     const fieldId = `${section}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     setFormData((prev) => ({
       ...prev,
       custom_fields: {
         ...prev.custom_fields,
         [fieldId]: {
-          label: fieldName.trim(),
+          label: fieldName,
           section,
           type: inputType,
           value: "",
@@ -348,6 +360,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
     }));
 
     setExpandedSections((prev) => ({ ...prev, [section]: true }));
+    closeCustomFieldModal();
   };
 
   const removeCustomField = (fieldId: string) => {
@@ -575,7 +588,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
               </h3>
               <button
                 type="button"
-                onClick={() => addCustomField("basic")}
+                onClick={() => openCustomFieldModal("basic")}
                 className="inline-flex items-center gap-1 rounded-md border border-dashed border-[#113F67] px-2 py-1 text-xs font-medium text-[#113F67] hover:bg-[#113F67]/5"
               >
                 <Plus className="h-3.5 w-3.5" />
@@ -822,7 +835,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
               </button>
               <button
                 type="button"
-                onClick={() => addCustomField("molecular")}
+                onClick={() => openCustomFieldModal("molecular")}
                 className="inline-flex items-center gap-1 rounded-md border border-dashed border-[#113F67] px-2 py-1 text-xs font-medium text-[#113F67] hover:bg-[#113F67]/5"
               >
                 <Plus className="h-3.5 w-3.5" />
@@ -941,7 +954,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
               </button>
               <button
                 type="button"
-                onClick={() => addCustomField("biochemical")}
+                onClick={() => openCustomFieldModal("biochemical")}
                 className="inline-flex items-center gap-1 rounded-md border border-dashed border-[#113F67] px-2 py-1 text-xs font-medium text-[#113F67] hover:bg-[#113F67]/5"
               >
                 <Plus className="h-3.5 w-3.5" />
@@ -1035,7 +1048,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
               </button>
               <button
                 type="button"
-                onClick={() => addCustomField("morphology")}
+                onClick={() => openCustomFieldModal("morphology")}
                 className="inline-flex items-center gap-1 rounded-md border border-dashed border-[#113F67] px-2 py-1 text-xs font-medium text-[#113F67] hover:bg-[#113F67]/5"
               >
                 <Plus className="h-3.5 w-3.5" />
@@ -1244,7 +1257,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
               </button>
               <button
                 type="button"
-                onClick={() => addCustomField("culture")}
+                onClick={() => openCustomFieldModal("culture")}
                 className="inline-flex items-center gap-1 rounded-md border border-dashed border-[#113F67] px-2 py-1 text-xs font-medium text-[#113F67] hover:bg-[#113F67]/5"
               >
                 <Plus className="h-3.5 w-3.5" />
@@ -1323,6 +1336,86 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
           </div>
         </form>
       </div>
+
+      {customFieldModal.open && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-2xl">
+            <h3 className="text-lg font-semibold text-[#113F67]">Add Custom Input Field</h3>
+            <p className="mt-1 text-sm text-gray-500">Choose a title, section, and input type.</p>
+
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Field Title</label>
+                <input
+                  type="text"
+                  value={customFieldModal.label}
+                  onChange={(e) =>
+                    setCustomFieldModal((prev) => ({ ...prev, label: e.target.value, error: "" }))
+                  }
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                  placeholder="e.g., Gram stain reagent"
+                />
+                {customFieldModal.error && (
+                  <p className="mt-1 text-xs text-red-600">{customFieldModal.error}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Section</label>
+                <select
+                  value={customFieldModal.section}
+                  onChange={(e) =>
+                    setCustomFieldModal((prev) => ({
+                      ...prev,
+                      section: e.target.value as SectionKey,
+                    }))
+                  }
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                >
+                  <option value="basic">Required Information</option>
+                  <option value="molecular">Molecular & Genetic Data</option>
+                  <option value="biochemical">Biochemical Tests & Microbial Properties</option>
+                  <option value="morphology">Cell & Colony Morphology</option>
+                  <option value="culture">Culture Requirements</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Input Type</label>
+                <select
+                  value={customFieldModal.type}
+                  onChange={(e) =>
+                    setCustomFieldModal((prev) => ({ ...prev, type: e.target.value as CustomFieldType }))
+                  }
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                >
+                  <option value="text">Text</option>
+                  <option value="textarea">Long Text</option>
+                  <option value="status">Status (+ / - / weak)</option>
+                  <option value="file">File Reference</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeCustomFieldModal}
+                className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={addCustomField}
+                className="rounded-lg bg-[#113F67] px-3 py-2 text-sm text-white hover:bg-[#0d2f4d]"
+              >
+                Add Field
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
