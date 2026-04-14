@@ -46,7 +46,7 @@ export default function AdminAppointmentDashboard() {
   const [audienceFilter, setAudienceFilter] = useState<AudienceFilter>('all');
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [showModal, setShowModal] = useState(false);
-  const [modalType, setModalType] = useState<'approve' | 'deny' | 'scan'>('approve');
+  const [modalType, setModalType] = useState<'approve' | 'deny' | 'scan' | 'notice'>('approve');
   const [remarks, setRemarks] = useState('');
   const [reason, setReason] = useState('');
   const [qrInput, setQrInput] = useState('');
@@ -58,7 +58,7 @@ export default function AdminAppointmentDashboard() {
   const [unavailableReason, setUnavailableReason] = useState('');
   const [unavailableDates, setUnavailableDates] = useState<UnavailableDate[]>([]);
   const [savingUnavailable, setSavingUnavailable] = useState(false);
-  const [showUnavailablePanel, setShowUnavailablePanel] = useState(false);
+  const [showUnavailablePanel] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const tabs: { key: TabType; label: string; color: string }[] = [
@@ -186,7 +186,8 @@ export default function AdminAppointmentDashboard() {
         throw new Error(data.message || data.error || 'Failed to mark date unavailable');
       }
 
-      alert('Date marked unavailable. Notification payload queued for future system integration.');
+      setModalType('notice');
+      setShowModal(true);
       setUnavailableDate('');
       setUnavailableReason('');
       fetchUnavailableDates();
@@ -746,51 +747,44 @@ export default function AdminAppointmentDashboard() {
 
 </div>
 
-      <div className="mb-6 rounded-lg border border-orange-200 bg-orange-50 p-3 sm:p-4">
-        <button
-          type="button"
-          onClick={() => setShowUnavailablePanel((prev) => !prev)}
-          className="w-full flex items-center justify-between text-left"
-        >
-          <h2 className="text-lg font-semibold text-orange-900">Set Date Unavailable</h2>
-          <span className="text-sm font-semibold text-orange-800">
-            {showUnavailablePanel ? 'Hide' : 'Show'} {showUnavailablePanel ? '▲' : '▼'}
-          </span>
-        </button>
+      <div className="mb-6 rounded-lg border border-[#113F67]/20 bg-[#113F67]/5 p-3 sm:p-4">
+        <div className="w-full flex items-center justify-between text-left">
+          <h2 className="text-lg font-semibold text-[#113F67]">Set Date Unavailable</h2>
+        </div>
 
         {showUnavailablePanel && (
           <>
-            <p className="text-sm text-orange-800 mb-4 mt-3">This blocks booking for students/faculty and prepares data for the upcoming notification system.</p>
+            <p className="text-sm text-[#113F67] mb-4 mt-3">This blocks booking for students/faculty and prepares data for the upcoming notification system.</p>
             <div className="grid gap-3 md:grid-cols-3">
               <input
                 type="date"
                 value={unavailableDate}
                 onChange={(e) => setUnavailableDate(e.target.value)}
-                className="rounded-md border border-orange-300 px-3 py-2"
+                className="rounded-md border border-[#113F67]/30 px-3 py-2 focus:border-[#113F67] focus:outline-none"
               />
               <input
                 type="text"
                 value={unavailableReason}
                 onChange={(e) => setUnavailableReason(e.target.value)}
                 placeholder="Reason (e.g. lab maintenance)"
-                className="rounded-md border border-orange-300 px-3 py-2 md:col-span-2"
+                className="rounded-md border border-[#113F67]/30 px-3 py-2 md:col-span-2 focus:border-[#113F67] focus:outline-none"
               />
             </div>
             <div className="mt-3 flex flex-col sm:flex-row sm:items-center gap-3">
               <button
                 onClick={handleSetUnavailableDate}
                 disabled={savingUnavailable}
-                className="rounded-md bg-orange-600 px-4 py-2 text-white hover:bg-orange-700 disabled:opacity-60"
+                className="rounded-md bg-[#113F67] px-4 py-2 text-white hover:bg-[#0d2f4d] disabled:opacity-60"
               >
                 {savingUnavailable ? 'Saving...' : 'Mark Unavailable'}
               </button>
             </div>
             <div className="mt-4 space-y-2">
               {unavailableDates.length === 0 ? (
-                <p className="text-sm text-orange-700">No blocked dates yet.</p>
+                <p className="text-sm text-[#113F67]/80">No blocked dates yet.</p>
               ) : (
                 unavailableDates.slice(0, 8).map((item) => (
-                  <div key={item.unavailable_id} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-md bg-white px-3 py-2 text-sm border border-orange-100">
+                  <div key={item.unavailable_id} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-md bg-white px-3 py-2 text-sm border border-[#113F67]/15">
                     <span className="break-words">
                       {format(new Date(`${item.unavailable_date}T00:00:00`), 'MMM dd, yyyy')} - {item.reason}
                     </span>
@@ -984,6 +978,7 @@ export default function AdminAppointmentDashboard() {
               {modalType === 'scan' && 'Scan QR Code'}
               {modalType === 'approve' && 'Approve Appointment'}
               {modalType === 'deny' && 'Deny Appointment'}
+              {modalType === 'notice' && 'Notice'}
             </h2>
 
             {modalType === 'scan' ? (
@@ -1081,6 +1076,18 @@ export default function AdminAppointmentDashboard() {
                     Cancel
                   </button>
                 </div>
+              </div>
+            ) : modalType === 'notice' ? (
+              <div className="space-y-4">
+                <div className="rounded-lg border border-[#113F67]/20 bg-[#113F67]/5 p-4 text-sm text-[#113F67]">
+                  Date marked unavailable. Notification payload queued for future system integration.
+                </div>
+                <button
+                  onClick={closeModal}
+                  className="w-full bg-[#113F67] text-white px-4 py-2 rounded-md hover:bg-[#0d2f4d]"
+                >
+                  OK
+                </button>
               </div>
             ) : (
               <div>
