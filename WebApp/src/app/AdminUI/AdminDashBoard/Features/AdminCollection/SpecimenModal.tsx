@@ -1028,26 +1028,27 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
                   />
                 </div>
 
-                {specimen && (
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Update Notes <span className="text-red-500">*</span>
-                    </label>
-                    <textarea
-                      value={formData.update_notes}
-                      onChange={(e) => setFormData({ ...formData, update_notes: e.target.value })}
-                      rows={2}
-                      className="w-full px-3 py-2 border border-[#113F67] text-sm text-[#113F67] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
-                      placeholder="Describe what changed in this update"
-                    />
-                    <p className="mt-1 text-xs text-gray-500">
-                      This works like a commit message and is required when editing.
-                    </p>
-                  </div>
-                )}
               </div>
             )}
           </div>
+
+          {specimen && (
+            <div className="mb-6 border rounded-lg p-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Update Notes <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                value={formData.update_notes}
+                onChange={(e) => setFormData({ ...formData, update_notes: e.target.value })}
+                rows={2}
+                className="w-full px-3 py-2 border border-[#113F67] text-sm text-[#113F67] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                placeholder="Describe what changed in this update"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                This works like a commit message and is required when editing.
+              </p>
+            </div>
+          )}
 
           {/* CUSTOM FIELDS SECTION */}
           <div className="mb-6 border rounded-lg">
