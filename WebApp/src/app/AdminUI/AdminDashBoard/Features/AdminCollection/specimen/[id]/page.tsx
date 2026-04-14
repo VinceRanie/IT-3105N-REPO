@@ -13,6 +13,65 @@ interface SpecimenDetailProps {
   }>;
 }
 
+type NormalizedCustomField = {
+  id: string;
+  label: string;
+  section: string;
+  type: string;
+  value: string;
+};
+
+const CUSTOM_SECTION_LABELS: Record<string, string> = {
+  basic: "Required Information",
+  molecular: "Molecular & Genetic Data",
+  biochemical: "Biochemical Tests & Microbial Properties",
+  morphology: "Cell & Colony Morphology",
+  culture: "Culture Requirements",
+};
+
+const CUSTOM_SECTION_ORDER = ["basic", "molecular", "biochemical", "morphology", "culture"];
+
+const normalizeCustomFields = (customFields: any): NormalizedCustomField[] => {
+  if (!customFields || typeof customFields !== "object") return [];
+
+  return Object.entries(customFields).map(([key, value]) => {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      const raw = value as any;
+      return {
+        id: key,
+        label: String(raw.label || key).trim() || key,
+        section: String(raw.section || "basic").trim().toLowerCase(),
+        type: String(raw.type || "text").trim().toLowerCase(),
+        value: String(raw.value || ""),
+      };
+    }
+
+    return {
+      id: key,
+      label: key.replace(/_/g, " "),
+      section: "basic",
+      type: "text",
+      value: String(value || ""),
+    };
+  });
+};
+
+const groupCustomFieldsBySection = (customFields: any) => {
+  const normalized = normalizeCustomFields(customFields);
+  const bySection = new Map<string, NormalizedCustomField[]>();
+
+  normalized.forEach((field) => {
+    const section = CUSTOM_SECTION_ORDER.includes(field.section) ? field.section : "basic";
+    const current = bySection.get(section) || [];
+    current.push(field);
+    bySection.set(section, current);
+  });
+
+  return CUSTOM_SECTION_ORDER
+    .map((section) => ({ section, fields: bySection.get(section) || [] }))
+    .filter((entry) => entry.fields.length > 0);
+};
+
 export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
   const resolvedParams = use(params);
   const [specimen, setSpecimen] = useState<any>(null);
@@ -574,17 +633,27 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
       doc.setFont("helvetica", "bold");
       doc.text("Additional Information", margin, yPos);
       yPos += lineHeight;
-      
+
+      const groupedCustomFields = groupCustomFieldsBySection(specimen.custom_fields);
       doc.setFontSize(10);
-      doc.setFont("helvetica", "normal");
-      
-      Object.entries(specimen.custom_fields).forEach(([key, value]) => {
-        checkPageBreak();
+
+      groupedCustomFields.forEach((group) => {
+        checkPageBreak(10);
         doc.setFont("helvetica", "bold");
-        doc.text(`${key.replace(/_/g, ' ')}:`, margin, yPos);
-        doc.setFont("helvetica", "normal");
-        doc.text(String(value), margin + 50, yPos);
+        doc.text(CUSTOM_SECTION_LABELS[group.section] || group.section, margin, yPos);
         yPos += lineHeight;
+
+        group.fields.forEach((field) => {
+          checkPageBreak(10);
+          doc.setFont("helvetica", "bold");
+          doc.text(`${field.label}:`, margin, yPos);
+          doc.setFont("helvetica", "normal");
+          const valueText = doc.splitTextToSize(field.value || "N/A", contentWidth - 55);
+          doc.text(valueText, margin + 55, yPos);
+          yPos += Math.max(lineHeight, valueText.length * 5);
+        });
+
+        yPos += 2;
       });
     }
 
@@ -808,9 +877,18 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
                 {specimen.custom_fields && Object.keys(specimen.custom_fields).length > 0 && (
                   <div className="bg-white shadow rounded-xl p-6">
                     <h2 className="text-lg font-semibold mb-4">Additional Information</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {Object.entries(specimen.custom_fields).map(([key, value]: [string, any]) => (
-                        <InfoItem key={key} label={key.replace(/_/g, " ")} value={value || "N/A"} />
+                    <div className="space-y-6">
+                      {groupCustomFieldsBySection(specimen.custom_fields).map((group) => (
+                        <div key={group.section}>
+                          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">
+                            {CUSTOM_SECTION_LABELS[group.section] || group.section}
+                          </h3>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {group.fields.map((field) => (
+                              <InfoItem key={field.id} label={field.label} value={field.value || "N/A"} />
+                            ))}
+                          </div>
+                        </div>
                       ))}
                     </div>
                   </div>
