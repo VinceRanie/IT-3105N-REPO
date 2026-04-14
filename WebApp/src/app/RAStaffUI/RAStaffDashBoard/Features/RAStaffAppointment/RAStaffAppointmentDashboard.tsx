@@ -7,11 +7,14 @@ import { Check, X, QrCode, Search } from 'lucide-react';
 
 interface Appointment {
   appointment_id: number;
-  student_id: string;
+  student_id: string | null;
   department: string;
   purpose: string;
   date: string;
   end_time: string;
+  appointment_source?: 'internal' | 'outsider';
+  requester_name?: string | null;
+  requester_email?: string | null;
   status: 'pending' | 'approved' | 'denied' | 'ongoing' | 'visited' | 'no_show';
   qr_code: string | null;
   admin_remarks: string | null;
@@ -25,6 +28,7 @@ interface UnavailableDate {
 }
 
 type TabType = 'pending' | 'ongoing' | 'visited' | 'denied' | 'no_show';
+type AudienceFilter = 'all' | 'internal' | 'outsider';
 
 export default function RAStaffAppointmentDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('pending');
@@ -34,6 +38,7 @@ export default function RAStaffAppointmentDashboard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [audienceFilter, setAudienceFilter] = useState<AudienceFilter>('all');
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState<'approve' | 'deny' | 'scan'>('approve');
@@ -219,11 +224,14 @@ export default function RAStaffAppointmentDashboard() {
 
   useEffect(() => {
     if (allAppointments.length > 0) {
-      const tabAppointments = allAppointments.filter((app: Appointment) => app.status === activeTab);
+      const tabAppointments = allAppointments.filter((app: Appointment) => {
+        const source = app.appointment_source || 'internal';
+        return app.status === activeTab && (audienceFilter === 'all' || source === audienceFilter);
+      });
       setAppointments(tabAppointments);
       setError(null);
     }
-  }, [activeTab, allAppointments]);
+  }, [activeTab, allAppointments, audienceFilter]);
 
   const fetchAllAppointmentsAndCount = async (retries = 3) => {
     if (retries === 0) {
@@ -430,10 +438,13 @@ export default function RAStaffAppointmentDashboard() {
     let filtered = appointments;
 
     if (searchTerm) {
+      const lower = searchTerm.toLowerCase();
       filtered = filtered.filter(
         (a) =>
-          a.student_id.includes(searchTerm) ||
-          a.purpose.toLowerCase().includes(searchTerm.toLowerCase())
+          String(a.student_id || '').toLowerCase().includes(lower) ||
+          String(a.requester_name || '').toLowerCase().includes(lower) ||
+          String(a.requester_email || '').toLowerCase().includes(lower) ||
+          a.purpose.toLowerCase().includes(lower)
       );
     }
 
@@ -562,6 +573,27 @@ export default function RAStaffAppointmentDashboard() {
         ))}
       </div>
 
+      <div className="mb-4 flex flex-wrap gap-2">
+        <button
+          onClick={() => setAudienceFilter('all')}
+          className={`px-3 py-1.5 rounded-md text-sm font-medium ${audienceFilter === 'all' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-700'}`}
+        >
+          All Audiences
+        </button>
+        <button
+          onClick={() => setAudienceFilter('internal')}
+          className={`px-3 py-1.5 rounded-md text-sm font-medium ${audienceFilter === 'internal' ? 'bg-blue-700 text-white' : 'bg-blue-50 text-blue-700'}`}
+        >
+          Internal (Student/Faculty)
+        </button>
+        <button
+          onClick={() => setAudienceFilter('outsider')}
+          className={`px-3 py-1.5 rounded-md text-sm font-medium ${audienceFilter === 'outsider' ? 'bg-emerald-700 text-white' : 'bg-emerald-50 text-emerald-700'}`}
+        >
+          Outsider
+        </button>
+      </div>
+
       {/* Error Alert */}
       {error && (
         <div className="mb-6 p-4 bg-amber-50 border-2 border-amber-300 rounded-lg">
@@ -622,9 +654,14 @@ export default function RAStaffAppointmentDashboard() {
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
                     <h3 className="text-lg font-semibold text-gray-800">
-                      Student ID: {appointment.student_id}
+                      {appointment.appointment_source === 'outsider'
+                        ? `Visitor: ${appointment.requester_name || appointment.requester_email || 'External Visitor'}`
+                        : `Student ID: ${appointment.student_id}`}
                     </h3>
                     {getStatusBadge(appointment.status)}
+                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${appointment.appointment_source === 'outsider' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'}`}>
+                      {(appointment.appointment_source || 'internal').toUpperCase()}
+                    </span>
                   </div>
                   
                   <div className="grid grid-cols-2 gap-4 text-sm text-gray-600 mb-3">
@@ -634,6 +671,11 @@ export default function RAStaffAppointmentDashboard() {
                     <div>
                       <span className="font-medium">Purpose:</span> {appointment.purpose}
                     </div>
+                    {appointment.requester_email && (
+                      <div className="col-span-2">
+                        <span className="font-medium">Contact:</span> {appointment.requester_email}
+                      </div>
+                    )}
                   </div>
 
                   <div className="text-sm text-gray-600">

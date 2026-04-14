@@ -59,7 +59,7 @@ interface Collection {
   special_reqs?: string;
   activity?: string;
   result?: string;
-  custom_fields?: Record<string, string>;
+  custom_fields?: Record<string, any>;
 }
 
 export default function RAStaffCollection({ specimens, onEdit, onView, onTogglePublish }: { 
@@ -127,6 +127,13 @@ export default function RAStaffCollection({ specimens, onEdit, onView, onToggleP
       </div>
     </th>
   );
+
+  const formatCustomFieldValue = (value: any) => {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      return String(value.value || "N/A");
+    }
+    return String(value || "N/A");
+  };
 
   return (
     <div className="w-full flex flex-col px-4 sm:px-6 lg:px-8 py-6">
@@ -285,8 +292,10 @@ export default function RAStaffCollection({ specimens, onEdit, onView, onToggleP
                                 <>
                                   {Object.entries(specimen.custom_fields).map(([key, value]) => (
                                     <div key={key}>
-                                      <span className="font-medium capitalize">{key.replace(/_/g, ' ')}:</span>{" "}
-                                      {value}
+                                      <span className="font-medium capitalize">
+                                        {(value && typeof value === "object" && value.label) ? value.label : key.replace(/_/g, ' ')}:
+                                      </span>{" "}
+                                      {formatCustomFieldValue(value)}
                                     </div>
                                   ))}
                                 </>
