@@ -53,6 +53,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
     locale: "",
     project_fund: "",
     description: "",
+    update_notes: "",
     
     // Molecular/Genetic data
     accession_no: "",
@@ -103,6 +104,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
         locale: specimen.locale || "",
         project_fund: specimen.project_fund || "",
         description: specimen.description || "",
+        update_notes: specimen.update_notes || specimen.notes || "",
         accession_no: specimen.accession_no || "",
         similarity_percent: specimen.similarity_percent || "",
         biochemical_tests: specimen.biochemical_tests || {
@@ -139,6 +141,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
         locale: "",
         project_fund: "",
         description: "",
+        update_notes: "",
         accession_no: "",
         similarity_percent: "",
         biochemical_tests: {
@@ -274,6 +277,11 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (specimen && !String(formData.update_notes || "").trim()) {
+      alert("Please add update notes before saving changes.");
+      return;
+    }
+
     if (isSubmitting) {
       return;
     }
@@ -284,6 +292,10 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
     
     // Add all form fields
     Object.entries(formData).forEach(([key, value]) => {
+      if (key === 'update_notes' && !specimen) {
+        return;
+      }
+
       if (key === 'biochemical_tests' || key === 'custom_fields' || key === 'morphology') {
         submitData.append(key, JSON.stringify(value));
       } else {
@@ -1015,6 +1027,24 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
                     placeholder="Additional observations or results"
                   />
                 </div>
+
+                {specimen && (
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Update Notes <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      value={formData.update_notes}
+                      onChange={(e) => setFormData({ ...formData, update_notes: e.target.value })}
+                      rows={2}
+                      className="w-full px-3 py-2 border border-[#113F67] text-sm text-[#113F67] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                      placeholder="Describe what changed in this update"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      This works like a commit message and is required when editing.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </div>

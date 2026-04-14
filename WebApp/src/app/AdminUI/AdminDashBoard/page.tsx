@@ -91,7 +91,24 @@ type UsageLogItem = {
 type MicrobialItem = {
   _id?: string;
   code_name?: string | null;
+  classification?: string | null;
   created_at?: string | Date | null;
+  updated_at?: string | Date | null;
+  updated_by?: string | { first_name?: string; last_name?: string; name?: string; email?: string } | null;
+  updatedBy?: string | null;
+  updated_by_name?: string | null;
+  last_updated_by?: string | null;
+  update_notes?: string | null;
+  notes?: string | null;
+};
+
+type SpecimenOverviewEntry = {
+  id: string;
+  name: string;
+  category: string;
+  updatedBy: string;
+  updatedAt: string;
+  notes: string;
 };
 
 type ActivityEntry = {
@@ -194,6 +211,48 @@ const formatRelativeTime = (timestamp: number) => {
   }
 
   return new Date(timestamp).toLocaleDateString();
+};
+
+const formatDateTime = (value: string | Date | null | undefined) => {
+  if (!value) return "N/A";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "N/A";
+
+  return date.toLocaleString([], {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
+const resolveUpdatedBy = (microbial: MicrobialItem) => {
+  const directCandidates = [
+    microbial.updated_by_name,
+    microbial.updatedBy,
+    microbial.last_updated_by,
+  ];
+
+  const direct = directCandidates.find((candidate) => String(candidate || "").trim().length > 0);
+  if (direct) return String(direct).trim();
+
+  if (typeof microbial.updated_by === "string" && microbial.updated_by.trim()) {
+    return microbial.updated_by.trim();
+  }
+
+  if (microbial.updated_by && typeof microbial.updated_by === "object") {
+    const firstName = String(microbial.updated_by.first_name || "").trim();
+    const lastName = String(microbial.updated_by.last_name || "").trim();
+    const fullName = `${firstName} ${lastName}`.trim();
+    if (fullName) return fullName;
+
+    const fallback = String(microbial.updated_by.name || microbial.updated_by.email || "").trim();
+    if (fallback) return fallback;
+  }
+
+  return "System";
 };
 
 const isTodayLocal = (input: string | Date | null | undefined) => {
@@ -580,6 +639,7 @@ export default function AdminHome() {
   const [unavailableDates, setUnavailableDates] = useState<UnavailableDate[]>([]);
   const [savingUnavailable, setSavingUnavailable] = useState(false);
   const [showReportsNavToast, setShowReportsNavToast] = useState(false);
+  const [specimenOverview, setSpecimenOverview] = useState<SpecimenOverviewEntry[]>([]);
   const [userRoleSummary, setUserRoleSummary] = useState<UserRoleSummary>({
     activeUsers: 0,
     researchAssistants: 0,
@@ -852,6 +912,25 @@ export default function AdminHome() {
         batches,
       });
 
+      const mappedSpecimenOverview = (Array.isArray(microbialsData) ? microbialsData : [])
+        .slice()
+        .sort((a, b) => {
+          const aTime = parseTimestamp(a.updated_at || a.created_at) ?? 0;
+          const bTime = parseTimestamp(b.updated_at || b.created_at) ?? 0;
+          return bTime - aTime;
+        })
+        .slice(0, 5)
+        .map((microbial) => {
+          return {
+            id: String(microbial._id || `${microbial.code_name || "specimen"}-${Date.now()}`),
+            name: String(microbial.code_name || "Unnamed specimen"),
+            category: String(microbial.classification || "Uncategorized"),
+            updatedBy: resolveUpdatedBy(microbial),
+            updatedAt: formatDateTime(microbial.updated_at || microbial.created_at),
+            notes: String(microbial.update_notes || microbial.notes || "-").trim() || "-",
+          };
+        });
+
       if (!isCancelled) {
         setSummaryCards(
           createSummaryCards({
@@ -870,6 +949,7 @@ export default function AdminHome() {
         setTodayOngoingAppointments(ongoingToday);
         setTodayNoShowAppointments(noShowToday);
         setTomorrowPendingAppointments(pendingTomorrow);
+        setSpecimenOverview(mappedSpecimenOverview);
         setUserRoleSummary({
           activeUsers,
           researchAssistants,
@@ -1301,32 +1381,29 @@ export default function AdminHome() {
                 <tr className="border-b">
                   <th className="text-left text-[11px] uppercase tracking-wider text-gray-500 font-semibold py-2">Name</th>
                   <th className="text-left text-[11px] uppercase tracking-wider text-gray-500 font-semibold py-2">Category</th>
-                  <th className="text-left text-[11px] uppercase tracking-wider text-gray-500 font-semibold py-2">Date Added</th>
-                  <th className="text-left text-[11px] uppercase tracking-wider text-gray-500 font-semibold py-2">QR Status</th>
+                  <th className="text-left text-[11px] uppercase tracking-wider text-gray-500 font-semibold py-2">Updated By</th>
+                  <th className="text-left text-[11px] uppercase tracking-wider text-gray-500 font-semibold py-2">Date Updated</th>
+                  <th className="text-left text-[11px] uppercase tracking-wider text-gray-500 font-semibold py-2">Notes</th>
                 </tr>
               </thead>
 
               <tbody>
-                {dashboardData.specimens.map((s) => (
-                  <tr key={s.name} className="border-b last:border-0 hover:bg-gray-50 transition-colors">
+                {specimenOverview.map((s) => (
+                  <tr key={s.id} className="border-b last:border-0 hover:bg-gray-50 transition-colors">
                     <td className="text-sm font-medium text-gray-900 py-2">{s.name}</td>
                     <td className="text-sm text-gray-500 py-2">{s.category}</td>
-                    <td className="text-sm text-gray-500 py-2">{s.date}</td>
-                    <td className="py-2">
-                      <span
-                        className={`text-[10px] px-2 py-1 rounded-full font-medium ${
-                          s.qr === "Active"
-                            ? "bg-green-100 text-green-600"
-                            : s.qr === "Pending"
-                            ? "bg-yellow-100 text-yellow-600"
-                            : "bg-gray-100 text-gray-500"
-                        }`}
-                      >
-                        {s.qr}
-                      </span>
-                    </td>
+                    <td className="text-sm text-gray-500 py-2">{s.updatedBy}</td>
+                    <td className="text-sm text-gray-500 py-2">{s.updatedAt}</td>
+                    <td className="text-sm text-gray-500 py-2 max-w-xs truncate" title={s.notes}>{s.notes}</td>
                   </tr>
                 ))}
+                {specimenOverview.length === 0 && (
+                  <tr>
+                    <td className="text-sm text-gray-500 py-3" colSpan={6}>
+                      No specimen update history available.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
