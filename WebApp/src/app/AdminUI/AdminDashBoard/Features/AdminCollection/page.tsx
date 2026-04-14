@@ -7,6 +7,7 @@ import AdminControls from "./AdminControls";
 import ProjectModal from "./ProjectModal";
 import SpecimenModal from "./SpecimenModal";
 import { useRouter } from "next/navigation";
+import AlertModal from "./AlertModal";
 
 interface Project {
   _id: string;
@@ -15,6 +16,8 @@ interface Project {
   classification: string;
   user_id?: number | string;
 }
+
+
 
 interface Specimen {
   _id: string;
@@ -81,6 +84,14 @@ export default function AdminCollectionPage() {
   const [isSpecimenModalOpen, setIsSpecimenModalOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [selectedSpecimen, setSelectedSpecimen] = useState<Specimen | null>(null);
+  const [alertModal, setAlertModal] = useState<{
+    title: string;
+    message: string;
+  } | null>(null);
+
+  const showAlert = (title: string, message: string) => {
+    setAlertModal({ title, message });
+  };
   
   const router = useRouter();
 
@@ -151,14 +162,20 @@ export default function AdminCollectionPage() {
         await fetchProjects();
         setIsProjectModalOpen(false);
         setSelectedProject(null);
-        alert(selectedProject ? "Project updated successfully!" : "Project created successfully!");
+        showAlert(
+          "Success",
+          selectedProject
+            ? "Project updated successfully!"
+            : "Project created successfully!"
+        );
+
       } else {
         const error = await response.json();
-        alert(`Error: ${error.message || "Failed to save project"}`);
+        showAlert("Error", error.message || "Failed to save project");
       }
     } catch (error) {
       console.error("Error saving project:", error);
-      alert("Error saving project");
+      showAlert("Error", "Error saving project");
     }
   };
 
@@ -180,14 +197,19 @@ export default function AdminCollectionPage() {
         await fetchSpecimens();
         setIsSpecimenModalOpen(false);
         setSelectedSpecimen(null);
-        alert(selectedSpecimen ? "Specimen updated successfully! QR code has been generated." : "Specimen added successfully! QR code has been generated.");
+        showAlert(
+          "Success",
+          selectedSpecimen
+            ? "Specimen updated successfully! QR code has been generated."
+            : "Specimen added successfully! QR code has been generated."
+        );
       } else {
         const error = await response.json();
-        alert(`Error: ${error.error || "Failed to save specimen"}`);
+        showAlert("Error", error.error || "Failed to save specimen");
       }
     } catch (error) {
       console.error("Error saving specimen:", error);
-      alert("Error saving specimen");
+      showAlert("Error", "Error saving specimen");
     }
   };
 
@@ -199,13 +221,13 @@ export default function AdminCollectionPage() {
 
       if (response.ok) {
         await fetchSpecimens();
-        alert("Specimen deleted successfully!");
+        showAlert("Success", "Specimen deleted successfully!");
       } else {
-        alert("Failed to delete specimen");
+        showAlert("Error", "Failed to delete specimen");
       }
     } catch (error) {
       console.error("Error deleting specimen:", error);
-      alert("Error deleting specimen");
+      showAlert("Error", "Error deleting specimen");
     }
   };
 
@@ -222,19 +244,25 @@ export default function AdminCollectionPage() {
 
       if (response.ok) {
         await fetchSpecimens();
+        showAlert(
+          "Success",
+          nextStatus === "published"
+            ? "Specimen published successfully!"
+            : "Specimen unpublished successfully!"
+        );
       } else {
-        alert('Failed to update publish status');
+        showAlert("Error", "Failed to update publish status");
       }
     } catch (error) {
       console.error('Error updating publish status:', error);
-      alert('Error updating publish status');
+      showAlert("Error", "Error updating publish status");
     }
   };
 
   const handleViewSpecimen = (specimen: any) => {
     console.log("View specimen:", specimen);
     if (!specimen._id) {
-      alert("Error: Specimen ID is missing");
+      showAlert("Error", "Specimen ID is missing");
       return;
     }
     // Navigate to specimen details page or open a detailed modal
@@ -244,7 +272,7 @@ export default function AdminCollectionPage() {
   const handleEditSpecimen = (specimen: any) => {
     console.log("Edit specimen:", specimen);
     if (!specimen._id) {
-      alert("Error: Specimen ID is missing");
+      showAlert("Error", "Specimen ID is missing");
       return;
     }
     setSelectedSpecimen(specimen);
@@ -329,6 +357,14 @@ export default function AdminCollectionPage() {
         specimen={selectedSpecimen}
         projects={projects}
       />
+
+    <AlertModal
+      isOpen={!!alertModal}
+      title={alertModal?.title || ""}
+      message={alertModal?.message || ""}
+      onClose={() => setAlertModal(null)}
+    />
+
     </>
   );
 }
