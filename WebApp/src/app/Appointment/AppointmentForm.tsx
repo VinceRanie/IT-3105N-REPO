@@ -241,6 +241,21 @@ export default function AppointmentForm() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  const formatLocalDateTime = (value: string) => {
+    if (!value) return value;
+    return `${value.replace('T', ' ')}:00`;
+  };
+
+  const getLocalDateTimeMin = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
+
   useEffect(() => {
     setIsMounted(true);
   }, []);
@@ -279,6 +294,7 @@ export default function AppointmentForm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...formData,
+          date: formatLocalDateTime(formData.date),
           user_id: userId,
         }),
       });
@@ -407,7 +423,7 @@ export default function AppointmentForm() {
                 value={formData.date}
                 onChange={handleChange}
                 required
-                min={new Date().toISOString().slice(0, 16)}
+                min={getLocalDateTimeMin()}
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#113F67]/40 focus:border-[#113F67] transition"
               />
             </div>

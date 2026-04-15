@@ -43,7 +43,7 @@ export default function AdminControls({ active, onRoleChange, search, onSearchCh
       {/* Search bar */}
       <div className="w-full sm:w-auto">
         <input
-          className="shadow-md transition-colors w-full sm:w-80 h-8 text-sm text-[#113F67] rounded-lg border border-gray-300 px-3 py-1 focus:outline-none focus:ring focus:ring-[#113F67]"
+          className="shadow-md transition-colors w-full sm:w-80 h-8 text-sm text-[#113F67] rounded-lg border border-[#113F67] px-3 py-1 focus:outline-none focus:ring focus:ring-[#113F67]"
           placeholder="Search"
           value={search}
           onChange={handleSearch}

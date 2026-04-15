@@ -89,6 +89,26 @@ export default function RAStaffCollectionPage() {
   
   const router = useRouter();
 
+  const getCurrentUserDisplayName = () => {
+    if (typeof window === "undefined") return "";
+
+    try {
+      const fromUserData = localStorage.getItem("userData");
+      const fromUser = localStorage.getItem("user");
+      const raw = fromUserData || fromUser;
+      if (!raw) return "";
+
+      const parsed = JSON.parse(raw);
+      const firstName = String(parsed.first_name || parsed.firstName || "").trim();
+      const lastName = String(parsed.last_name || parsed.lastName || "").trim();
+      const fullName = `${firstName} ${lastName}`.trim();
+
+      return fullName || String(parsed.name || parsed.email || parsed.username || "").trim();
+    } catch {
+      return "";
+    }
+  };
+
   // Fetch projects
   const fetchProjects = async () => {
     try {
@@ -170,6 +190,14 @@ export default function RAStaffCollectionPage() {
       const url = selectedSpecimen
         ? `${API_URL}/microbials/${selectedSpecimen._id}`
         : `${API_URL}/microbials`;
+
+      if (selectedSpecimen) {
+        const updatedBy = getCurrentUserDisplayName();
+        specimenData.set("updated_at", new Date().toISOString());
+        if (updatedBy) {
+          specimenData.set("updated_by", updatedBy);
+        }
+      }
 
       const response = await fetch(url, {
         method,

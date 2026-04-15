@@ -8,6 +8,7 @@ import Collections from "../UI Components/Collection";
 import Features from "../UI Components/Features";
 import Footer from "../UI Components/Footer";
 
+
 type SpecimenTypeStat = {
     type: string;
     count: number;

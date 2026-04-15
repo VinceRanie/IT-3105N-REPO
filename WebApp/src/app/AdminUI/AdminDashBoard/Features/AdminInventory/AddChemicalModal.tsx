@@ -229,14 +229,14 @@ export default function AddChemicalModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-white bg-opacity-50 border border-[#113F67]">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
         {/* Header */}
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-2xl font-bold text-[#113F67]">Add New Chemical</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="cursor-pointer text-gray-400 hover:text-gray-600 transition-colors"
           >
             <X size={24} />
           </button>
@@ -263,7 +263,7 @@ export default function AddChemicalModal({
                 value={formData.name}
                 onChange={handleChange}
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                className="w-full px-3 py-2 border border-[#113F67] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
                 placeholder="Enter chemical name"
               />
             </div>
@@ -440,14 +440,14 @@ export default function AddChemicalModal({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              className="cursor-pointer px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="px-4 py-2 bg-[#113F67] text-white rounded-lg hover:bg-[#0d2f4d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="cursor-pointer px-4 py-2 bg-[#113F67] text-white rounded-lg hover:bg-[#0d2f4d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? "Adding..." : "Add Chemical"}
             </button>
