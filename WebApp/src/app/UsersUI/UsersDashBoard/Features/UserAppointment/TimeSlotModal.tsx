@@ -38,6 +38,11 @@ export default function TimeSlotModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [userInfo, setUserInfo] = useState<any>(null);
+  const [successAlert, setSuccessAlert] = useState({
+    isOpen: false,
+    title: '',
+    message: ''
+  });
 
   const parseMinutes = (time: string) => {
     const [hours, minutes] = time.split(':').map(Number);
@@ -239,8 +244,11 @@ export default function TimeSlotModal({
       const data = await response.json();
 
       if (response.ok) {
-        alert('✅ Appointment booked successfully! Your appointment ID: ' + data.appointment_id);
-        onSuccess();
+        setSuccessAlert({
+          isOpen: true,
+          title: 'Appointment Confirmed',
+          message: `Your appointment has been booked successfully.\nAppointment ID: ${data.appointment_id}`
+        });
       } else {
         setError(data.message || 'Failed to book appointment');
       }
@@ -299,21 +307,27 @@ export default function TimeSlotModal({
 
   const submissionData = getSubmissionData();
 
+  const handleSuccessAlertClose = () => {
+    setSuccessAlert((prev) => ({ ...prev, isOpen: false }));
+    onSuccess();
+  };
+
   // Guard: if availability is missing, show loading state
   if (!availability || !availability.timeSlots) {
     return (
       <div className={styles.overlay} onClick={onClose}>
         <div className={styles.modal} onClick={e => e.stopPropagation()}>
           <button className={styles.closeBtn} onClick={onClose}>×</button>
-          <p style={{ padding: '20px', textAlign: 'center', color: '#666' }}>Loading available time slots...</p>
+          <p style={{ padding: '20px', textAlign: 'center', color: '#4d6580' }}>Loading available time slots...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.modal} onClick={e => e.stopPropagation()}>
+    <>
+      <div className={styles.overlay} onClick={onClose}>
+        <div className={styles.modal} onClick={e => e.stopPropagation()}>
         <button className={styles.closeBtn} onClick={onClose}>×</button>
 
         <h2>📍 Select Time Slot</h2>
@@ -400,7 +414,7 @@ export default function TimeSlotModal({
               </div>
               <div className={styles.summaryRow}>
                 <span>Student ID:</span>
-                <strong>{submissionData.studentId || '⚠️ Not Found'}</strong>
+                <strong>{submissionData.studentId || 'Not Found'}</strong>
               </div>
               {submissionData.department && (
                 <div className={styles.summaryRow}>
@@ -409,7 +423,7 @@ export default function TimeSlotModal({
                 </div>
               )}
               {!submissionData.studentId && (
-                <p style={{ color: '#e74c3c', fontSize: '12px', margin: '10px 0 0 0' }}>
+                <p style={{ color: '#dc2626', fontSize: '12px', margin: '10px 0 0 0' }}>
                   ⚠️ Warning: Student ID could not be found. Please ensure you're logged in.
                 </p>
               )}
@@ -426,7 +440,25 @@ export default function TimeSlotModal({
             </button>
           </>
         )}
+        </div>
       </div>
-    </div>
+
+      {successAlert.isOpen && (
+        <div className={styles.alertOverlay}>
+          <div className={styles.alertCard}>
+            <h4 className={styles.alertTitle}>{successAlert.title}</h4>
+            <p className={styles.alertMessage}>{successAlert.message}</p>
+            <div className={styles.alertActions}>
+              <button
+                onClick={handleSuccessAlertClose}
+                className={styles.alertOkButton}
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

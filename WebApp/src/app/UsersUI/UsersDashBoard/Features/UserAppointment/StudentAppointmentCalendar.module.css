@@ -2,7 +2,7 @@
   max-width: 1200px;
   margin: 0 auto;
   padding: 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #113f67 0%, #1a5b93 100%);
   min-height: 100vh;
   border-radius: 12px;
 }
@@ -22,7 +22,7 @@
 .header p {
   font-size: 1.1rem;
   margin: 10px 0 0 0;
-  opacity: 0.9;
+  color: #e2ecf7;
 }
 
 /* Legend */
@@ -46,12 +46,12 @@
   width: 16px;
   height: 16px;
   border-radius: 4px;
-  border: 2px solid white;
+  border: 2px solid #d2e3f4;
 }
 
 .dayBox.available {
-  background-color: #4ade80;
-  border-color: #22c55e;
+  background-color: #bfd9f2;
+  border-color: #113f67;
 }
 
 .dayBox.partial {
@@ -74,7 +74,7 @@
   background: white;
   border-radius: 12px;
   padding: 20px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 10px 36px rgba(17, 63, 103, 0.18);
   overflow-x: auto;
 }
 
@@ -86,7 +86,7 @@
 }
 
 .monthHeader button {
-  background: #667eea;
+  background: #113f67;
   color: white;
   border: none;
   padding: 8px 16px;
@@ -98,14 +98,14 @@
 }
 
 .monthHeader button:hover {
-  background: #764ba2;
+  background: #0d3253;
   transform: scale(1.05);
 }
 
 .monthHeader h2 {
   margin: 0;
   font-size: 1.8rem;
-  color: #333;
+  color: #113f67;
   min-width: 200px;
   text-align: center;
 }
@@ -122,9 +122,9 @@
   text-align: center;
   font-weight: bold;
   padding: 10px;
-  background: #f3f4f6;
+  background: #eaf2fa;
   border-radius: 6px;
-  color: #666;
+  color: #113f67;
 }
 
 /* Days grid */
@@ -141,7 +141,7 @@
 
 .day {
   aspect-ratio: 1;
-  border: 2px solid #e5e7eb;
+  border: 2px solid #d9e7f4;
   border-radius: 8px;
   padding: 8px;
   display: flex;
@@ -150,21 +150,21 @@
   justify-content: center;
   gap: 4px;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: all 0.25s ease;
   font-weight: 500;
   position: relative;
   background: white;
 }
 
 .day.available {
-  background: #f0fdf4;
-  border-color: #4ade80;
-  box-shadow: 0 2px 8px rgba(74, 222, 128, 0.2);
+  background: #f4f9fe;
+  border-color: #2b5f8d;
+  box-shadow: 0 2px 10px rgba(17, 63, 103, 0.15);
 }
 
 .day.available:hover {
-  background: #dcfce7;
-  border-color: #22c55e;
+  background: #e2eef9;
+  border-color: #113f67;
   transform: scale(1.05);
 }
 
@@ -195,38 +195,32 @@
 }
 
 .day.disabled {
-  background: #d1d5db;
-  border-color: #9ca3af;
+  background: #edf2f7;
+  border-color: #c4d0dd;
   cursor: not-allowed;
-  opacity: 1;
-  color: #6b7280;
+  opacity: 0.92;
+  color: #7a8694;
 }
 
 .day.disabled:hover {
-  background: #d1d5db;
-  border-color: #9ca3af;
+  background: #edf2f7;
+  border-color: #c4d0dd;
   transform: none;
 }
 
 .day.disabled .dayNumber {
-  color: #6b7280;
-}
-
-.day.disabled:hover {
-  background: #f3f4f6;
-  border-color: #d1d5db;
-  transform: none;
+  color: #7a8694;
 }
 
 .dayNumber {
   font-size: 1.2rem;
-  color: #333;
+  color: #113f67;
   font-weight: bold;
 }
 
 .slots {
   font-size: 0.8rem;
-  color: #666;
+  color: #4d5f72;
 }
 
 .red {
@@ -238,7 +232,7 @@
 }
 
 .green {
-  color: #4ade80;
+  color: #113f67;
 }
 
 /* Responsive */
