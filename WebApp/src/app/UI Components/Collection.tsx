@@ -116,7 +116,7 @@ export default function Collections({ specimenTypes = [], totalSpecimens = 0, co
           </div>
   
           <div className="mt-12 text-center">
-            <p className="text-gray-600 mb-6">Set an Appointment to our Laboratory.</p>
+            <p className="text-gray-600 mb-6">Set an Appointment to ES23TC Laboratory.</p>
             <button onClick={() => router.push("/Appointment")} className="bg-[#113F67] text-white px-8 py-3 rounded-lg font-large capitalize hover:shadow-2xl cursor-pointer">
              Request an Appointment
             </button>
