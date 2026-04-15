@@ -31,6 +31,8 @@ export default function AppointmentBooking() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const toSqlDateTime = (date: string, time: string) => `${date} ${time}:00`;
+
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
@@ -62,7 +64,11 @@ export default function AppointmentBooking() {
         return;
       }
 
-      const end = new Date(start.getTime() + 60 * 60 * 1000);
+      const [hours, minutes] = formData.time.split(':').map(Number);
+      const end = new Date(Number(formData.date.slice(0, 4)), Number(formData.date.slice(5, 7)) - 1, Number(formData.date.slice(8, 10)), hours, minutes, 0);
+      end.setHours(end.getHours() + 1);
+      const endDate = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`;
+      const endTime = `${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}:${String(end.getSeconds()).padStart(2, '0')}`;
 
       const response = await fetch('/API/appointments', {
         method: 'POST',
@@ -74,8 +80,8 @@ export default function AppointmentBooking() {
           requester_phone: formData.requester_phone || null,
           department: formData.department || 'External Visitor',
           purpose: formData.purpose,
-          date: start.toISOString().slice(0, 19).replace('T', ' '),
-          end_time: end.toISOString().slice(0, 19).replace('T', ' '),
+          date: toSqlDateTime(formData.date, formData.time),
+          end_time: `${endDate} ${endTime}`,
           website: formData.website
         })
       });

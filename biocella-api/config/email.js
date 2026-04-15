@@ -1,23 +1,31 @@
 const nodemailer = require('nodemailer');
 
-// Check if Gmail OAuth2 credentials are configured
-const hasGmailConfig = !!(
+// 🔎 Debugging: log env variables at startup
+console.log('🔎 Gmail OAuth2 config check:');
+console.log('Client ID:', process.env.GMAIL_CLIENT_ID || '❌ Missing');
+console.log('Client Secret:', process.env.GMAIL_CLIENT_SECRET ? '✅ Loaded' : '❌ Missing');
+console.log('Refresh Token:', process.env.GMAIL_REFRESH_TOKEN ? '✅ Loaded' : '❌ Missing');
+console.log('User Email:', process.env.GMAIL_USER || '❌ Missing');
+
+// OAuth2 credentials for Gmail send
+const hasGmailOAuthConfig = !!(
   process.env.GMAIL_CLIENT_ID &&
   process.env.GMAIL_CLIENT_SECRET &&
   process.env.GMAIL_REFRESH_TOKEN &&
   process.env.GMAIL_USER
 );
 
-if (!hasGmailConfig) {
-  console.warn('⚠️  Warning: Gmail OAuth2 credentials not fully configured. Email notifications will be skipped.');
+const hasGmailConfig = hasGmailOAuthConfig;
+
+if (!hasGmailOAuthConfig) {
+  console.warn('⚠️  Warning: No email credentials configured. Email notifications will be skipped.');
 }
 
-// OAuth2 Configuration for Gmail (lazy loaded only when needed)
 let oauth2Client = null;
 let google = null;
 let googleInitError = null;
+let cachedTransporter = null;
 
-// Try to load google module - but don't crash if it fails
 try {
   google = require('googleapis').google;
   console.log('✅ googleapis module loaded successfully');
@@ -29,18 +37,16 @@ try {
 
 const initializeGoogleAuth = () => {
   try {
-    if (oauth2Client) {
-      return; // Already initialized
-    }
-    
+    if (oauth2Client) return;
+
     if (!google) {
       if (googleInitError) {
         throw new Error('googleapis module failed to load: ' + googleInitError.message);
       }
       throw new Error('googleapis module not available');
     }
-    
-    if (!hasGmailConfig) {
+
+    if (!hasGmailOAuthConfig) {
       console.warn('Cannot initialize Google Auth: Gmail credentials are missing');
       return;
     }
@@ -57,28 +63,35 @@ const initializeGoogleAuth = () => {
 
     console.log('✅ Google OAuth2 initialized successfully');
   } catch (error) {
-    console.error('❌ Error initializing Google OAuth2:', error.message);
+    console.error('❌ Error initializing Google OAuth2:', error);
     oauth2Client = null;
     throw error;
   }
 };
 
-// Create Gmail transporter with OAuth2
 const createTransporter = async () => {
+  if (cachedTransporter) return cachedTransporter;
+
   try {
-    // Initialize if needed
-    if (!oauth2Client && hasGmailConfig) {
+    if (!oauth2Client && hasGmailOAuthConfig) {
       initializeGoogleAuth();
     }
 
     if (!oauth2Client) {
-      throw new Error('Gmail OAuth2 not configured. Please set GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN, and GMAIL_USER environment variables.');
+      throw new Error(
+        'Gmail OAuth2 not configured. Please set GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN, and GMAIL_USER environment variables.'
+      );
     }
 
-    const { credentials } = await oauth2Client.refreshAccessToken().catch((err) => {
-      throw new Error('Failed to refresh access token: ' + err.message);
-    });
-    
+    let accessToken;
+    try {
+      accessToken = await oauth2Client.getAccessToken();
+    } catch (error) {
+      console.error("❌ Refresh token failed:", error);
+      console.error("Details:", error.response?.data || error.code || error.toString());
+      throw error; // rethrow so the caller knows it failed
+    }
+
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
@@ -87,44 +100,64 @@ const createTransporter = async () => {
         clientId: process.env.GMAIL_CLIENT_ID,
         clientSecret: process.env.GMAIL_CLIENT_SECRET,
         refreshToken: process.env.GMAIL_REFRESH_TOKEN,
-        accessToken: credentials.access_token
-      }
+        accessToken: accessToken?.token
+      },
+      tls: { rejectUnauthorized: true },
+      connectionTimeout: 10000
     });
 
+    cachedTransporter = transporter;
     return transporter;
   } catch (error) {
-    console.error('❌ Error creating email transporter:', error.message);
+    console.error('❌ Error creating email transporter:', error);
     throw error;
   }
 };
 
-// Helper function to send emails - NEVER crash the main process
 const sendEmail = async (mailOptions) => {
   try {
     if (!hasGmailConfig) {
-      console.warn('⚠️  Email sending skipped: Gmail credentials not configured');
+      console.warn('⚠️  Email sending skipped: no mail transport is configured');
       console.log(`📧 Email would have been sent to: ${mailOptions.to}`);
       console.log(`📧 Subject: ${mailOptions.subject}`);
       return { messageId: 'SKIPPED_NO_CONFIG' };
     }
 
     const transporter = await createTransporter();
-    const senderEmail = process.env.EMAIL_USER || process.env.GMAIL_USER;
+
     const info = await transporter.sendMail({
-      from: `"BIOCELLA" <${senderEmail}>`,
+      from: `"BIOCELLA" <${process.env.GMAIL_USER}>`,
       ...mailOptions
     });
     console.log('📧 Email sent successfully:', info.messageId);
     return info;
   } catch (error) {
-    console.error('❌ Error sending email:', error.message);
-    // IMPORTANT: Don't throw - let the calling function know but don't crash
+    console.error('❌ Error sending email:', error);
     return { error: error.message, messageId: null };
+  }
+};
+
+// 🔹 New helper to test refresh token
+const testRefreshToken = async () => {
+  try {
+    if (!oauth2Client && hasGmailOAuthConfig) {
+      initializeGoogleAuth();
+    }
+    if (!oauth2Client) {
+      console.error('❌ No OAuth2 client available. Check Gmail OAuth2 config.');
+      return;
+    }
+
+    const accessToken = await oauth2Client.getAccessToken();
+    console.log('✅ Refresh token worked. Access token:', accessToken.token);
+  } catch (err) {
+    console.error('❌ Refresh token failed:', err.message || err);
   }
 };
 
 module.exports = {
   sendEmail,
   createTransporter,
-  hasGmailConfig
+  hasGmailConfig,
+  testRefreshToken // export helper
 };
