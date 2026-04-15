@@ -115,7 +115,7 @@ function ForgotResetContent() {
       <div className="flex items-center justify-center p-6">
         <div className="w-full max-w-2xl bg-white rounded-lg shadow-lg p-8">
           <div className="pb-6 text-left">
-            <Image src="/UI/img/logo-biocella.png" alt="Logo" width={120} height={40} />
+            <Image src="/UI/img/BioOffice.webp" alt="USC Biology Department Office" width={120} height={40} />
             <h2 className="text-2xl font-bold text-[#113F67] mt-4">Reset Password</h2>
             <p className="text-sm text-gray-600">Account details are loaded from your registration record.</p>
           </div>

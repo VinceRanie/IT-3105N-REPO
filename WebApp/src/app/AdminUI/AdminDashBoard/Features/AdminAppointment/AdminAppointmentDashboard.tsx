@@ -46,7 +46,7 @@ export default function AdminAppointmentDashboard() {
   const [audienceFilter, setAudienceFilter] = useState<AudienceFilter>('all');
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [showModal, setShowModal] = useState(false);
-  const [modalType, setModalType] = useState<'approve' | 'deny' | 'scan'>('approve');
+  const [modalType, setModalType] = useState<'approve' | 'deny' | 'scan' | 'notice'>('approve');
   const [remarks, setRemarks] = useState('');
   const [reason, setReason] = useState('');
   const [qrInput, setQrInput] = useState('');
@@ -58,7 +58,7 @@ export default function AdminAppointmentDashboard() {
   const [unavailableReason, setUnavailableReason] = useState('');
   const [unavailableDates, setUnavailableDates] = useState<UnavailableDate[]>([]);
   const [savingUnavailable, setSavingUnavailable] = useState(false);
-  const [showUnavailablePanel, setShowUnavailablePanel] = useState(false);
+  const [showUnavailablePanel] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const tabs: { key: TabType; label: string; color: string }[] = [
@@ -186,7 +186,8 @@ export default function AdminAppointmentDashboard() {
         throw new Error(data.message || data.error || 'Failed to mark date unavailable');
       }
 
-      alert('Date marked unavailable. Notification payload queued for future system integration.');
+      setModalType('notice');
+      setShowModal(true);
       setUnavailableDate('');
       setUnavailableReason('');
       fetchUnavailableDates();
@@ -727,68 +728,64 @@ export default function AdminAppointmentDashboard() {
   };
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-800">Appointment Management</h1>
-        <button
-          onClick={() => {
-            setCameraActive(false)
-            setShowModal(true)
-            setModalType('scan')
-            setQrInput('')
-          }}
-          className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors font-semibold"
-        >
-          📷 Scan QR Code
-        </button>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-white via-[#f4f8fb] to-[#eaf1f8] p-4 sm:p-6">
 
-      <div className="mb-6 rounded-lg border border-orange-200 bg-orange-50 p-4">
-        <button
-          type="button"
-          onClick={() => setShowUnavailablePanel((prev) => !prev)}
-          className="w-full flex items-center justify-between text-left"
-        >
-          <h2 className="text-lg font-semibold text-orange-900">Set Date Unavailable</h2>
-          <span className="text-sm font-semibold text-orange-800">
-            {showUnavailablePanel ? 'Hide' : 'Show'} {showUnavailablePanel ? '▲' : '▼'}
-          </span>
-        </button>
+    {/* HEADER */}
+    <div className="flex justify-end mb-6">
+
+<button
+  onClick={() => {
+    setCameraActive(false)
+    setShowModal(true)
+    setModalType('scan')
+    setQrInput('')
+  }}
+  className="cursor-pointer w-full sm:w-auto bg-[#113F67] text-white px-5 py-2.5 rounded-xl hover:bg-[#0d2f4d] transition shadow-md hover:shadow-lg font-semibold"
+>
+  Scan QR Code
+</button>
+
+</div>
+
+      <div className="mb-6 rounded-lg border border-[#113F67]/20 bg-[#113F67]/5 p-3 sm:p-4">
+        <div className="w-full flex items-center justify-between text-left">
+          <h2 className="text-lg font-semibold text-[#113F67]">Set Date Unavailable</h2>
+        </div>
 
         {showUnavailablePanel && (
           <>
-            <p className="text-sm text-orange-800 mb-4 mt-3">This blocks booking for students/faculty and prepares data for the upcoming notification system.</p>
+            <p className="text-sm text-[#113F67] mb-4 mt-3">This blocks booking for students/faculty and prepares data for the upcoming notification system.</p>
             <div className="grid gap-3 md:grid-cols-3">
               <input
                 type="date"
                 value={unavailableDate}
                 onChange={(e) => setUnavailableDate(e.target.value)}
-                className="rounded-md border border-orange-300 px-3 py-2"
+                className="rounded-md border border-[#113F67]/30 px-3 py-2 focus:border-[#113F67] focus:outline-none"
               />
               <input
                 type="text"
                 value={unavailableReason}
                 onChange={(e) => setUnavailableReason(e.target.value)}
                 placeholder="Reason (e.g. lab maintenance)"
-                className="rounded-md border border-orange-300 px-3 py-2 md:col-span-2"
+                className="rounded-md border border-[#113F67]/30 px-3 py-2 md:col-span-2 focus:border-[#113F67] focus:outline-none"
               />
             </div>
-            <div className="mt-3 flex items-center gap-3">
+            <div className="mt-3 flex flex-col sm:flex-row sm:items-center gap-3">
               <button
                 onClick={handleSetUnavailableDate}
                 disabled={savingUnavailable}
-                className="rounded-md bg-orange-600 px-4 py-2 text-white hover:bg-orange-700 disabled:opacity-60"
+                className="rounded-md bg-[#113F67] px-4 py-2 text-white hover:bg-[#0d2f4d] disabled:opacity-60"
               >
                 {savingUnavailable ? 'Saving...' : 'Mark Unavailable'}
               </button>
             </div>
             <div className="mt-4 space-y-2">
               {unavailableDates.length === 0 ? (
-                <p className="text-sm text-orange-700">No blocked dates yet.</p>
+                <p className="text-sm text-[#113F67]/80">No blocked dates yet.</p>
               ) : (
                 unavailableDates.slice(0, 8).map((item) => (
-                  <div key={item.unavailable_id} className="flex items-center justify-between rounded-md bg-white px-3 py-2 text-sm border border-orange-100">
-                    <span>
+                  <div key={item.unavailable_id} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-md bg-white px-3 py-2 text-sm border border-[#113F67]/15">
+                    <span className="break-words">
                       {format(new Date(`${item.unavailable_date}T00:00:00`), 'MMM dd, yyyy')} - {item.reason}
                     </span>
                     <button
@@ -806,12 +803,13 @@ export default function AdminAppointmentDashboard() {
       </div>
 
       {/* Tabs */}
-      <div className="flex space-x-2 mb-6 border-b border-gray-200">
+      <div className="mb-6 border-b border-gray-200 overflow-x-auto">
+        <div className="flex space-x-2 min-w-max">
         {tabs.map((tab) => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
-            className={`px-6 py-3 font-medium transition-colors ${
+            className={`px-4 sm:px-6 py-3 font-medium whitespace-nowrap transition-colors ${
               activeTab === tab.key
                 ? 'border-b-2 border-blue-600 text-blue-600'
                 : 'text-gray-600 hover:text-gray-800'
@@ -827,34 +825,14 @@ export default function AdminAppointmentDashboard() {
             </span>
           </button>
         ))}
-      </div>
-
-      <div className="mb-4 flex flex-wrap gap-2">
-        <button
-          onClick={() => setAudienceFilter('all')}
-          className={`px-3 py-1.5 rounded-md text-sm font-medium ${audienceFilter === 'all' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-700'}`}
-        >
-          All Audiences
-        </button>
-        <button
-          onClick={() => setAudienceFilter('internal')}
-          className={`px-3 py-1.5 rounded-md text-sm font-medium ${audienceFilter === 'internal' ? 'bg-blue-700 text-white' : 'bg-blue-50 text-blue-700'}`}
-        >
-          Internal (Student/Faculty)
-        </button>
-        <button
-          onClick={() => setAudienceFilter('outsider')}
-          className={`px-3 py-1.5 rounded-md text-sm font-medium ${audienceFilter === 'outsider' ? 'bg-emerald-700 text-white' : 'bg-emerald-50 text-emerald-700'}`}
-        >
-          Outsider
-        </button>
+        </div>
       </div>
 
       {/* Error Alert */}
       {error && (
         <div className="mb-6 p-4 bg-amber-50 border-2 border-amber-300 rounded-lg">
           <div className="flex items-start gap-3 mb-3">
-            <div className="text-amber-700 font-bold text-lg">⚠️ CONNECTION WARNING</div>
+            <div className="text-amber-700 font-bold text-base sm:text-lg">⚠️ CONNECTION WARNING</div>
             <button
               onClick={() => setError(null)}
               className="text-amber-600 hover:text-amber-800 font-semibold ml-auto"
@@ -868,13 +846,13 @@ export default function AdminAppointmentDashboard() {
               The system attempted 3 automatic retries. Please click "Retry Now" to try again.
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-2">
             <button
               onClick={() => refreshAppointmentCounts()}
               disabled={loading}
               className="px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
             >
-              {loading ? '⏳ Retrying...' : '🔄 Retry Now'}
+              {loading ? 'Retrying...' : 'Retry Now'}
             </button>
             <button
               onClick={() => setError(null)}
@@ -904,15 +882,13 @@ export default function AdminAppointmentDashboard() {
           {appointments.map((appointment) => (
             <div
               key={appointment.appointment_id}
-              className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow"
+              className="bg-white p-4 sm:p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow"
             >
-              <div className="flex justify-between items-start">
+              <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-4">
                 <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h3 className="text-lg font-semibold text-gray-800">
-                      {appointment.appointment_source === 'outsider'
-                        ? `Visitor: ${appointment.requester_name || appointment.requester_email || 'External Visitor'}`
-                        : `Student ID: ${appointment.student_id}`}
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-2">
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-800 break-words">
+                      Student ID: {appointment.student_id}
                     </h3>
                     {getStatusBadge(appointment.status)}
                     <span className={`px-3 py-1 rounded-full text-xs font-semibold ${appointment.appointment_source === 'outsider' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'}`}>
@@ -920,7 +896,7 @@ export default function AdminAppointmentDashboard() {
                     </span>
                   </div>
                   
-                  <div className="grid grid-cols-2 gap-4 text-sm text-gray-600 mb-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-sm text-gray-600 mb-3">
                     <div>
                       <span className="font-medium">Department:</span> {appointment.department}
                     </div>
@@ -928,7 +904,7 @@ export default function AdminAppointmentDashboard() {
                       <span className="font-medium">Date:</span>{' '}
                       {format(new Date(appointment.date), 'MMM dd, yyyy hh:mm a')}
                     </div>
-                    <div className="col-span-2">
+                    <div className="sm:col-span-2">
                       <span className="font-medium">Purpose:</span> {appointment.purpose}
                     </div>
                     {appointment.requester_email && (
@@ -954,18 +930,18 @@ export default function AdminAppointmentDashboard() {
                 </div>
 
                 {/* Action Buttons */}
-                <div className="flex flex-col gap-2 ml-4">
+                <div className="flex flex-col sm:flex-row lg:flex-col gap-2 lg:ml-4">
                   {activeTab === 'pending' && (
                     <>
                       <button
                         onClick={() => openModal(appointment, 'approve')}
-                        className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors text-sm"
+                        className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors text-sm w-full sm:w-auto"
                       >
                         Approve
                       </button>
                       <button
                         onClick={() => openModal(appointment, 'deny')}
-                        className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors text-sm"
+                        className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors text-sm w-full sm:w-auto"
                       >
                         Deny
                       </button>
@@ -975,7 +951,7 @@ export default function AdminAppointmentDashboard() {
               </div>
 
               {/* Timestamps */}
-              <div className="mt-4 pt-4 border-t border-gray-200 text-xs text-gray-500 grid grid-cols-4 gap-2">
+              <div className="mt-4 pt-4 border-t border-gray-200 text-xs text-gray-500 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
                 {appointment.pending_at && (
                   <div>Pending: {format(new Date(appointment.pending_at), 'MMM dd, HH:mm')}</div>
                 )}
@@ -996,12 +972,13 @@ export default function AdminAppointmentDashboard() {
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h2 className="text-xl font-bold mb-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-3 sm:p-4">
+          <div className="bg-white rounded-lg p-4 sm:p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <h2 className="text-lg sm:text-xl font-bold mb-4">
               {modalType === 'scan' && 'Scan QR Code'}
               {modalType === 'approve' && 'Approve Appointment'}
               {modalType === 'deny' && 'Deny Appointment'}
+              {modalType === 'notice' && 'Notice'}
             </h2>
 
             {modalType === 'scan' ? (
@@ -1010,9 +987,9 @@ export default function AdminAppointmentDashboard() {
                   <div className="space-y-3">
                     <button
                       onClick={() => startCamera()}
-                      className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white px-4 py-3 rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all font-semibold flex items-center justify-center gap-2"
+                      className="cursor-pointer w-full bg-[#113F67] from-blue-500 to-blue-600 text-white px-4 py-3 rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all font-semibold flex items-center justify-center gap-2"
                     >
-                      📷 Start Camera Scanner
+                      Start Camera Scanner
                     </button>
                     <div className="relative">
                       <div className="absolute inset-0 flex items-center">
@@ -1061,12 +1038,12 @@ export default function AdminAppointmentDashboard() {
                       ref={canvasRef}
                       style={{ display: 'none' }}
                     />
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <button
                         onClick={switchCamera}
-                        className="w-full bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors font-semibold"
+                        className="w-full bg-[#113F67] text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors font-semibold"
                       >
-                        🔄 Switch Camera
+                        Switch Camera
                       </button>
                       <button
                         onClick={stopCamera}
@@ -1084,7 +1061,7 @@ export default function AdminAppointmentDashboard() {
                   placeholder="Paste QR code content or result here"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
                 />
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <button
                     onClick={handleScanQR}
                     disabled={!qrInput || cameraActive}
@@ -1099,6 +1076,18 @@ export default function AdminAppointmentDashboard() {
                     Cancel
                   </button>
                 </div>
+              </div>
+            ) : modalType === 'notice' ? (
+              <div className="space-y-4">
+                <div className="rounded-lg border border-[#113F67]/20 bg-[#113F67]/5 p-4 text-sm text-[#113F67]">
+                  Date marked unavailable. Notification payload queued for future system integration.
+                </div>
+                <button
+                  onClick={closeModal}
+                  className="w-full bg-[#113F67] text-white px-4 py-2 rounded-md hover:bg-[#0d2f4d]"
+                >
+                  OK
+                </button>
               </div>
             ) : (
               <div>
@@ -1117,7 +1106,7 @@ export default function AdminAppointmentDashboard() {
                   className="w-full px-4 py-2 border border-gray-300 rounded-md mb-4"
                 />
                 
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <button
                     onClick={modalType === 'approve' ? handleApprove : handleDeny}
                     className={`flex-1 text-white px-4 py-2 rounded-md ${

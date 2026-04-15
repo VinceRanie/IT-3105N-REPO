@@ -81,6 +81,8 @@ const microbialInfoSchema = new Schema({
   
   // Description/Notes
   description: String,
+  update_notes: String,
+  updated_by: String,
   
   // Flexible custom fields for any additional data
   custom_fields: { type: Schema.Types.Mixed },
