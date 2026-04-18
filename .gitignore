@@ -4,6 +4,4 @@ WebApp/node_modules/
 .env
 *.zip
 merge-test/
-package.json
-package-lock.json
 test-email.js

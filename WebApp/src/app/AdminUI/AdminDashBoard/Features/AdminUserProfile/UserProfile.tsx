@@ -43,6 +43,14 @@ interface UserProfile {
   role: string;
 }
 
+interface PasswordResetStatus {
+  isLocked: boolean;
+  cooldownType: "token" | "cooldown" | null;
+  remainingMs: number;
+  expiresAt: string | null;
+  message: string | null;
+}
+
 const roleLabelMap: Record<string, string> = {
   admin: "Administrator",
   staff: "Research Assistant",
@@ -76,6 +84,35 @@ export default function ProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [profileImageInput, setProfileImageInput] = useState("");
   const [profileImageSrc, setProfileImageSrc] = useState(DEFAULT_PROFILE_IMAGE);
+  const [passwordResetStatus, setPasswordResetStatus] = useState<PasswordResetStatus | null>(null);
+  const [clockNow, setClockNow] = useState(() => Date.now());
+
+  const syncPasswordResetStatus = (status: PasswordResetStatus | null) => {
+    setPasswordResetStatus(status);
+    setClockNow(Date.now());
+  };
+
+  const formatCountdown = (remainingMs: number) => {
+    const totalSeconds = Math.max(0, Math.ceil(remainingMs / 1000));
+    const days = Math.floor(totalSeconds / 86400);
+    const hours = Math.floor((totalSeconds % 86400) / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    if (days > 0) {
+      return `${days}d ${hours}h ${minutes}m`;
+    }
+
+    if (hours > 0) {
+      return `${hours}h ${minutes}m ${seconds}s`;
+    }
+
+    if (minutes > 0) {
+      return `${minutes}m ${seconds}s`;
+    }
+
+    return `${seconds}s`;
+  };
 
   const fetchProfile = async () => {
     try {
@@ -100,12 +137,25 @@ export default function ProfilePage() {
       setSelectedCourse(profile.course || "");
       setProfileImageInput(profile.profile_photo || "");
       setProfileImageSrc(resolveProfilePhotoSrc(profile.profile_photo));
+      syncPasswordResetStatus((data.passwordResetStatus as PasswordResetStatus) || null);
     } catch (err: any) {
       setError(err.message || "Failed to load profile.");
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!passwordResetStatus?.isLocked || !passwordResetStatus.expiresAt) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setClockNow(Date.now());
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [passwordResetStatus?.expiresAt, passwordResetStatus?.isLocked]);
 
   useEffect(() => {
     fetchProfile();
@@ -194,6 +244,10 @@ export default function ProfilePage() {
 
   const handleChangePassword = async () => {
     try {
+      if (isPasswordResetLocked) {
+        return;
+      }
+
       setSendingReset(true);
       setError(null);
 
@@ -207,7 +261,14 @@ export default function ProfilePage() {
 
       const data = await response.json();
       if (!response.ok) {
+        if (data.passwordResetStatus) {
+          syncPasswordResetStatus(data.passwordResetStatus as PasswordResetStatus);
+        }
         throw new Error(data.message || "Failed to request password reset.");
+      }
+
+      if (data.passwordResetStatus) {
+        syncPasswordResetStatus(data.passwordResetStatus as PasswordResetStatus);
       }
 
       alert("A password reset email has been sent to your account email.");
@@ -224,6 +285,10 @@ export default function ProfilePage() {
   }, [userData?.role]);
 
   const availableCourses = selectedDepartment ? courses[selectedDepartment as keyof typeof courses] || [] : [];
+  const passwordResetRemainingMs = passwordResetStatus?.expiresAt
+    ? Math.max(0, new Date(passwordResetStatus.expiresAt).getTime() - clockNow)
+    : 0;
+  const isPasswordResetLocked = Boolean(passwordResetStatus?.isLocked && passwordResetRemainingMs > 0);
 
   if (loading) {
     return (
@@ -365,10 +430,15 @@ export default function ProfilePage() {
             <Lock className="h-5 w-5 text-[#113F67]" /> Change Password
           </h2>
           <p className="text-sm text-gray-500">Send a reset link to your email to change your password.</p>
+          {isPasswordResetLocked && (
+            <p className="text-sm text-amber-700">
+              Next request available in {formatCountdown(passwordResetRemainingMs)}.
+            </p>
+          )}
           <button
             type="button"
             onClick={handleChangePassword}
-            disabled={sendingReset}
+            disabled={sendingReset || isPasswordResetLocked}
             className="bg-[#113F67] text-white px-4 py-2 rounded-lg shadow cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {sendingReset ? "Sending..." : "Change Password"}

@@ -86,6 +86,66 @@ const didEmailSend = (result, expectedRecipient = "") => {
   return true;
 };
 
+const formatDuration = (remainingMs) => {
+  const totalSeconds = Math.max(1, Math.ceil(remainingMs / 1000));
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+
+  if (days > 0) {
+    return `${days} day${days === 1 ? "" : "s"}${hours > 0 ? ` ${hours} hour${hours === 1 ? "" : "s"}` : ""}`;
+  }
+
+  if (hours > 0) {
+    return `${hours} hour${hours === 1 ? "" : "s"}${minutes > 0 ? ` ${minutes} minute${minutes === 1 ? "" : "s"}` : ""}`;
+  }
+
+  if (minutes > 0) {
+    return `${minutes} minute${minutes === 1 ? "" : "s"}`;
+  }
+
+  return `${totalSeconds} second${totalSeconds === 1 ? "" : "s"}`;
+};
+
+const buildPasswordResetStatus = (user) => {
+  const expiresAtValue = user?.reset_token_expires ? new Date(user.reset_token_expires) : null;
+
+  if (!expiresAtValue || Number.isNaN(expiresAtValue.getTime())) {
+    return {
+      isLocked: false,
+      cooldownType: null,
+      remainingMs: 0,
+      expiresAt: null,
+      message: null,
+    };
+  }
+
+  const remainingMs = expiresAtValue.getTime() - Date.now();
+  if (remainingMs <= 0) {
+    return {
+      isLocked: false,
+      cooldownType: null,
+      remainingMs: 0,
+      expiresAt: null,
+      message: null,
+    };
+  }
+
+  const cooldownType = user?.reset_token ? "token" : "cooldown";
+  const formattedDuration = formatDuration(remainingMs);
+
+  return {
+    isLocked: true,
+    cooldownType,
+    remainingMs,
+    expiresAt: expiresAtValue.toISOString(),
+    message:
+      cooldownType === "token"
+        ? `A password reset link is already active. You can request a new one in ${formattedDuration}.`
+        : `You can request another password reset in ${formattedDuration}.`,
+  };
+};
+
 
 const sendFinalizeSetupEmail = async (email, resetToken) => {
   let emailResult;
@@ -173,17 +233,14 @@ const sendAdminInviteEmail = async (email, resetToken, normalizedRole) => {
 };
 
 const issuePasswordResetForUser = async (user) => {
-  if (user.reset_token_expires) {
-    const expiresAtMs = new Date(user.reset_token_expires).getTime();
-    const remainingMs = expiresAtMs - Date.now();
-    const isCooldownWindow = remainingMs > RESET_LINK_TTL_MS;
-    if (remainingMs > 0 && (!user.reset_token || isCooldownWindow)) {
-      return {
-        ok: false,
-        statusCode: 429,
-        message: "You can only change your password once every 7 days.",
-      };
-    }
+  const passwordResetStatus = buildPasswordResetStatus(user);
+  if (passwordResetStatus.isLocked) {
+    return {
+      ok: false,
+      statusCode: 429,
+      message: passwordResetStatus.message,
+      passwordResetStatus,
+    };
   }
 
   const resetToken = uuidv4();
@@ -216,6 +273,8 @@ const issuePasswordResetForUser = async (user) => {
   }
 
   if (!didEmailSend(emailResult, user.email)) {
+    await authModel.setResetToken(user.user_id, null, null);
+
     return {
       ok: false,
       statusCode: HttpStatus.SERVICE_UNAVAILABLE,
@@ -227,6 +286,11 @@ const issuePasswordResetForUser = async (user) => {
     ok: true,
     statusCode: HttpStatus.OK,
     message: "Email sent successfully",
+    passwordResetStatus: buildPasswordResetStatus({
+      ...user,
+      reset_token: resetToken,
+      reset_token_expires: tokenExpiry,
+    }),
   };
 };
 
@@ -710,9 +774,12 @@ exports.getUserProfile = async (req, res) => {
       });
     }
 
+    const passwordResetAccount = await authModel.getUserByEmail(user.email);
+
     return res.status(HttpStatus.OK).json({
       message: "User profile retrieved.",
       user,
+      passwordResetStatus: buildPasswordResetStatus(passwordResetAccount),
       statusCode: HttpStatus.OK,
     });
   } catch (error) {
@@ -724,6 +791,14 @@ exports.getUserProfile = async (req, res) => {
     });
   }
 };
+    if (resetResult.passwordResetStatus) {
+      return res.status(resetResult.statusCode).json({
+        message: resetResult.message,
+        passwordResetStatus: resetResult.passwordResetStatus,
+        statusCode: resetResult.statusCode,
+      });
+    }
+
 
 // UPDATE USER PROFILE
 exports.updateUserProfile = async (req, res) => {
