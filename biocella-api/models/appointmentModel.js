@@ -6,17 +6,111 @@ const crypto = require('crypto');
 exports.createAppointment = async (data) => {
   console.log('[DEBUG] createAppointment received data:', JSON.stringify(data, null, 2));
   
-  const { user_id, student_id, department, purpose, date, end_time } = data;
+  const {
+    user_id,
+    student_id,
+    department,
+    purpose,
+    date,
+    end_time,
+    appointment_source = 'internal',
+    requester_name = null,
+    requester_email = null,
+    requester_phone = null,
+    requester_ip = null
+  } = data;
   const status = 'pending';
   const qr_code = null; // Will be generated upon approval
   
-  console.log('[DEBUG] Extracted values:', { user_id, student_id, department, purpose, date, end_time });
+  console.log('[DEBUG] Extracted values:', {
+    user_id,
+    student_id,
+    department,
+    purpose,
+    date,
+    end_time,
+    appointment_source,
+    requester_email,
+    requester_ip
+  });
   
   const [result] = await db.execute(
-    "INSERT INTO appointment (user_id, student_id, department, purpose, date, end_time, status, qr_code, pending_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())",
-    [user_id, student_id, department, purpose, date, end_time, status, qr_code]
+    `INSERT INTO appointment (
+      user_id,
+      student_id,
+      department,
+      purpose,
+      date,
+      end_time,
+      status,
+      qr_code,
+      pending_at,
+      appointment_source,
+      requester_name,
+      requester_email,
+      requester_phone,
+      requester_ip
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?)`,
+    [
+      user_id,
+      student_id,
+      department,
+      purpose,
+      date,
+      end_time,
+      status,
+      qr_code,
+      appointment_source,
+      requester_name,
+      requester_email,
+      requester_phone,
+      requester_ip
+    ]
   );
   return result.insertId;
+};
+
+exports.countRecentOutsiderByEmail = async (email, hours = 24) => {
+  const [rows] = await db.execute(
+    `SELECT COUNT(*) AS total
+     FROM appointment
+     WHERE appointment_source = 'outsider'
+       AND requester_email = ?
+       AND created_at >= DATE_SUB(NOW(), INTERVAL ? HOUR)`,
+    [email, hours]
+  );
+
+  return Number(rows[0]?.total || 0);
+};
+
+exports.countRecentOutsiderByIp = async (ip, minutes = 15) => {
+  if (!ip) return 0;
+
+  const [rows] = await db.execute(
+    `SELECT COUNT(*) AS total
+     FROM appointment
+     WHERE appointment_source = 'outsider'
+       AND requester_ip = ?
+       AND created_at >= DATE_SUB(NOW(), INTERVAL ? MINUTE)`,
+    [ip, minutes]
+  );
+
+  return Number(rows[0]?.total || 0);
+};
+
+exports.countUpcomingOutsiderByEmail = async (email) => {
+  const [rows] = await db.execute(
+    `SELECT COUNT(*) AS total
+     FROM appointment
+     WHERE appointment_source = 'outsider'
+       AND requester_email = ?
+       AND deleted_at IS NULL
+       AND status IN ('pending', 'approved', 'ongoing')
+       AND date >= NOW()`,
+    [email]
+  );
+
+  return Number(rows[0]?.total || 0);
 };
 
 // CHECK IF DATE IS MARKED UNAVAILABLE
@@ -57,25 +151,16 @@ exports.getAppointmentsByStatus = async (status) => {
 
 // CHECK FOR SCHEDULE CONFLICTS - checks for overlapping time ranges on the SAME DATE
 exports.checkScheduleConflict = async (date, end_time = null, excludeId = null, student_id = null) => {
-  // If no end_time provided, assume 1-hour slot
-  let endTime = end_time;
-  if (!endTime && date) {
-    // If only start time provided, assume 1 hour duration
-    const startDate = new Date(date);
-    startDate.setHours(startDate.getHours() + 1);
-    endTime = startDate.toISOString().slice(0, 19).replace('T', ' ');
-  }
-
   // Query for appointments that overlap with the requested time range on the SAME DATE
   // Overlap occurs if: existing_start < requested_end AND existing_end > requested_start
   let query = `SELECT * FROM appointment 
     WHERE status IN ('approved', 'ongoing') 
     AND deleted_at IS NULL
     AND DATE(date) = DATE(?)
-    AND date < ?
+    AND date < COALESCE(?, DATE_ADD(?, INTERVAL 1 HOUR))
     AND (end_time IS NULL OR end_time > ?)`;
   
-  const params = [date, endTime, date];
+  const params = [date, end_time, date, date];
   
   if (student_id) {
     query += " AND student_id = ?";

@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "https://22102959.dcism.org/biocella-api";
+import { requireEnv } from "@/app/API/lib/routeEnv";
 
 export async function POST(request: NextRequest) {
+  const env = requireEnv(["NEXT_PUBLIC_API_URL"] as const);
+  if (!env.ok) return env.response;
+  const API_BASE_URL = env.values.NEXT_PUBLIC_API_URL;
+
   try {
     const body = await request.json();
     const response = await fetch(`${API_BASE_URL}/auth/finalize-setup`, {

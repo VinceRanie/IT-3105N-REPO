@@ -53,14 +53,14 @@ export default function AdminControls({
         <input
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
-          className="text-[#113F67] shadow-md transition-colors w-full sm:w-80 h-9 text-sm text-[#113F67] rounded-lg border border-gray-300 px-3 py-1 focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+          className="text-[#113F67] shadow-md transition-colors w-full sm:w-80 h-9 text-sm text-[#113F67] rounded-lg border border-[#113F67] px-3 py-1 focus:outline-none focus:ring-2 focus:ring-[#113F67]"
           placeholder="Search by code, name, or project..."
         />
 
         <select
           value={statusFilter}
           onChange={(e) => onStatusFilterChange(e.target.value as "all" | "unpublished" | "published")}
-          className="shadow-md transition-colors w-full sm:w-44 h-9 text-sm text-[#113F67] rounded-lg border border-gray-300 px-3 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+          className="shadow-md transition-colors w-full sm:w-44 h-9 text-sm text-white rounded-lg border border-gray-300 px-3 py-1 bg-[#113F67] focus:outline-none focus:ring-2 focus:ring-[#113F67]"
           aria-label="Filter by publish status"
         >
           <option value="all">All</option>

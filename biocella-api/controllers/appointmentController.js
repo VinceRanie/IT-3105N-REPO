@@ -37,13 +37,97 @@ const hasAppointmentElapsed = (appointment) => {
   return endCandidate.getTime() < Date.now();
 };
 
+const getClientIp = (req) => {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (forwarded && typeof forwarded === 'string') {
+    return forwarded.split(',')[0].trim();
+  }
+
+  return req.ip || req.socket?.remoteAddress || null;
+};
+
+const isValidEmail = (value = '') => {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value).trim());
+};
+
 // CREATE
 exports.create = async (req, res) => {
   try {
     console.log('[DEBUG] Create appointment - req.body:', JSON.stringify(req.body, null, 2));
 
+    const appointmentSource =
+      String(req.body.appointment_source || 'internal').toLowerCase() === 'outsider'
+        ? 'outsider'
+        : 'internal';
+
+    const payload = {
+      ...req.body,
+      appointment_source: appointmentSource,
+      requester_name: null,
+      requester_email: null,
+      requester_phone: null,
+      requester_ip: null
+    };
+
+    if (appointmentSource === 'outsider') {
+      const requesterName = String(req.body.requester_name || '').trim();
+      const requesterEmail = String(req.body.requester_email || '').trim().toLowerCase();
+      const requesterPhone = String(req.body.requester_phone || '').trim();
+      const honeypot = String(req.body.website || '').trim();
+      const clientIp = getClientIp(req);
+
+      if (honeypot) {
+        return res.status(400).json({ error: 'Invalid appointment payload' });
+      }
+
+      if (!requesterName || !requesterEmail) {
+        return res.status(400).json({
+          error: 'Requester name and email are required for outsider appointments.'
+        });
+      }
+
+      if (!isValidEmail(requesterEmail)) {
+        return res.status(400).json({
+          error: 'Please provide a valid email address.'
+        });
+      }
+
+      // Anti-spam guardrails for public booking.
+      const [recentByIp, recentByEmail, upcomingByEmail] = await Promise.all([
+        Appointment.countRecentOutsiderByIp(clientIp, 15),
+        Appointment.countRecentOutsiderByEmail(requesterEmail, 24),
+        Appointment.countUpcomingOutsiderByEmail(requesterEmail)
+      ]);
+
+      if (recentByIp >= 2) {
+        return res.status(429).json({
+          error: 'Too many appointment attempts from this network. Please wait 15 minutes before trying again.'
+        });
+      }
+
+      if (recentByEmail >= 3) {
+        return res.status(429).json({
+          error: 'Too many requests for this email in the last 24 hours. Please try again tomorrow.'
+        });
+      }
+
+      if (upcomingByEmail >= 2) {
+        return res.status(409).json({
+          error: 'This email already has 2 active upcoming outsider appointments. Please wait for one to finish or cancel first.'
+        });
+      }
+
+      payload.user_id = null;
+      payload.student_id = null;
+      payload.requester_name = requesterName;
+      payload.requester_email = requesterEmail;
+      payload.requester_phone = requesterPhone || null;
+      payload.requester_ip = clientIp;
+      payload.department = payload.department || 'External Visitor';
+    }
+
     // Reject booking on dates explicitly blocked by admin/RA
-    const blockedDate = await Appointment.isDateUnavailable(req.body.date);
+    const blockedDate = await Appointment.isDateUnavailable(payload.date);
     if (blockedDate) {
       return res.status(409).json({
         error: "Selected date is unavailable",
@@ -53,14 +137,14 @@ exports.create = async (req, res) => {
     }
     
     // Global conflict check: no overlapping time range is allowed for any user on the same date.
-    const hasConflict = await Appointment.checkScheduleConflict(req.body.date, req.body.end_time, null, null);
+    const hasConflict = await Appointment.checkScheduleConflict(payload.date, payload.end_time, null, null);
     if (hasConflict) {
       return res.status(409).json({ 
         error: "Schedule conflict: This time range is already occupied by another appointment"
       });
     }
     
-    const id = await Appointment.createAppointment(req.body);
+    const id = await Appointment.createAppointment(payload);
     res.status(201).json({ 
       message: "Appointment request submitted successfully", 
       appointment_id: id 
@@ -180,13 +264,20 @@ exports.approve = async (req, res) => {
     await Appointment.updateAppointmentStatus(req.params.id, 'approved', req.body.remarks);
     await Appointment.updateAppointmentStatus(req.params.id, 'ongoing');
     
+    const recipientEmail = appointment.user_email || appointment.requester_email;
+    const identityLabel = appointment.student_id
+      ? `<p><strong>Student ID:</strong> ${appointment.student_id}</p>`
+      : appointment.requester_name
+      ? `<p><strong>Visitor Name:</strong> ${appointment.requester_name}</p>`
+      : '';
+
     // Send email to user if email exists (but don't crash if it fails)
-    if (appointment.user_email) {
+    if (recipientEmail) {
       // Remove data URL prefix to get just the base64 data
       const base64Data = qrCodeDataUrl.replace(/^data:image\/png;base64,/, '');
       
       sendEmail({
-        to: appointment.user_email,
+        to: recipientEmail,
         subject: 'Appointment Approved - Biocella',
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -194,7 +285,7 @@ exports.approve = async (req, res) => {
             <p><strong>Date:</strong> ${formattedDate}</p>
             <p><strong>Department:</strong> ${appointment.department}</p>
             <p><strong>Purpose:</strong> ${appointment.purpose}</p>
-            <p><strong>Student ID:</strong> ${appointment.student_id}</p>
+            ${identityLabel}
             ${req.body.remarks ? `<p><strong>Admin Remarks:</strong> ${req.body.remarks}</p>` : ''}
             <hr>
             <h3>Your QR Code:</h3>
@@ -246,10 +337,17 @@ exports.deny = async (req, res) => {
     const { reason } = req.body;
     await Appointment.updateAppointmentStatus(req.params.id, 'denied', reason);
     
+    const recipientEmail = appointment.user_email || appointment.requester_email;
+    const identityLabel = appointment.student_id
+      ? `<p><strong>Student ID:</strong> ${appointment.student_id}</p>`
+      : appointment.requester_name
+      ? `<p><strong>Visitor Name:</strong> ${appointment.requester_name}</p>`
+      : '';
+
     // Send email to user if email exists (but don't crash if it fails)
-    if (appointment.user_email) {
+    if (recipientEmail) {
       sendEmail({
-        to: appointment.user_email,
+        to: recipientEmail,
         subject: 'Appointment Request Denied - Biocella',
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -257,7 +355,7 @@ exports.deny = async (req, res) => {
             <p><strong>Requested Date:</strong> ${formattedDate}</p>
             <p><strong>Department:</strong> ${appointment.department}</p>
             <p><strong>Purpose:</strong> ${appointment.purpose}</p>
-            <p><strong>Student ID:</strong> ${appointment.student_id}</p>
+            ${identityLabel}
             <hr>
             <p><strong>Reason:</strong> ${reason || 'No reason provided'}</p>
             <p>Please contact us if you have any questions or would like to reschedule.</p>
