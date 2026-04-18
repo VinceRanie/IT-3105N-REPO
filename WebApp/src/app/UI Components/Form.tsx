@@ -40,7 +40,7 @@ const Form = () => {
             </div>
             <div className="flex items-center">
               <div className="w-2 h-2  rounded-full"></div>
-              <span>Laboratory management system</span>
+              <span>Laboratory Appointment system</span>
             </div>
             <div className="flex items-center">
               <div className="w-2 h-2 bg-biocella-molecular rounded-full"></div>

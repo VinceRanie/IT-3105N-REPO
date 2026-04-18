@@ -4,7 +4,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(17, 63, 103, 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -29,7 +29,7 @@
   width: 90%;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 20px 60px rgba(17, 63, 103, 0.28);
   position: relative;
   animation: slideUp 0.3s ease-out;
 }
@@ -53,7 +53,7 @@
   border: none;
   font-size: 2rem;
   cursor: pointer;
-  color: #999;
+  color: #6f859a;
   transition: color 0.3s;
   padding: 0;
   width: 40px;
@@ -64,29 +64,29 @@
 }
 
 .closeBtn:hover {
-  color: #333;
+  color: #113f67;
 }
 
 .modal h2 {
   margin: 0 0 10px 0;
-  color: #333;
+  color: #113f67;
   font-size: 1.8rem;
 }
 
 .dateInfo {
   margin: 0 0 25px 0;
   font-size: 1.1rem;
-  color: #667eea;
+  color: #1f5f96;
   font-weight: 500;
 }
 
 /* Timeline */
 .timeline {
   margin-bottom: 25px;
-  background: #f9fafb;
+  background: #f5f9fd;
   border-radius: 8px;
   padding: 15px;
-  border: 2px solid #e5e7eb;
+  border: 2px solid #d8e6f3;
 }
 
 .timelineScroll {
@@ -102,19 +102,19 @@
 }
 
 .timelineScroll::-webkit-scrollbar-track {
-  background: #e5e7eb;
+  background: #d8e6f3;
   border-radius: 3px;
 }
 
 .timelineScroll::-webkit-scrollbar-thumb {
-  background: #667eea;
+  background: #113f67;
   border-radius: 3px;
 }
 
 .timeSlot {
   min-width: 65px;
   padding: 10px;
-  border: 2px solid #e5e7eb;
+  border: 2px solid #dbe7f3;
   border-radius: 6px;
   cursor: pointer;
   text-align: center;
@@ -125,16 +125,16 @@
 }
 
 .timeSlot.available:hover {
-  border-color: #667eea;
-  background: #f0f3ff;
+  border-color: #113f67;
+  background: #eaf2fa;
   transform: translateY(-2px);
 }
 
 .timeSlot.available.selected {
-  background: #667eea;
+  background: #113f67;
   color: white;
-  border-color: #667eea;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  border-color: #113f67;
+  box-shadow: 0 4px 12px rgba(17, 63, 103, 0.35);
 }
 
 .timeSlot.booked {
@@ -170,7 +170,7 @@
   display: block;
   margin-bottom: 10px;
   font-weight: 600;
-  color: #333;
+  color: #113f67;
 }
 
 .endTimeSelectionGrid {
@@ -181,32 +181,32 @@
 
 .endTimeBtn {
   padding: 10px;
-  border: 2px solid #e5e7eb;
+  border: 2px solid #dbe7f3;
   border-radius: 6px;
   background: white;
   cursor: pointer;
   font-weight: 500;
   transition: all 0.3s;
-  color: #333;
+  color: #113f67;
 }
 
 .endTimeBtn:hover {
-  border-color: #667eea;
-  background: #f0f3ff;
+  border-color: #113f67;
+  background: #eaf2fa;
   transform: translateY(-2px);
 }
 
 .endTimeBtn.selectedEndTime {
-  background: #764ba2;
+  background: #113f67;
   color: white;
-  border-color: #764ba2;
-  box-shadow: 0 4px 12px rgba(118, 75, 162, 0.4);
+  border-color: #113f67;
+  box-shadow: 0 4px 12px rgba(17, 63, 103, 0.35);
 }
 
 .textarea {
   width: 100%;
   padding: 12px;
-  border: 2px solid #e5e7eb;
+  border: 2px solid #dbe7f3;
   border-radius: 6px;
   font-family: inherit;
   font-size: 0.95rem;
@@ -216,14 +216,14 @@
 
 .textarea:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: #113f67;
+  box-shadow: 0 0 0 3px rgba(17, 63, 103, 0.14);
 }
 
 /* Summary */
 .summary {
-  background: #f9fafb;
-  border: 2px solid #e5e7eb;
+  background: #f5f9fd;
+  border: 2px solid #d8e6f3;
   border-radius: 8px;
   padding: 15px;
   margin-bottom: 20px;
@@ -233,7 +233,7 @@
   display: flex;
   justify-content: space-between;
   padding: 8px 0;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid #dbe7f3;
 }
 
 .summaryRow:last-child {
@@ -241,12 +241,12 @@
 }
 
 .summaryRow span {
-  color: #666;
+  color: #4d6580;
   font-weight: 500;
 }
 
 .summaryRow strong {
-  color: #333;
+  color: #113f67;
   font-weight: 600;
 }
 
@@ -264,7 +264,7 @@
 .submitBtn {
   width: 100%;
   padding: 12px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #113f67 0%, #1a5b93 100%);
   color: white;
   border: none;
   border-radius: 6px;
@@ -276,12 +276,68 @@
 
 .submitBtn:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 6px 20px rgba(17, 63, 103, 0.4);
 }
 
 .submitBtn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.alertOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 63, 103, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+}
+
+.alertCard {
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 16px 42px rgba(17, 63, 103, 0.24);
+  max-width: 420px;
+  width: 90%;
+  padding: 20px;
+  border: 1px solid #dbe7f3;
+}
+
+.alertTitle {
+  margin: 0 0 10px 0;
+  color: #113f67;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.alertMessage {
+  margin: 0;
+  color: #3f556d;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  white-space: pre-line;
+}
+
+.alertActions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.alertOkButton {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  background: #113f67;
+  color: #ffffff;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.alertOkButton:hover {
+  background: #0c2f4d;
 }
 
 /* Responsive */
