@@ -21,6 +21,7 @@ export default function RAStaffInventory() {
   
   // Modal states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [addModalMode, setAddModalMode] = useState<"new-chemical" | "existing-container">("new-chemical");
   const [editingChemical, setEditingChemical] = useState<Chemical | null>(null);
   
   // Search and filter
@@ -231,13 +232,28 @@ export default function RAStaffInventory() {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-4xl font-bold text-[#113F67]">INVENTORY</h1>
-        <button
-          onClick={() => setIsAddModalOpen(true)}
-          className="flex items-center gap-2 bg-[#113F67] text-white px-4 py-2 rounded-lg hover:bg-[#0d2f4d] transition-colors"
-        >
-          <Plus size={20} />
-          Add Chemical
-        </button>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <button
+            onClick={() => {
+              setAddModalMode("new-chemical");
+              setIsAddModalOpen(true);
+            }}
+            className="flex items-center gap-2 bg-[#113F67] text-white px-4 py-2 rounded-lg hover:bg-[#0d2f4d] transition-colors"
+          >
+            <Plus size={20} />
+            Add New Chemical
+          </button>
+          <button
+            onClick={() => {
+              setAddModalMode("existing-container");
+              setIsAddModalOpen(true);
+            }}
+            className="flex items-center gap-2 border border-[#113F67] text-[#113F67] px-4 py-2 rounded-lg hover:bg-[#113F67]/10 transition-colors"
+          >
+            <Plus size={20} />
+            Add Container to Existing
+          </button>
+        </div>
       </div>
 
       {/* Search and Filter Section */}
@@ -364,15 +380,20 @@ export default function RAStaffInventory() {
                       {chemicalBatch?.expiration_date ? new Date(chemicalBatch.expiration_date).toLocaleDateString() : 'N/A'}
                     </td>
                     <td className="px-6 py-4 text-sm">
-                      {isLowStock(chemical) ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                          Low Stocks
+                      <div className="flex flex-wrap gap-1.5">
+                        {isLowStock(chemical) ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            Low Stocks
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            In Stock
+                          </span>
+                        )}
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700">
+                          Shared Threshold
                         </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                          In Stock
-                        </span>
-                      )}
+                      </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-center">
                       {chemicalBatch?.qr_code ? (
@@ -460,6 +481,7 @@ export default function RAStaffInventory() {
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         onSuccess={handleAddSuccess}
+        mode={addModalMode}
       />
 
       {editingChemical && (

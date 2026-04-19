@@ -125,9 +125,22 @@ export default function AdminInventory() {
     setIsDeleteModalOpen(false);
   };
 
-  // Check if quantity is below threshold
+  const getChemicalBatches = (chemicalId: number) =>
+    batches.filter((batch) => batch.chemical_id === chemicalId);
+
+  const getRemainingQuantity = (chemicalId: number) => {
+    const chemicalBatches = getChemicalBatches(chemicalId);
+    if (!chemicalBatches.length) return 0;
+
+    return chemicalBatches.reduce(
+      (sum, batch) => sum + Math.max(0, batch.quantity - batch.used_quantity),
+      0
+    );
+  };
+
+  // Threshold is evaluated against total remaining stock across all active containers.
   const isLowStock = (chemical: Chemical) => {
-    return chemical.quantity <= chemical.threshold;
+    return getRemainingQuantity(chemical.chemical_id) <= chemical.threshold;
   };
 
   if (loading) {
@@ -231,6 +244,7 @@ export default function AdminInventory() {
               ) : (
                 currentItems.map((chemical) => {
                   const chemicalBatch = batches.find(b => b.chemical_id === chemical.chemical_id);
+                  const remainingQuantity = getRemainingQuantity(chemical.chemical_id);
                   return (
                   <tr
                     key={chemical.chemical_id}
@@ -247,7 +261,7 @@ export default function AdminInventory() {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">
-                      {chemicalBatch ? chemicalBatch.quantity - chemicalBatch.used_quantity : chemical.quantity}
+                      {remainingQuantity}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">
                       {chemical.unit}
@@ -259,15 +273,20 @@ export default function AdminInventory() {
                       {chemicalBatch?.expiration_date ? new Date(chemicalBatch.expiration_date).toLocaleDateString() : 'N/A'}
                     </td>
                     <td className="px-6 py-4 text-sm">
-                      {isLowStock(chemical) ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                          Low Stock
+                      <div className="flex flex-wrap gap-1.5">
+                        {isLowStock(chemical) ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            Low Stock
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            In Stock
+                          </span>
+                        )}
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700">
+                          Shared Threshold
                         </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                          In Stock
-                        </span>
-                      )}
+                      </div>
                     </td>
                   </tr>
                   );

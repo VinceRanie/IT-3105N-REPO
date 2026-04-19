@@ -194,18 +194,20 @@ export default function EditChemicalModal({
             {/* Quantity */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Quantity *
+                Quantity (Auto from Lots)
               </label>
               <input
                 type="number"
                 name="quantity"
                 value={formData.quantity}
-                onChange={handleChange}
-                required
-                min="0"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
-                placeholder="Enter quantity"
+                readOnly
+                disabled
+                className="w-full px-3 py-2 border border-gray-200 bg-gray-100 text-gray-600 rounded-lg"
+                placeholder="Calculated from active lots"
               />
+              <p className="mt-1 text-xs text-gray-500">
+                Quantity is derived from total remaining stock across active lots/containers.
+              </p>
             </div>
 
             {/* Unit */}
@@ -232,7 +234,7 @@ export default function EditChemicalModal({
             {/* Threshold */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Low Stock Threshold *
+                Reorder Threshold (Total Stock) *
               </label>
               <input
                 type="number"
@@ -245,7 +247,7 @@ export default function EditChemicalModal({
                 placeholder="Enter threshold"
               />
               <p className="mt-1 text-xs text-gray-500">
-                Alert when quantity falls below this value
+                Applied to total remaining stock across all lots/containers.
               </p>
             </div>
 

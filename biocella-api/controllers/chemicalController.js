@@ -37,11 +37,12 @@ const isTypeUnitValid = (type, unit) => {
 exports.create = async (req, res) => {
   try {
     const { name, type, quantity, unit, threshold, expiration_date, location } = req.body;
+    const resolvedType = String(type || "General").trim() || "General";
     const lot_number = typeof req.body.lot_number === "string" ? req.body.lot_number.trim() : "";
     const parsedQuantity = Number(quantity);
     const parsedThreshold = Number(threshold);
     
-    console.log('Creating chemical with data:', { name, type, quantity, unit, threshold, expiration_date, location, lot_number });
+    console.log('Creating chemical with data:', { name, type: resolvedType, quantity, unit, threshold, expiration_date, location, lot_number });
 
     if (!lot_number) {
       return res.status(400).json({ error: "lot_number is required when creating a container" });
@@ -55,26 +56,47 @@ exports.create = async (req, res) => {
       return res.status(400).json({ error: "threshold must be 0 or greater" });
     }
 
-    if (parsedThreshold >= parsedQuantity) {
-      return res.status(400).json({ error: "threshold must be less than quantity" });
-    }
-
-    if (!isTypeUnitValid(type, unit)) {
+    if (!isTypeUnitValid(resolvedType, unit)) {
       return res.status(400).json({
-        error: `Unit ${unit} is not valid for type ${type}. Allowed units: ${getAllowedUnitsForType(type).join(", ")}`,
+        error: `Unit ${unit} is not valid for type ${resolvedType}. Allowed units: ${getAllowedUnitsForType(resolvedType).join(", ")}`,
       });
     }
-    
-    // Create the chemical entry (master record)
-    const chemicalId = await Reagent.createReagent({
+
+    const existingChemical = await Reagent.findReagentByIdentity({
       name,
-      type,
-      quantity: parsedQuantity,
+      type: resolvedType,
       unit,
-      threshold: parsedThreshold
     });
-    
-    console.log('Chemical created with ID:', chemicalId);
+
+    let chemicalId = null;
+    let effectiveThreshold = parsedThreshold;
+
+    if (existingChemical) {
+      chemicalId = Number(existingChemical.chemical_id);
+      effectiveThreshold = Number(existingChemical.threshold || 0);
+
+      const existingQuantity = Number(existingChemical.quantity || 0);
+      await Reagent.updateReagent(chemicalId, {
+        name: existingChemical.name,
+        type: existingChemical.type,
+        quantity: Math.max(0, existingQuantity) + parsedQuantity,
+        unit: existingChemical.unit,
+        threshold: effectiveThreshold,
+      });
+
+      console.log('Existing chemical reused with ID:', chemicalId);
+    } else {
+      // Create the chemical entry (master record)
+      chemicalId = await Reagent.createReagent({
+        name,
+        type: resolvedType,
+        quantity: parsedQuantity,
+        unit,
+        threshold: parsedThreshold,
+      });
+
+      console.log('Chemical created with ID:', chemicalId);
+    }
     
     // Create the batch entry (physical container)
     const batchData = {
@@ -107,9 +129,11 @@ exports.create = async (req, res) => {
     console.log('Batch updated with QR code');
     
     res.status(201).json({ 
-      message: "Chemical and batch created", 
+      message: existingChemical ? "Container added to existing chemical" : "Chemical and batch created", 
       chemical_id: chemicalId,
       batch_id: batchId,
+      threshold_applied: effectiveThreshold,
+      reused_existing_chemical: Boolean(existingChemical),
       qr_code: qrCodeDataURL
     });
   } catch (err) {
@@ -142,19 +166,10 @@ exports.getById = async (req, res) => {
 // UPDATE
 exports.update = async (req, res) => {
   try {
-    const parsedQuantity = toNumber(req.body.quantity);
     const parsedThreshold = toNumber(req.body.threshold);
-
-    if (!Number.isFinite(parsedQuantity) || parsedQuantity < 0) {
-      return res.status(400).json({ error: "quantity must be 0 or greater" });
-    }
 
     if (!Number.isFinite(parsedThreshold) || parsedThreshold < 0) {
       return res.status(400).json({ error: "threshold must be 0 or greater" });
-    }
-
-    if (parsedThreshold >= parsedQuantity) {
-      return res.status(400).json({ error: "threshold must be less than quantity" });
     }
 
     if (!isTypeUnitValid(req.body.type, req.body.unit)) {
@@ -163,6 +178,14 @@ exports.update = async (req, res) => {
       });
     }
 
+    // Keep chemical.quantity aligned with current active container totals.
+    const batches = await Batch.getAllBatches({ chemical_id: req.params.id });
+    const parsedQuantity = batches.reduce((sum, batch) => {
+      const qty = toNumber(batch.quantity);
+      const used = toNumber(batch.used_quantity);
+      return sum + Math.max(0, qty - used);
+    }, 0);
+
     const affected = await Reagent.updateReagent(req.params.id, {
       ...req.body,
       quantity: parsedQuantity,
@@ -170,60 +193,11 @@ exports.update = async (req, res) => {
     });
     if (!affected) return res.status(404).json({ message: "Chemical not found" });
 
-    // Keep batch-backed inventory totals consistent with edited master quantity.
-    const batches = await Batch.getAllBatches({ chemical_id: req.params.id });
-
-    if (batches.length) {
-      const getRemaining = (batch) => {
-        const qty = toNumber(batch.quantity);
-        const used = toNumber(batch.used_quantity);
-        return Math.max(0, qty - used);
-      };
-
-      const currentRemaining = batches.reduce((sum, batch) => sum + getRemaining(batch), 0);
-      let delta = parsedQuantity - currentRemaining;
-
-      if (Math.abs(delta) > 0.000001) {
-        if (delta > 0) {
-          const latestBatch = batches[0];
-          const qty = toNumber(latestBatch.quantity);
-          const used = toNumber(latestBatch.used_quantity);
-
-          await Batch.updateBatch(latestBatch.batch_id, {
-            quantity: qty + delta,
-            used_quantity: used,
-            expiration_date: latestBatch.expiration_date || null,
-            location: latestBatch.location || null,
-            lot_number: latestBatch.lot_number || null,
-          });
-        } else {
-          let toReduce = Math.abs(delta);
-
-          for (const batch of batches) {
-            if (toReduce <= 0) break;
-
-            const qty = toNumber(batch.quantity);
-            const used = toNumber(batch.used_quantity);
-            const available = Math.max(0, qty - used);
-            const reduction = Math.min(available, toReduce);
-
-            if (reduction <= 0) continue;
-
-            await Batch.updateBatch(batch.batch_id, {
-              quantity: qty - reduction,
-              used_quantity: used,
-              expiration_date: batch.expiration_date || null,
-              location: batch.location || null,
-              lot_number: batch.lot_number || null,
-            });
-
-            toReduce -= reduction;
-          }
-        }
-      }
-    }
-
-    res.json({ message: "Chemical updated" });
+    res.json({
+      message: "Chemical updated",
+      quantity_source: "derived_from_active_batches",
+      derived_quantity: parsedQuantity,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -9,12 +9,15 @@ interface AddChemicalModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  mode?: "new-chemical" | "existing-container";
 }
 
 interface ExistingChemical {
   chemical_id: number;
   name: string;
   type: string;
+  unit: string;
+  threshold: number;
 }
 
 interface ExistingBatch {
@@ -44,6 +47,7 @@ export default function AddChemicalModal({
   isOpen,
   onClose,
   onSuccess,
+  mode = "new-chemical",
 }: AddChemicalModalProps) {
   const [formData, setFormData] = useState<ChemicalFormData>({
     name: "",
@@ -58,8 +62,11 @@ export default function AddChemicalModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [customType, setCustomType] = useState("");
+  const [selectedExistingChemicalId, setSelectedExistingChemicalId] = useState<number | null>(null);
   const [existingChemicals, setExistingChemicals] = useState<ExistingChemical[]>([]);
   const [existingBatches, setExistingBatches] = useState<ExistingBatch[]>([]);
+
+  const isContainerMode = mode === "existing-container";
 
   useEffect(() => {
     const fetchLotSuggestions = async () => {
@@ -101,10 +108,26 @@ export default function AddChemicalModal({
   }, [allowedUnits, formData.unit]);
 
   const lotSuggestions = useMemo(() => {
+    if (isContainerMode && selectedExistingChemicalId) {
+      const suggestionSet = new Set(
+        existingBatches
+          .filter(
+            (batch) =>
+              batch.chemical_id === selectedExistingChemicalId &&
+              !!batch.lot_number &&
+              batch.lot_number.trim() !== ""
+          )
+          .map((batch) => batch.lot_number!.trim())
+      );
+
+      return Array.from(suggestionSet).sort((a, b) => a.localeCompare(b));
+    }
+
     const normalizedName = formData.name.trim().toLowerCase();
     const normalizedType = resolvedType.trim().toLowerCase();
+    const normalizedUnit = formData.unit.trim();
 
-    if (!normalizedName || !normalizedType) {
+    if (!normalizedName || !normalizedType || !normalizedUnit) {
       return [];
     }
 
@@ -112,7 +135,8 @@ export default function AddChemicalModal({
       .filter(
         (chemical) =>
           chemical.name.trim().toLowerCase() === normalizedName &&
-          chemical.type.trim().toLowerCase() === normalizedType
+          chemical.type.trim().toLowerCase() === normalizedType &&
+          chemical.unit === normalizedUnit
       )
       .map((chemical) => chemical.chemical_id);
 
@@ -132,7 +156,61 @@ export default function AddChemicalModal({
     );
 
     return Array.from(suggestionSet).sort((a, b) => a.localeCompare(b));
-  }, [existingChemicals, existingBatches, formData.name, resolvedType]);
+  }, [
+    existingChemicals,
+    existingBatches,
+    formData.name,
+    formData.unit,
+    isContainerMode,
+    resolvedType,
+    selectedExistingChemicalId,
+  ]);
+
+  const selectedExistingChemical = useMemo(() => {
+    if (!selectedExistingChemicalId) return null;
+    return existingChemicals.find((c) => c.chemical_id === selectedExistingChemicalId) || null;
+  }, [existingChemicals, selectedExistingChemicalId]);
+
+  useEffect(() => {
+    if (!isContainerMode || !selectedExistingChemical) return;
+
+    setFormData((prev) => ({
+      ...prev,
+      name: selectedExistingChemical.name,
+      type: selectedExistingChemical.type,
+      unit: selectedExistingChemical.unit,
+      threshold: Number(selectedExistingChemical.threshold || 0),
+    }));
+    setCustomType("");
+  }, [isContainerMode, selectedExistingChemical]);
+
+  const matchedChemical = useMemo(() => {
+    const normalizedName = formData.name.trim().toLowerCase();
+    const normalizedType = resolvedType.trim().toLowerCase();
+    const normalizedUnit = formData.unit.trim();
+
+    if (!normalizedName || !normalizedType || !normalizedUnit) {
+      return null;
+    }
+
+    return (
+      existingChemicals.find(
+        (chemical) =>
+          chemical.name.trim().toLowerCase() === normalizedName &&
+          chemical.type.trim().toLowerCase() === normalizedType &&
+          chemical.unit === normalizedUnit
+      ) || null
+    );
+  }, [existingChemicals, formData.name, formData.unit, resolvedType]);
+
+  useEffect(() => {
+    if (!matchedChemical) return;
+
+    setFormData((prev) => {
+      if (prev.threshold === matchedChemical.threshold) return prev;
+      return { ...prev, threshold: matchedChemical.threshold };
+    });
+  }, [matchedChemical]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -140,7 +218,11 @@ export default function AddChemicalModal({
     setError(null);
 
     try {
-      if (formData.type === "Other" && !customType.trim()) {
+      if (isContainerMode && !selectedExistingChemical) {
+        throw new Error("Please select an existing chemical.");
+      }
+
+      if (!isContainerMode && formData.type === "Other" && !customType.trim()) {
         throw new Error("Please specify the custom chemical type.");
       }
 
@@ -150,10 +232,6 @@ export default function AddChemicalModal({
 
       if (!Number.isFinite(formData.threshold) || formData.threshold < 0) {
         throw new Error("Threshold must be 0 or greater.");
-      }
-
-      if (formData.threshold >= formData.quantity) {
-        throw new Error("Threshold must be less than quantity.");
       }
 
       if (!formData.lot_number.trim()) {
@@ -195,6 +273,7 @@ export default function AddChemicalModal({
         lot_number: "",
       });
       setCustomType("");
+      setSelectedExistingChemicalId(null);
 
       onSuccess();
     } catch (err) {
@@ -233,7 +312,9 @@ export default function AddChemicalModal({
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
         {/* Header */}
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-2xl font-bold text-[#113F67]">Add New Chemical</h2>
+          <h2 className="text-2xl font-bold text-[#113F67]">
+            {isContainerMode ? "Add Container to Existing Chemical" : "Add New Chemical"}
+          </h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -252,6 +333,36 @@ export default function AddChemicalModal({
         {/* Form */}
         <form onSubmit={handleSubmit}>
           <div className="space-y-4">
+            {isContainerMode && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Existing Chemical *
+                </label>
+                <select
+                  value={selectedExistingChemicalId ?? ""}
+                  onChange={(e) => {
+                    const parsed = Number(e.target.value);
+                    setSelectedExistingChemicalId(Number.isFinite(parsed) ? parsed : null);
+                  }}
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                >
+                  <option value="">Select chemical</option>
+                  {existingChemicals
+                    .slice()
+                    .sort((a, b) => `${a.name}${a.type}`.localeCompare(`${b.name}${b.type}`))
+                    .map((chemical) => (
+                      <option key={chemical.chemical_id} value={chemical.chemical_id}>
+                        {chemical.name} ({chemical.type}, {chemical.unit})
+                      </option>
+                    ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-500">
+                  This adds a new lot/container and keeps the shared threshold of the selected chemical.
+                </p>
+              </div>
+            )}
+
             {/* Name */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -262,6 +373,7 @@ export default function AddChemicalModal({
                 name="name"
                 value={formData.name}
                 onChange={handleChange}
+                disabled={isContainerMode}
                 required
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
                 placeholder="Enter chemical name"
@@ -277,6 +389,7 @@ export default function AddChemicalModal({
                 name="type"
                 value={formData.type}
                 onChange={handleChange}
+                disabled={isContainerMode}
                 required
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
               >
@@ -296,7 +409,7 @@ export default function AddChemicalModal({
               </select>
             </div>
 
-            {formData.type === "Other" && (
+            {!isContainerMode && formData.type === "Other" && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Custom Type *
@@ -339,6 +452,7 @@ export default function AddChemicalModal({
                 name="unit"
                 value={formData.unit}
                 onChange={handleChange}
+                disabled={isContainerMode}
                 required
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
               >
@@ -354,7 +468,7 @@ export default function AddChemicalModal({
             {/* Threshold */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Low Stock Threshold *
+                Reorder Threshold (Total Stock) *
               </label>
               <input
                 type="number"
@@ -363,13 +477,15 @@ export default function AddChemicalModal({
                 onChange={handleChange}
                 required
                 min="0"
-                max={formData.quantity > 0 ? formData.quantity - 0.01 : undefined}
                 step="0.01"
+                disabled={Boolean(matchedChemical) || isContainerMode}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
-                placeholder="Enter threshold"
+                placeholder="Enter total-stock reorder threshold"
               />
               <p className="mt-1 text-xs text-gray-500">
-                Must be less than the quantity
+                {matchedChemical
+                  ? `Using existing threshold (${matchedChemical.threshold}) for this chemical. Applied across all lots/containers.`
+                  : "Applied to total remaining stock across all lots/containers of this chemical."}
               </p>
             </div>
 

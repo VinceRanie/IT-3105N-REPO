@@ -17,6 +17,7 @@ export default function AdminInventory() {
   
   // Modal states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [addModalMode, setAddModalMode] = useState<"new-chemical" | "existing-container">("new-chemical");
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedChemical, setSelectedChemical] = useState<Chemical | null>(null);
   const [editingChemical, setEditingChemical] = useState<Chemical | null>(null);
@@ -70,9 +71,15 @@ export default function AdminInventory() {
     if (typeof window === "undefined") return;
 
     const params = new URLSearchParams(window.location.search);
-    if (params.get("modal") !== "add-chemical") return;
-
-    setIsAddModalOpen(true);
+    const modal = params.get("modal");
+    if (modal === "add-chemical") {
+      setAddModalMode("new-chemical");
+      setIsAddModalOpen(true);
+    }
+    if (modal === "add-container") {
+      setAddModalMode("existing-container");
+      setIsAddModalOpen(true);
+    }
     window.history.replaceState({}, "", window.location.pathname);
   }, []);
 
@@ -249,13 +256,28 @@ export default function AdminInventory() {
   </h2>
 
 
-  <button
-    onClick={() => setIsAddModalOpen(true)}
-    className="flex items-center justify-center gap-2 bg-[#113F67] text-white px-4 py-2 rounded-lg hover:bg-[#0d2f4d] transition-colors w-full sm:w-auto"
-  >
-    <Plus size={20} />
-    Add Chemical
-  </button>
+  <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+    <button
+      onClick={() => {
+        setAddModalMode("new-chemical");
+        setIsAddModalOpen(true);
+      }}
+      className="flex items-center justify-center gap-2 bg-[#113F67] text-white px-4 py-2 rounded-lg hover:bg-[#0d2f4d] transition-colors w-full sm:w-auto"
+    >
+      <Plus size={20} />
+      Add New Chemical
+    </button>
+    <button
+      onClick={() => {
+        setAddModalMode("existing-container");
+        setIsAddModalOpen(true);
+      }}
+      className="flex items-center justify-center gap-2 border border-[#113F67] text-[#113F67] px-4 py-2 rounded-lg hover:bg-[#113F67]/10 transition-colors w-full sm:w-auto"
+    >
+      <Plus size={20} />
+      Add Container to Existing
+    </button>
+  </div>
 </div>
 
       {/* Search and Filter Section */}
@@ -379,15 +401,20 @@ export default function AdminInventory() {
                       {chemicalBatch?.expiration_date ? new Date(chemicalBatch.expiration_date).toLocaleDateString() : 'N/A'}
                     </td>
                     <td className="px-6 py-4 text-sm">
-                      {isLowStock(chemical) ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                          Low Stocks
+                      <div className="flex flex-wrap gap-1.5">
+                        {isLowStock(chemical) ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            Low Stocks
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            In Stock
+                          </span>
+                        )}
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700">
+                          Shared Threshold
                         </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                          In Stock
-                        </span>
-                      )}
+                      </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-center">
                       {chemicalBatch?.qr_code ? (
@@ -484,6 +511,7 @@ export default function AdminInventory() {
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         onSuccess={handleAddSuccess}
+        mode={addModalMode}
       />
 
       {editingChemical && (
