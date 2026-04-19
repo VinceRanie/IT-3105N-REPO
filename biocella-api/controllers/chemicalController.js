@@ -73,7 +73,7 @@ exports.create = async (req, res) => {
 
     if (existingChemical) {
       chemicalId = Number(existingChemical.chemical_id);
-      effectiveThreshold = Number(existingChemical.threshold || 0);
+      effectiveThreshold = parsedThreshold;
 
       const existingQuantity = Number(existingChemical.quantity || 0);
       await Reagent.updateReagent(chemicalId, {

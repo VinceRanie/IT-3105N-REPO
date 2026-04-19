@@ -204,13 +204,13 @@ export default function AddChemicalModal({
   }, [existingChemicals, formData.name, formData.unit, resolvedType]);
 
   useEffect(() => {
-    if (!matchedChemical) return;
+    if (!isContainerMode || !selectedExistingChemical || lotSuggestions.length === 0) return;
 
     setFormData((prev) => {
-      if (prev.threshold === matchedChemical.threshold) return prev;
-      return { ...prev, threshold: matchedChemical.threshold };
+      if (lotSuggestions.includes(prev.lot_number)) return prev;
+      return { ...prev, lot_number: lotSuggestions[0] };
     });
-  }, [matchedChemical]);
+  }, [isContainerMode, selectedExistingChemical, lotSuggestions]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -236,6 +236,10 @@ export default function AddChemicalModal({
 
       if (!formData.lot_number.trim()) {
         throw new Error("Lot Number is required.");
+      }
+
+      if (isContainerMode && lotSuggestions.length > 0 && !lotSuggestions.includes(formData.lot_number.trim())) {
+        throw new Error("For existing containers, Lot Group ID must match one of the selected chemical's existing lot groups.");
       }
 
       if (!allowedUnits.includes(formData.unit as (typeof allowedUnits)[number])) {
@@ -308,8 +312,8 @@ export default function AddChemicalModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black bg-opacity-50 p-3 sm:p-4 overflow-y-auto">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md sm:max-w-lg p-4 sm:p-6 max-h-[92vh] overflow-y-auto">
         {/* Header */}
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-2xl font-bold text-[#113F67]">
@@ -478,13 +482,12 @@ export default function AddChemicalModal({
                 required
                 min="0"
                 step="0.01"
-                disabled={Boolean(matchedChemical) || isContainerMode}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
                 placeholder="Enter total-stock reorder threshold"
               />
               <p className="mt-1 text-xs text-gray-500">
-                {matchedChemical
-                  ? `Using existing threshold (${matchedChemical.threshold}) for this chemical. Applied across all lots/containers.`
+                {isContainerMode
+                  ? "Updates and applies as the shared total-stock threshold for this chemical across all lots/containers."
                   : "Applied to total remaining stock across all lots/containers of this chemical."}
               </p>
             </div>
@@ -528,25 +531,44 @@ export default function AddChemicalModal({
             {/* Lot Number */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Lot Number *
+                {isContainerMode ? "Lot Group ID *" : "Lot Number *"}
               </label>
-              <input
-                type="text"
-                list="admin-lot-number-options"
-                name="lot_number"
-                value={formData.lot_number}
-                onChange={handleChange}
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
-                placeholder="e.g., AGR-2026-03"
-              />
-              <datalist id="admin-lot-number-options">
-                {lotSuggestions.map((lot) => (
-                  <option key={lot} value={lot} />
-                ))}
-              </datalist>
+              {isContainerMode ? (
+                <select
+                  name="lot_number"
+                  value={formData.lot_number}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                >
+                  <option value="">Select existing lot group</option>
+                  {lotSuggestions.map((lot) => (
+                    <option key={lot} value={lot}>{lot}</option>
+                  ))}
+                </select>
+              ) : (
+                <>
+                  <input
+                    type="text"
+                    list="admin-lot-number-options"
+                    name="lot_number"
+                    value={formData.lot_number}
+                    onChange={handleChange}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                    placeholder="e.g., AGR-2026-03"
+                  />
+                  <datalist id="admin-lot-number-options">
+                    {lotSuggestions.map((lot) => (
+                      <option key={lot} value={lot} />
+                    ))}
+                  </datalist>
+                </>
+              )}
               <p className="mt-1 text-xs text-gray-500">
-                Suggestions are based on current name and type. You can also type a new lot number.
+                {isContainerMode
+                  ? "For existing-container mode, use the same lot group ID."
+                  : "Suggestions are based on current name and type. You can also type a new lot number."}
               </p>
             </div>
           </div>
@@ -565,7 +587,7 @@ export default function AddChemicalModal({
               disabled={loading}
               className="px-4 py-2 bg-[#113F67] text-white rounded-lg hover:bg-[#0d2f4d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? "Adding..." : "Add Chemical"}
+              {loading ? "Adding..." : isContainerMode ? "Add Container" : "Add Chemical"}
             </button>
           </div>
         </form>
