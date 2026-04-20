@@ -1,23 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
 import { google } from "googleapis";
-import { requireEnv } from "@/app/API/lib/routeEnv";
 
 // This route redirects the user to Google's OAuth consent screen.
 // The registration token is passed through OAuth "state" so we can
 // identify the user when Google redirects back.
 
 export async function GET(request: NextRequest) {
-  const env = requireEnv([
-    "GMAIL_CLIENT_ID",
-    "GMAIL_CLIENT_SECRET",
-    "NEXT_PUBLIC_APP_BASE_URL",
-  ] as const);
-  if (!env.ok) return env.response;
+  const clientId = process.env.GMAIL_CLIENT_ID || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GMAIL_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET;
+  const requestOrigin = new URL(request.url).origin;
+  const appBaseUrl = (process.env.NEXT_PUBLIC_APP_BASE_URL || requestOrigin).replace(/\/+$/, "");
+
+  if (!clientId || !clientSecret) {
+    console.error(
+      "Server misconfiguration: Missing Google OAuth credentials. " +
+        "Expected GMAIL_CLIENT_ID (or NEXT_PUBLIC_GOOGLE_CLIENT_ID) and GMAIL_CLIENT_SECRET (or GOOGLE_CLIENT_SECRET)."
+    );
+    return NextResponse.json(
+      {
+        message:
+          "Google authentication is not configured on the server. Please contact the administrator.",
+      },
+      { status: 500 }
+    );
+  }
 
   const oauth2Client = new google.auth.OAuth2(
-    env.values.GMAIL_CLIENT_ID,
-    env.values.GMAIL_CLIENT_SECRET,
-    `${env.values.NEXT_PUBLIC_APP_BASE_URL}/API/auth/google/callback`
+    clientId,
+    clientSecret,
+    `${appBaseUrl}/API/auth/google/callback`
   );
 
   const { searchParams } = new URL(request.url);
