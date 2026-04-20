@@ -19,6 +19,21 @@ type NormalizedCustomField = {
   section: string;
   type: string;
   value: string;
+  rawValue: any;
+};
+
+const normalizeCustomImageDescriptionValue = (value: any) => {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return {
+      image_url: String(value.image_url || ""),
+      description: String(value.description || ""),
+    };
+  }
+
+  return {
+    image_url: "",
+    description: String(value || ""),
+  };
 };
 
 const CUSTOM_SECTION_LABELS: Record<string, string> = {
@@ -43,6 +58,7 @@ const normalizeCustomFields = (customFields: any): NormalizedCustomField[] => {
         section: String(raw.section || "basic").trim().toLowerCase(),
         type: String(raw.type || "text").trim().toLowerCase(),
         value: String(raw.value || ""),
+        rawValue: raw.value,
       };
     }
 
@@ -52,6 +68,7 @@ const normalizeCustomFields = (customFields: any): NormalizedCustomField[] => {
       section: "basic",
       type: "text",
       value: String(value || ""),
+      rawValue: value,
     };
   });
 };
@@ -648,7 +665,19 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
           doc.setFont("helvetica", "bold");
           doc.text(`${field.label}:`, margin, yPos);
           doc.setFont("helvetica", "normal");
-          const valueText = doc.splitTextToSize(field.value || "N/A", contentWidth - 55);
+          const printableValue = field.type === "image_description"
+            ? (() => {
+                const normalized = normalizeCustomImageDescriptionValue(field.rawValue);
+                if (!normalized.image_url && !normalized.description) {
+                  return "N/A";
+                }
+                return [
+                  normalized.description ? `Description: ${normalized.description}` : null,
+                  normalized.image_url ? `Image: ${normalized.image_url}` : null,
+                ].filter(Boolean).join(" | ");
+              })()
+            : (field.value || "N/A");
+          const valueText = doc.splitTextToSize(printableValue, contentWidth - 55);
           doc.text(valueText, margin + 55, yPos);
           yPos += Math.max(lineHeight, valueText.length * 5);
         });
@@ -885,7 +914,37 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
                           </h3>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {group.fields.map((field) => (
-                              <InfoItem key={field.id} label={field.label} value={field.value || "N/A"} />
+                              field.type === "image_description" ? (
+                                <div key={field.id} className="md:col-span-2 rounded-lg border border-gray-200 p-4">
+                                  <h4 className="text-sm font-semibold text-gray-700">{field.label}</h4>
+                                  <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                                    <div>
+                                      {normalizeCustomImageDescriptionValue(field.rawValue).image_url ? (
+                                        <div className="relative h-48 w-full overflow-hidden rounded-lg border border-gray-200">
+                                          <Image
+                                            src={`${API_URL}${normalizeCustomImageDescriptionValue(field.rawValue).image_url}`}
+                                            alt={field.label}
+                                            fill
+                                            className="object-cover"
+                                          />
+                                        </div>
+                                      ) : (
+                                        <div className="flex h-48 items-center justify-center rounded-lg border border-dashed border-gray-300 text-sm text-gray-400">
+                                          No image uploaded
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div>
+                                      <p className="text-xs font-medium uppercase text-gray-500">Description</p>
+                                      <p className="mt-1 text-sm text-gray-800 whitespace-pre-wrap">
+                                        {normalizeCustomImageDescriptionValue(field.rawValue).description || "N/A"}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : (
+                                <InfoItem key={field.id} label={field.label} value={field.value || "N/A"} />
+                              )
                             ))}
                           </div>
                         </div>

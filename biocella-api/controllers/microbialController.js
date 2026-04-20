@@ -48,6 +48,86 @@ const buildVisibilityFilter = (req) => {
   return publishedFilter;
 };
 
+const normalizeImageDescriptionValue = (value) => {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return {
+      image_url: String(value.image_url || ''),
+      description: String(value.description || ''),
+    };
+  }
+
+  return {
+    image_url: '',
+    description: String(value || ''),
+  };
+};
+
+const applyCustomImageUploads = ({ customFields, customImageMapRaw, uploadedCustomImages, oldCustomFields }) => {
+  if (!customFields || typeof customFields !== 'object' || Array.isArray(customFields)) {
+    return customFields;
+  }
+
+  let customImageMap = customImageMapRaw;
+  if (typeof customImageMap === 'string') {
+    try {
+      customImageMap = JSON.parse(customImageMap);
+    } catch {
+      customImageMap = null;
+    }
+  }
+
+  if (!customImageMap || typeof customImageMap !== 'object' || Array.isArray(customImageMap)) {
+    return customFields;
+  }
+
+  const nextCustomFields = { ...customFields };
+  const oldFields = oldCustomFields && typeof oldCustomFields === 'object' ? oldCustomFields : {};
+
+  Object.entries(customImageMap).forEach(([fieldId, fileIndexValue]) => {
+    const field = nextCustomFields[fieldId];
+    if (!field || typeof field !== 'object' || Array.isArray(field)) {
+      return;
+    }
+
+    if (String(field.type || '').toLowerCase() !== 'image_description') {
+      return;
+    }
+
+    const fileIndex = Number(fileIndexValue);
+    if (!Number.isInteger(fileIndex) || fileIndex < 0 || fileIndex >= uploadedCustomImages.length) {
+      return;
+    }
+
+    const uploadedFile = uploadedCustomImages[fileIndex];
+    if (!uploadedFile?.filename) {
+      return;
+    }
+
+    const previousValue = normalizeImageDescriptionValue(field.value);
+    const oldField = oldFields[fieldId];
+    const oldValue = oldField && typeof oldField === 'object' && !Array.isArray(oldField)
+      ? normalizeImageDescriptionValue(oldField.value)
+      : null;
+
+    if (oldValue?.image_url && oldValue.image_url.startsWith('/uploads/')) {
+      const oldImagePath = path.join(__dirname, '..', oldValue.image_url);
+      if (fs.existsSync(oldImagePath)) {
+        fs.unlinkSync(oldImagePath);
+      }
+    }
+
+    nextCustomFields[fieldId] = {
+      ...field,
+      value: {
+        ...previousValue,
+        image_url: `/uploads/specimens/${uploadedFile.filename}`,
+      },
+    };
+  });
+
+  return nextCustomFields;
+};
+
 // CREATE
 exports.createMicrobial = async (req, res) => {
   try {
@@ -96,6 +176,14 @@ exports.createMicrobial = async (req, res) => {
         }
       }
     });
+
+    specimenData.custom_fields = applyCustomImageUploads({
+      customFields: specimenData.custom_fields,
+      customImageMapRaw: req.body.custom_image_map,
+      uploadedCustomImages: req.files?.custom_images || [],
+      oldCustomFields: null,
+    });
+    delete specimenData.custom_image_map;
 
     const microbial = new MicrobialInfo(specimenData);
     await microbial.save();
@@ -240,9 +328,10 @@ exports.updateMicrobial = async (req, res) => {
   try {
     // Handle file uploads if new files are provided
     let updateData = { ...req.body };
+    let oldSpecimen = null;
     
     if (req.files) {
-      const oldSpecimen = await MicrobialInfo.findById(req.params.id);
+      oldSpecimen = await MicrobialInfo.findById(req.params.id);
       
       // Handle new image upload
       if (req.files.image && req.files.image[0]) {
@@ -280,6 +369,10 @@ exports.updateMicrobial = async (req, res) => {
       }
     }
 
+    if (!oldSpecimen) {
+      oldSpecimen = await MicrobialInfo.findById(req.params.id);
+    }
+
     // Parse JSON fields if they're strings (from multipart form data)
     const jsonFields = ['custom_fields', 'biochemical_tests', 'morphology'];
     jsonFields.forEach(field => {
@@ -292,9 +385,23 @@ exports.updateMicrobial = async (req, res) => {
       }
     });
 
+    const hasCustomFieldsPayload = Object.prototype.hasOwnProperty.call(updateData, 'custom_fields');
+    const hasCustomImageUploads = (req.files?.custom_images || []).length > 0;
+
+    if (hasCustomFieldsPayload || hasCustomImageUploads) {
+      updateData.custom_fields = applyCustomImageUploads({
+        customFields: updateData.custom_fields,
+        customImageMapRaw: req.body.custom_image_map,
+        uploadedCustomImages: req.files?.custom_images || [],
+        oldCustomFields: oldSpecimen?.custom_fields || null,
+      });
+    }
+
     if (Object.prototype.hasOwnProperty.call(updateData, 'publish_status')) {
       updateData.publish_status = normalizePublishStatus(updateData.publish_status, 'unpublished');
     }
+
+    delete updateData.custom_image_map;
     
     // Update timestamp
     updateData.updated_at = Date.now();
