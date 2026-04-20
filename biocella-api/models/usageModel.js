@@ -94,9 +94,9 @@ exports.getForecastBaseData = async ({ usageWindowDays = 30, limit = 8 }) => {
       COALESCE(r.lead_time_days, 7) AS lead_time_days,
       COALESCE(r.safety_stock, 0) AS safety_stock,
       COALESCE(stock.current_stock, 0) AS current_stock,
-      COALESCE(usage.window_used, 0) AS window_used,
-      COALESCE(usage.usage_logs, 0) AS usage_logs,
-      usage.last_used_at
+      COALESCE(usage_stats.window_used, 0) AS window_used,
+      COALESCE(usage_stats.usage_logs, 0) AS usage_logs,
+      usage_stats.last_used_at
     FROM reagents_chemicals r
     LEFT JOIN (
       SELECT
@@ -115,9 +115,9 @@ exports.getForecastBaseData = async ({ usageWindowDays = 30, limit = 8 }) => {
       FROM chemical_usage_log
       WHERE date_used >= DATE_SUB(NOW(), INTERVAL ? DAY)
       GROUP BY chemical_id
-    ) usage ON usage.chemical_id = r.chemical_id
-    WHERE stock.current_stock IS NOT NULL OR usage.window_used IS NOT NULL
-    ORDER BY COALESCE(usage.window_used, 0) DESC, r.name ASC
+    ) usage_stats ON usage_stats.chemical_id = r.chemical_id
+    WHERE stock.current_stock IS NOT NULL OR usage_stats.window_used IS NOT NULL
+    ORDER BY COALESCE(usage_stats.window_used, 0) DESC, r.name ASC
     LIMIT ?
   `;
 
@@ -140,9 +140,9 @@ exports.getForecastBaseData = async ({ usageWindowDays = 30, limit = 8 }) => {
         7 AS lead_time_days,
         0 AS safety_stock,
         COALESCE(stock.current_stock, 0) AS current_stock,
-        COALESCE(usage.window_used, 0) AS window_used,
-        COALESCE(usage.usage_logs, 0) AS usage_logs,
-        usage.last_used_at
+        COALESCE(usage_stats.window_used, 0) AS window_used,
+        COALESCE(usage_stats.usage_logs, 0) AS usage_logs,
+        usage_stats.last_used_at
       FROM reagents_chemicals r
       LEFT JOIN (
         SELECT
@@ -160,9 +160,9 @@ exports.getForecastBaseData = async ({ usageWindowDays = 30, limit = 8 }) => {
         FROM chemical_usage_log
         WHERE date_used >= DATE_SUB(NOW(), INTERVAL ? DAY)
         GROUP BY chemical_id
-      ) usage ON usage.chemical_id = r.chemical_id
-      WHERE stock.current_stock IS NOT NULL OR usage.window_used IS NOT NULL
-      ORDER BY COALESCE(usage.window_used, 0) DESC, r.name ASC
+      ) usage_stats ON usage_stats.chemical_id = r.chemical_id
+      WHERE stock.current_stock IS NOT NULL OR usage_stats.window_used IS NOT NULL
+      ORDER BY COALESCE(usage_stats.window_used, 0) DESC, r.name ASC
       LIMIT ?
     `;
 
