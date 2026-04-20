@@ -836,14 +836,6 @@ exports.getUserProfile = async (req, res) => {
     });
   }
 };
-    if (resetResult.passwordResetStatus) {
-      return res.status(resetResult.statusCode).json({
-        message: resetResult.message,
-        passwordResetStatus: resetResult.passwordResetStatus,
-        statusCode: resetResult.statusCode,
-      });
-    }
-
 
 // UPDATE USER PROFILE
 exports.updateUserProfile = async (req, res) => {
