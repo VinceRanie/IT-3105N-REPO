@@ -13,8 +13,24 @@ export async function GET(request: NextRequest) {
   const API_BASE_URL = env.values.NEXT_PUBLIC_API_URL;
   const clientId = process.env.GMAIL_CLIENT_ID || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GMAIL_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET;
+
+  const forwardedProto = request.headers.get("x-forwarded-proto");
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  const host = request.headers.get("host");
   const requestOrigin = new URL(request.url).origin;
-  const APP_BASE_URL = (process.env.NEXT_PUBLIC_APP_BASE_URL || requestOrigin).replace(/\/+$/, "");
+
+  const forwardedOrigin =
+    forwardedProto && forwardedHost
+      ? `${forwardedProto.split(",")[0].trim()}://${forwardedHost.split(",")[0].trim()}`
+      : null;
+
+  const hostOrigin = host
+    ? `${request.nextUrl.protocol.replace(":", "") || "https"}://${host}`
+    : null;
+
+  const APP_BASE_URL = (
+    process.env.NEXT_PUBLIC_APP_BASE_URL || forwardedOrigin || hostOrigin || requestOrigin
+  ).replace(/\/+$/, "");
 
   if (!clientId || !clientSecret) {
     console.error(

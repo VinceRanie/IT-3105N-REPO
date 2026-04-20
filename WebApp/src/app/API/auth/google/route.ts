@@ -8,8 +8,24 @@ import { google } from "googleapis";
 export async function GET(request: NextRequest) {
   const clientId = process.env.GMAIL_CLIENT_ID || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GMAIL_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET;
+
+  const forwardedProto = request.headers.get("x-forwarded-proto");
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  const host = request.headers.get("host");
   const requestOrigin = new URL(request.url).origin;
-  const appBaseUrl = (process.env.NEXT_PUBLIC_APP_BASE_URL || requestOrigin).replace(/\/+$/, "");
+
+  const forwardedOrigin =
+    forwardedProto && forwardedHost
+      ? `${forwardedProto.split(",")[0].trim()}://${forwardedHost.split(",")[0].trim()}`
+      : null;
+
+  const hostOrigin = host
+    ? `${request.nextUrl.protocol.replace(":", "") || "https"}://${host}`
+    : null;
+
+  const appBaseUrl = (
+    process.env.NEXT_PUBLIC_APP_BASE_URL || forwardedOrigin || hostOrigin || requestOrigin
+  ).replace(/\/+$/, "");
 
   if (!clientId || !clientSecret) {
     console.error(
