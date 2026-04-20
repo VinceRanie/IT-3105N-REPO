@@ -130,18 +130,27 @@ export default function AdminInventory() {
     );
   };
 
-  const getContainerIdsLabel = (chemicalId: number) => {
-    const chemicalBatches = getChemicalBatches(chemicalId);
-    if (!chemicalBatches.length) return "N/A";
+  const getPriorityBatch = (chemicalBatches: Batch[]) => {
+    if (!chemicalBatches.length) return null;
 
-    const ids = chemicalBatches.map((batch) => `#${batch.batch_id}`);
-    const visibleCount = 3;
+    const getRemaining = (batch: Batch) => Math.max(0, batch.quantity - batch.used_quantity);
+    const positiveRemaining = chemicalBatches.filter((batch) => getRemaining(batch) > 0);
+    const source = positiveRemaining.length ? positiveRemaining : chemicalBatches;
 
-    if (ids.length <= visibleCount) {
-      return ids.join(", ");
-    }
+    return [...source].sort((a, b) => {
+      const remainingDiff = getRemaining(a) - getRemaining(b);
+      if (remainingDiff !== 0) return remainingDiff;
 
-    return `${ids.slice(0, visibleCount).join(", ")} +${ids.length - visibleCount} more`;
+      const expA = a.expiration_date ? new Date(a.expiration_date).getTime() : Number.POSITIVE_INFINITY;
+      const expB = b.expiration_date ? new Date(b.expiration_date).getTime() : Number.POSITIVE_INFINITY;
+      if (expA !== expB) return expA - expB;
+
+      const recvA = new Date(a.date_received || "").getTime();
+      const recvB = new Date(b.date_received || "").getTime();
+      if (recvA !== recvB) return recvA - recvB;
+
+      return a.batch_id - b.batch_id;
+    })[0];
   };
 
   const toggleExpandedChemical = (chemicalId: number) => {
@@ -424,8 +433,8 @@ export default function AdminInventory() {
                 <SortableHeader column="type" label="Type" />
                 <SortableHeader column="quantity" label="Quantity" />
                 <SortableHeader column="unit" label="Unit" />
-                <th className="px-6 py-3 text-left text-sm font-semibold">Latest Location</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold">Latest Exp. Date</th>
+                <th className="px-6 py-3 text-left text-sm font-semibold">Priority Location</th>
+                <th className="px-6 py-3 text-left text-sm font-semibold">Priority Exp. Date</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold">Status</th>
                 <th className="px-6 py-3 text-center text-sm font-semibold">QR Code</th>
                 <th className="px-6 py-3 text-center text-sm font-semibold">Actions</th>
@@ -441,7 +450,7 @@ export default function AdminInventory() {
               ) : (
                 currentItems.map((chemical) => {
                   const chemicalBatches = getChemicalBatches(chemical.chemical_id);
-                  const chemicalBatch = chemicalBatches[0];
+                  const priorityBatch = getPriorityBatch(chemicalBatches);
                   const sortedBatches = getSortedBatchesForChemical(chemical.chemical_id);
                   const isExpanded = expandedChemicalIds.has(chemical.chemical_id);
                   const remainingQuantity = chemicalBatches.length
@@ -458,8 +467,8 @@ export default function AdminInventory() {
                       }`}
                     >
                       <td className="px-6 py-4 text-sm text-gray-900">
-                        <div className="font-semibold">{getContainerIdsLabel(chemical.chemical_id)}</div>
-                        <div className="text-xs text-gray-500 mt-1">{chemicalBatches.length} bottle(s)</div>
+                        <div className="font-semibold">{chemicalBatches.length} bottle(s)</div>
+                        <div className="text-xs text-gray-500 mt-1">Use Show to view all batch IDs</div>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-900">
                         {getLotGroupsLabel(chemical)}
@@ -479,10 +488,10 @@ export default function AdminInventory() {
                         {chemical.unit}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-900">
-                        {chemicalBatch?.location || 'N/A'}
+                        {priorityBatch?.location || 'N/A'}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-900">
-                        {chemicalBatch?.expiration_date ? new Date(chemicalBatch.expiration_date).toLocaleDateString() : 'N/A'}
+                        {priorityBatch?.expiration_date ? new Date(priorityBatch.expiration_date).toLocaleDateString() : 'N/A'}
                       </td>
                       <td className="px-6 py-4 text-sm">
                         <div className="flex flex-wrap gap-1.5">
@@ -501,18 +510,18 @@ export default function AdminInventory() {
                         </div>
                       </td>
                       <td className="px-6 py-4 text-sm text-center">
-                        {chemicalBatch?.qr_code ? (
+                        {priorityBatch?.qr_code ? (
                           <button
                             onClick={() => {
-                              if (!chemicalBatch?.batch_id || !chemicalBatch.qr_code) return;
-                              void downloadBatchQrWithLabel(chemicalBatch.qr_code, chemicalBatch.batch_id);
+                              if (!priorityBatch?.batch_id || !priorityBatch.qr_code) return;
+                              void downloadBatchQrWithLabel(priorityBatch.qr_code, priorityBatch.batch_id);
                             }}
                             className="inline-block"
-                            title="Download QR Code"
+                            title="Download QR Code (closest-to-empty bottle)"
                           >
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img 
-                              src={chemicalBatch.qr_code} 
+                              src={priorityBatch.qr_code} 
                               alt={`QR Code for ${chemical.name}`}
                               className="w-12 h-12 mx-auto hover:scale-110 transition-transform cursor-pointer"
                             />
@@ -532,8 +541,8 @@ export default function AdminInventory() {
                           </button>
                           <button
                             onClick={() => {
-                              if (chemicalBatch) {
-                                window.location.href = `/AdminUI/AdminDashBoard/Features/AdminInventory/batch/${chemicalBatch.batch_id}`;
+                              if (priorityBatch) {
+                                window.location.href = `/AdminUI/AdminDashBoard/Features/AdminInventory/batch/${priorityBatch.batch_id}`;
                               }
                             }}
                             className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
@@ -575,12 +584,13 @@ export default function AdminInventory() {
                                     <th className="px-4 py-2 text-left font-semibold">Qty</th>
                                     <th className="px-4 py-2 text-left font-semibold">Exp. Date</th>
                                     <th className="px-4 py-2 text-left font-semibold">Location</th>
+                                    <th className="px-4 py-2 text-left font-semibold">QR</th>
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
                                   {sortedBatches.length === 0 ? (
                                     <tr>
-                                      <td colSpan={5} className="px-4 py-3 text-slate-500">
+                                      <td colSpan={6} className="px-4 py-3 text-slate-500">
                                         No bottle records found.
                                       </td>
                                     </tr>
@@ -596,6 +606,19 @@ export default function AdminInventory() {
                                           {batch.expiration_date ? new Date(batch.expiration_date).toLocaleDateString() : "N/A"}
                                         </td>
                                         <td className="px-4 py-3 text-slate-700">{batch.location || "N/A"}</td>
+                                        <td className="px-4 py-3 text-slate-700">
+                                          {batch.qr_code ? (
+                                            <button
+                                              onClick={() => void downloadBatchQrWithLabel(batch.qr_code!, batch.batch_id)}
+                                              className="px-2.5 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors"
+                                              title={`Print QR for batch #${batch.batch_id}`}
+                                            >
+                                              Print QR
+                                            </button>
+                                          ) : (
+                                            <span className="text-xs text-gray-400">No QR</span>
+                                          )}
+                                        </td>
                                       </tr>
                                     ))
                                   )}
