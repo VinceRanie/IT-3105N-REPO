@@ -29,7 +29,7 @@ exports.createUserByAdmin = async (email, resetToken, role = "student", resetTok
 // READ - Get user by email
 exports.getUserByEmail = async (email) => {
   const [rows] = await db.execute(
-    "SELECT user_id, email, password, failed_login_attempts, lockout_until, role, reset_token, reset_token_expires FROM user WHERE email = ?",
+    "SELECT user_id, email, password, failed_login_attempts, lockout_until, role, reset_token, reset_token_expires, is_setup_complete, deleted_at FROM user WHERE email = ?",
     [email]
   );
   return rows[0] || null;
@@ -38,8 +38,17 @@ exports.getUserByEmail = async (email) => {
 // READ - Get user by reset token
 exports.getUserByResetToken = async (token) => {
   const [rows] = await db.execute(
-    "SELECT user_id, email, password, reset_token, reset_token_expires, first_name, last_name, profile_photo, department, course, role, is_setup_complete FROM user WHERE reset_token = ?",
+    "SELECT user_id, email, password, reset_token, reset_token_expires, first_name, last_name, profile_photo, department, course, role, is_setup_complete, deleted_at FROM user WHERE reset_token = ?",
     [token]
+  );
+  return rows[0] || null;
+};
+
+// READ - Get user auth details by id
+exports.getUserAuthById = async (userId) => {
+  const [rows] = await db.execute(
+    "SELECT user_id, email, password, role, is_setup_complete, reset_token, reset_token_expires, deleted_at FROM user WHERE user_id = ?",
+    [userId]
   );
   return rows[0] || null;
 };
@@ -76,17 +85,66 @@ exports.getAllNonAdminUsers = async () => {
 
   const hasCreatedAt = Number(columnRows?.[0]?.count || 0) > 0;
 
+  const [deletedAtColumnRows] = await db.execute(
+    `SELECT COUNT(*) AS count
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'user'
+       AND COLUMN_NAME = 'deleted_at'`
+  );
+
+  const hasDeletedAt = Number(deletedAtColumnRows?.[0]?.count || 0) > 0;
+
   const createdAtSelect = hasCreatedAt
     ? "COALESCE(created_at, NOW()) AS created_at"
     : "NOW() AS created_at";
 
+  const deletedAtSelect = hasDeletedAt
+    ? "deleted_at"
+    : "NULL AS deleted_at";
+
   const [rows] = await db.execute(
     `SELECT user_id, email, first_name, last_name, department, course, role, is_setup_complete,
+            ${deletedAtSelect},
             ${createdAtSelect}
      FROM user
      WHERE role <> 'admin'`
   );
   return rows;
+};
+
+// UPDATE - Soft deactivate user by removing password
+exports.deactivateUser = async (userId) => {
+  const [result] = await db.execute(
+    `UPDATE user
+     SET password = NULL,
+         reset_token = NULL,
+         reset_token_expires = NULL,
+         failed_login_attempts = 0,
+         lockout_until = NULL,
+         deleted_at = NOW()
+     WHERE user_id = ?
+       AND role <> 'admin'
+       AND is_setup_complete = 1
+       AND deleted_at IS NULL
+       AND password IS NOT NULL`,
+    [userId]
+  );
+
+  return result.affectedRows;
+};
+
+// UPDATE - Clear soft-delete marker for user reactivation
+exports.reactivateUser = async (userId) => {
+  const [result] = await db.execute(
+    `UPDATE user
+     SET deleted_at = NULL
+     WHERE user_id = ?
+       AND role <> 'admin'`,
+    [userId]
+  );
+
+  return result.affectedRows;
 };
 
 // UPDATE - Reset failed login attempts after successful login

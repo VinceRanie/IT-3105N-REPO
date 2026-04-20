@@ -269,6 +269,7 @@ CREATE TABLE `user` (
   `lockout_until` datetime DEFAULT NULL,
   `reset_token` varchar(255) DEFAULT NULL,
   `reset_token_expires` datetime DEFAULT NULL,
+  `deleted_at` datetime DEFAULT NULL,
   `created_at` datetime NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -375,7 +376,8 @@ ALTER TABLE `reagents_chemicals`
 --
 ALTER TABLE `user`
   ADD PRIMARY KEY (`user_id`),
-  ADD UNIQUE KEY `email` (`email`);
+  ADD UNIQUE KEY `email` (`email`),
+  ADD KEY `idx_user_deleted_at` (`deleted_at`);
 
 --
 -- AUTO_INCREMENT for dumped tables

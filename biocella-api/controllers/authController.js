@@ -232,6 +232,49 @@ const sendAdminInviteEmail = async (email, resetToken, normalizedRole) => {
   };
 };
 
+const sendReactivationEmail = async (email, resetToken) => {
+  let emailResult;
+  try {
+    emailResult = await sendEmail({
+      to: email,
+      subject: "Your BIOCELLA account has been reactivated",
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #113F67;">Account Reactivated</h2>
+          <p>Hi,</p>
+          <p>Your BIOCELLA account has been reactivated by an administrator.</p>
+          <p>Please click the button below to set your new password:</p>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${APP_BASE_URL}/forgot-password/reset?token=${resetToken}"
+               style="background-color: #113F67; color: white; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
+              Set New Password
+            </a>
+          </div>
+          <p><strong>This link will expire in 1 hour.</strong></p>
+          <p>If you did not expect this email, please contact an administrator.</p>
+          <p>Sincerely,<br/><strong>BIOCELLA Team</strong></p>
+        </div>
+      `,
+    });
+  } catch (emailError) {
+    console.error("Reactivation email error:", emailError);
+  }
+
+  if (!didEmailSend(emailResult, email)) {
+    return {
+      ok: false,
+      statusCode: HttpStatus.SERVICE_UNAVAILABLE,
+      message: "Reactivation email could not be sent. Please try again later.",
+    };
+  }
+
+  return {
+    ok: true,
+    statusCode: HttpStatus.OK,
+    message: "Reactivation email sent successfully.",
+  };
+};
+
 const issuePasswordResetForUser = async (user) => {
   const passwordResetStatus = buildPasswordResetStatus(user);
   if (passwordResetStatus.isLocked) {
@@ -638,7 +681,7 @@ exports.resetPassword = async (req, res) => {
       });
     }
 
-    if (!user.password) {
+    if (!user.password && !user.is_setup_complete) {
       return res.status(HttpStatus.CONFLICT).json({
         message: "Account is not registered.",
         statusCode: HttpStatus.CONFLICT,
@@ -652,12 +695,14 @@ exports.resetPassword = async (req, res) => {
       });
     }
 
-    const isSameAsOld = await authModel.comparePassword(newPassword, user.password);
-    if (isSameAsOld) {
-      return res.status(HttpStatus.BAD_REQUEST).json({
-        message: "New password must be different from your current password.",
-        statusCode: HttpStatus.BAD_REQUEST,
-      });
+    if (user.password) {
+      const isSameAsOld = await authModel.comparePassword(newPassword, user.password);
+      if (isSameAsOld) {
+        return res.status(HttpStatus.BAD_REQUEST).json({
+          message: "New password must be different from your current password.",
+          statusCode: HttpStatus.BAD_REQUEST,
+        });
+      }
     }
 
     const hashedPassword = await authModel.hashPassword(newPassword);
@@ -1066,6 +1111,84 @@ exports.updateUserRole = async (req, res) => {
     console.error("Update User Role Error:", error);
     return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
       message: "Failed to update user role.",
+      error: error.message || error,
+      statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+    });
+  }
+};
+
+// DEACTIVATE USER (SOFT DELETE ACCOUNT ACCESS)
+exports.deactivateUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const affected = await authModel.deactivateUser(id);
+
+    if (!affected) {
+      return res.status(HttpStatus.NOT_FOUND).json({
+        message: "User not found, already deactivated, or account setup is incomplete.",
+        statusCode: HttpStatus.NOT_FOUND,
+      });
+    }
+
+    return res.status(HttpStatus.OK).json({
+      message: "User deactivated successfully.",
+      statusCode: HttpStatus.OK,
+    });
+  } catch (error) {
+    console.error("Deactivate User Error:", error);
+    return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+      message: "Failed to deactivate user.",
+      error: error.message || error,
+      statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+    });
+  }
+};
+
+// REACTIVATE USER AND SEND PASSWORD RESET EMAIL
+exports.reactivateUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const user = await authModel.getUserAuthById(id);
+    if (!user || String(user.role || "").toLowerCase() === "admin") {
+      return res.status(HttpStatus.NOT_FOUND).json({
+        message: "User not found.",
+        statusCode: HttpStatus.NOT_FOUND,
+      });
+    }
+
+    const isDeactivated = Boolean(user.deleted_at);
+    if (!isDeactivated) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        message: "User is not deactivated.",
+        statusCode: HttpStatus.BAD_REQUEST,
+      });
+    }
+
+    const resetToken = uuidv4();
+    const tokenExpiry = new Date(Date.now() + RESET_LINK_TTL_MS);
+    await authModel.setResetToken(user.user_id, resetToken, tokenExpiry);
+
+    const emailResult = await sendReactivationEmail(user.email, resetToken);
+    if (!emailResult.ok) {
+      await authModel.setResetToken(user.user_id, null, null);
+      return res.status(emailResult.statusCode).json({
+        message: emailResult.message,
+        statusCode: emailResult.statusCode,
+      });
+    }
+
+    await authModel.reactivateUser(user.user_id);
+
+    return res.status(HttpStatus.OK).json({
+      message: "User reactivated. Password setup email sent successfully.",
+      statusCode: HttpStatus.OK,
+    });
+  } catch (error) {
+    console.error("Reactivate User Error:", error);
+    return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+      message: "Failed to reactivate user.",
       error: error.message || error,
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
     });

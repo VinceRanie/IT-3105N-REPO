@@ -21,6 +21,8 @@ router.post("/google-verify", authController.verifyGoogleProfile);
 // Admin user management
 router.get("/users", authController.getUsers);
 router.patch("/users/:id/role", authController.updateUserRole);
+router.patch("/users/:id/deactivate", authController.deactivateUser);
+router.patch("/users/:id/reactivate", authController.reactivateUser);
 router.post("/admin-invite", authController.adminInvite);
 
 module.exports = router;
