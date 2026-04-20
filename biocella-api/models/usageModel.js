@@ -82,17 +82,63 @@ exports.getTopUsedChemicals = async ({ startDate = null, endDate = null, limit =
 exports.getForecastBaseData = async ({ usageWindowDays = 30, limit = 8 }) => {
   const safeWindow = Number.isInteger(usageWindowDays) && usageWindowDays > 0 ? usageWindowDays : 30;
   const safeLimit = Number.isInteger(limit) && limit > 0 ? limit : 8;
+  const params = [safeWindow, safeLimit];
 
-  const [rows] = await db.execute(
-    `
+  const primaryQuery = `
+    SELECT
+      r.chemical_id,
+      r.name AS chemical_name,
+      r.type AS chemical_type,
+      r.unit,
+      r.threshold,
+      COALESCE(r.lead_time_days, 7) AS lead_time_days,
+      COALESCE(r.safety_stock, 0) AS safety_stock,
+      COALESCE(stock.current_stock, 0) AS current_stock,
+      COALESCE(usage.window_used, 0) AS window_used,
+      COALESCE(usage.usage_logs, 0) AS usage_logs,
+      usage.last_used_at
+    FROM reagents_chemicals r
+    LEFT JOIN (
+      SELECT
+        chemical_id,
+        SUM(GREATEST(COALESCE(quantity, 0) - COALESCE(used_quantity, 0), 0)) AS current_stock
+      FROM chemical_stock_batch
+      WHERE deleted_at IS NULL
+      GROUP BY chemical_id
+    ) stock ON stock.chemical_id = r.chemical_id
+    LEFT JOIN (
+      SELECT
+        chemical_id,
+        SUM(amount_used) AS window_used,
+        COUNT(log_id) AS usage_logs,
+        MAX(date_used) AS last_used_at
+      FROM chemical_usage_log
+      WHERE date_used >= DATE_SUB(NOW(), INTERVAL ? DAY)
+      GROUP BY chemical_id
+    ) usage ON usage.chemical_id = r.chemical_id
+    WHERE stock.current_stock IS NOT NULL OR usage.window_used IS NOT NULL
+    ORDER BY COALESCE(usage.window_used, 0) DESC, r.name ASC
+    LIMIT ?
+  `;
+
+  try {
+    const [rows] = await db.execute(primaryQuery, params);
+    return rows;
+  } catch (err) {
+    // Fallback for older deployments missing lead_time_days/safety_stock/deleted_at
+    if (!["ER_BAD_FIELD_ERROR", "ER_PARSE_ERROR"].includes(err.code)) {
+      throw err;
+    }
+
+    const fallbackQuery = `
       SELECT
         r.chemical_id,
         r.name AS chemical_name,
         r.type AS chemical_type,
         r.unit,
         r.threshold,
-        COALESCE(r.lead_time_days, 7) AS lead_time_days,
-        COALESCE(r.safety_stock, 0) AS safety_stock,
+        7 AS lead_time_days,
+        0 AS safety_stock,
         COALESCE(stock.current_stock, 0) AS current_stock,
         COALESCE(usage.window_used, 0) AS window_used,
         COALESCE(usage.usage_logs, 0) AS usage_logs,
@@ -103,7 +149,6 @@ exports.getForecastBaseData = async ({ usageWindowDays = 30, limit = 8 }) => {
           chemical_id,
           SUM(GREATEST(COALESCE(quantity, 0) - COALESCE(used_quantity, 0), 0)) AS current_stock
         FROM chemical_stock_batch
-        WHERE deleted_at IS NULL
         GROUP BY chemical_id
       ) stock ON stock.chemical_id = r.chemical_id
       LEFT JOIN (
@@ -119,9 +164,9 @@ exports.getForecastBaseData = async ({ usageWindowDays = 30, limit = 8 }) => {
       WHERE stock.current_stock IS NOT NULL OR usage.window_used IS NOT NULL
       ORDER BY COALESCE(usage.window_used, 0) DESC, r.name ASC
       LIMIT ?
-    `,
-    [safeWindow, safeLimit]
-  );
+    `;
 
-  return rows;
+    const [rows] = await db.execute(fallbackQuery, params);
+    return rows;
+  }
 };
