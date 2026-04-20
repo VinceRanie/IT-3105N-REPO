@@ -538,6 +538,15 @@ exports.requestPasswordResetAuthenticated = async (req, res) => {
     }
 
     const resetResult = await issuePasswordResetForUser(user);
+
+    if (resetResult.passwordResetStatus) {
+      return res.status(resetResult.statusCode).json({
+        message: resetResult.message,
+        passwordResetStatus: resetResult.passwordResetStatus,
+        statusCode: resetResult.statusCode,
+      });
+    }
+
     return res.status(resetResult.statusCode).json({
       message: resetResult.message,
       statusCode: resetResult.statusCode,
@@ -791,14 +800,6 @@ exports.getUserProfile = async (req, res) => {
     });
   }
 };
-    if (resetResult.passwordResetStatus) {
-      return res.status(resetResult.statusCode).json({
-        message: resetResult.message,
-        passwordResetStatus: resetResult.passwordResetStatus,
-        statusCode: resetResult.statusCode,
-      });
-    }
-
 
 // UPDATE USER PROFILE
 exports.updateUserProfile = async (req, res) => {
