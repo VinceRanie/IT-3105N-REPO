@@ -389,28 +389,37 @@ export default function AddChemicalModal({
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Type *
               </label>
-              <select
-                name="type"
-                value={formData.type}
-                onChange={handleChange}
-                disabled={isContainerMode}
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
-              >
-                <option value="General">General</option>
-                <option value="Agar">Agar</option>
-                <option value="Protein">Protein</option>
-                <option value="Acid">Acid</option>
-                <option value="Base">Base</option>
-                <option value="Salt">Salt</option>
-                <option value="Buffer">Buffer</option>
-                <option value="Enzyme">Enzyme</option>
-                <option value="Antibody">Antibody</option>
-                <option value="Dye">Dye</option>
-                <option value="Stain">Stain</option>
-                <option value="Solvent">Solvent</option>
-                <option value="Other">Other</option>
-              </select>
+              {isContainerMode ? (
+                <input
+                  type="text"
+                  value={selectedExistingChemical?.type || formData.type || "General"}
+                  disabled
+                  readOnly
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-700"
+                />
+              ) : (
+                <select
+                  name="type"
+                  value={formData.type}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                >
+                  <option value="General">General</option>
+                  <option value="Agar">Agar</option>
+                  <option value="Protein">Protein</option>
+                  <option value="Acid">Acid</option>
+                  <option value="Base">Base</option>
+                  <option value="Salt">Salt</option>
+                  <option value="Buffer">Buffer</option>
+                  <option value="Enzyme">Enzyme</option>
+                  <option value="Antibody">Antibody</option>
+                  <option value="Dye">Dye</option>
+                  <option value="Stain">Stain</option>
+                  <option value="Solvent">Solvent</option>
+                  <option value="Other">Other</option>
+                </select>
+              )}
             </div>
 
             {!isContainerMode && formData.type === "Other" && (
