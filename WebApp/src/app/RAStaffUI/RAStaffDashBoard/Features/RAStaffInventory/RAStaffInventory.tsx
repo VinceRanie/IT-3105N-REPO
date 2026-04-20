@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Fragment } from "react";
 import { Chemical, Batch } from "./types";
 import AddChemicalModal from "./AddChemicalModal";
 import EditChemicalModal from "./EditChemicalModal";
@@ -36,6 +36,7 @@ export default function RAStaffInventory() {
   // Sorting
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [expandedChemicalIds, setExpandedChemicalIds] = useState<Set<number>>(new Set());
 
   // Fetch chemicals and batches from API
   const fetchChemicals = async () => {
@@ -117,6 +118,86 @@ export default function RAStaffInventory() {
       (sum, batch) => sum + Math.max(0, batch.quantity - batch.used_quantity),
       0
     );
+  };
+
+  const getContainerIdsLabel = (chemicalId: number) => {
+    const chemicalBatches = getChemicalBatches(chemicalId);
+    if (!chemicalBatches.length) return "N/A";
+
+    const ids = chemicalBatches.map((batch) => `#${batch.batch_id}`);
+    const visibleCount = 3;
+
+    if (ids.length <= visibleCount) {
+      return ids.join(", ");
+    }
+
+    return `${ids.slice(0, visibleCount).join(", ")} +${ids.length - visibleCount} more`;
+  };
+
+  const toggleExpandedChemical = (chemicalId: number) => {
+    setExpandedChemicalIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(chemicalId)) {
+        next.delete(chemicalId);
+      } else {
+        next.add(chemicalId);
+      }
+      return next;
+    });
+  };
+
+  const getSortedBatchesForChemical = (chemicalId: number) => {
+    const chemicalBatches = getChemicalBatches(chemicalId);
+    return [...chemicalBatches].sort((a, b) => {
+      const dateA = new Date(a.date_received || "").getTime();
+      const dateB = new Date(b.date_received || "").getTime();
+
+      if (dateA !== dateB) {
+        return dateB - dateA;
+      }
+
+      return b.batch_id - a.batch_id;
+    });
+  };
+
+  const downloadBatchQrWithLabel = async (qrCodeDataUrl: string, batchId: number) => {
+    try {
+      const image = new Image();
+      await new Promise<void>((resolve, reject) => {
+        image.onload = () => resolve();
+        image.onerror = () => reject(new Error("Unable to load QR image."));
+        image.src = qrCodeDataUrl;
+      });
+
+      const padding = 16;
+      const labelAreaHeight = 44;
+      const canvas = document.createElement("canvas");
+      canvas.width = image.width + padding * 2;
+      canvas.height = image.height + padding * 2 + labelAreaHeight;
+
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Canvas context is not available.");
+
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(image, padding, padding);
+
+      context.fillStyle = "#0f172a";
+      context.font = "600 18px Arial";
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+      context.fillText(`Batch ID: ${batchId}`, canvas.width / 2, image.height + padding + labelAreaHeight / 2);
+
+      const link = document.createElement("a");
+      link.href = canvas.toDataURL("image/png");
+      link.download = `batch_${batchId}_qr.png`;
+      link.click();
+    } catch {
+      const fallbackLink = document.createElement("a");
+      fallbackLink.href = qrCodeDataUrl;
+      fallbackLink.download = `batch_${batchId}_qr.png`;
+      fallbackLink.click();
+    }
   };
 
   const getLotGroupsLabel = (chemical: Chemical) => {
@@ -316,14 +397,14 @@ export default function RAStaffInventory() {
           <table className="w-full">
             <thead className="bg-[#113F67] text-white">
               <tr>
-                <th className="px-6 py-3 text-left text-sm font-semibold">Batch ID</th>
+                <th className="px-6 py-3 text-left text-sm font-semibold">Container IDs</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold">Lot Groups</th>
                 <SortableHeader column="name" label="Name" />
                 <SortableHeader column="type" label="Type" />
                 <SortableHeader column="quantity" label="Quantity" />
                 <SortableHeader column="unit" label="Unit" />
-                <th className="px-6 py-3 text-left text-sm font-semibold">Location</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold">Exp. Date</th>
+                <th className="px-6 py-3 text-left text-sm font-semibold">Latest Location</th>
+                <th className="px-6 py-3 text-left text-sm font-semibold">Latest Exp. Date</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold">Status</th>
                 <th className="px-6 py-3 text-center text-sm font-semibold">QR Code</th>
                 <th className="px-6 py-3 text-center text-sm font-semibold">Actions</th>
@@ -340,6 +421,8 @@ export default function RAStaffInventory() {
                 currentItems.map((chemical) => {
                   const chemicalBatches = getChemicalBatches(chemical.chemical_id);
                   const chemicalBatch = chemicalBatches[0];
+                  const sortedBatches = getSortedBatchesForChemical(chemical.chemical_id);
+                  const isExpanded = expandedChemicalIds.has(chemical.chemical_id);
                   const remainingQuantity = chemicalBatches.length
                     ? chemicalBatches.reduce(
                         (sum, batch) => sum + Math.max(0, batch.quantity - batch.used_quantity),
@@ -347,100 +430,155 @@ export default function RAStaffInventory() {
                       )
                     : chemical.quantity;
                   return (
-                  <tr
-                    key={chemical.chemical_id}
-                    className={`hover:bg-gray-50 ${
-                      isLowStock(chemical) ? "bg-red-50" : ""
-                    }`}
-                  >
-                    <td className="px-6 py-4 text-sm text-gray-900 font-semibold">
-                      {chemicalBatch?.batch_id || 'N/A'}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-900">
-                      {getLotGroupsLabel(chemical)}
-                    </td>
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                      {chemical.name}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-900">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                        {chemical.type}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-900">
-                      {remainingQuantity}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-900">
-                      {chemical.unit}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-900">
-                      {chemicalBatch?.location || 'N/A'}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-900">
-                      {chemicalBatch?.expiration_date ? new Date(chemicalBatch.expiration_date).toLocaleDateString() : 'N/A'}
-                    </td>
-                    <td className="px-6 py-4 text-sm">
-                      <div className="flex flex-wrap gap-1.5">
-                        {isLowStock(chemical) ? (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                            Low Stocks
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            In Stock
-                          </span>
-                        )}
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700">
-                          Shared Threshold
+                  <Fragment key={chemical.chemical_id}>
+                    <tr
+                      className={`hover:bg-gray-50 ${
+                        isLowStock(chemical) ? "bg-red-50" : ""
+                      }`}
+                    >
+                      <td className="px-6 py-4 text-sm text-gray-900">
+                        <div className="font-semibold">{getContainerIdsLabel(chemical.chemical_id)}</div>
+                        <div className="text-xs text-gray-500 mt-1">{chemicalBatches.length} bottle(s)</div>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-900">
+                        {getLotGroupsLabel(chemical)}
+                      </td>
+                      <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                        {chemical.name}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-900">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          {chemical.type}
                         </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-center">
-                      {chemicalBatch?.qr_code ? (
-                        <button
-                          onClick={() => {
-                            const link = document.createElement('a');
-                            link.href = chemicalBatch.qr_code!;
-                            link.download = `batch_${chemicalBatch.batch_id}_qr.png`;
-                            link.click();
-                          }}
-                          className="inline-block"
-                          title="Download QR Code"
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img 
-                            src={chemicalBatch.qr_code} 
-                            alt={`QR Code for ${chemical.name}`}
-                            className="w-12 h-12 mx-auto hover:scale-110 transition-transform cursor-pointer"
-                          />
-                        </button>
-                      ) : (
-                        <span className="text-gray-400 text-xs">No QR</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-center">
-                      <div className="flex justify-center gap-2">
-                        <button
-                          onClick={() => {
-                            if (chemicalBatch) {
-                              window.location.href = `/RAStaffUI/RAStaffDashBoard/Features/RAStaffInventory/batch/${chemicalBatch.batch_id}`;
-                            }
-                          }}
-                          className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-                          title="View Batches"
-                        >
-                          <Package size={18} />
-                        </button>
-                        <button
-                          onClick={() => handleEdit(chemical)}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                          title="Edit"
-                        >
-                          <Edit size={18} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-900">
+                        {remainingQuantity}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-900">
+                        {chemical.unit}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-900">
+                        {chemicalBatch?.location || 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-900">
+                        {chemicalBatch?.expiration_date ? new Date(chemicalBatch.expiration_date).toLocaleDateString() : 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 text-sm">
+                        <div className="flex flex-wrap gap-1.5">
+                          {isLowStock(chemical) ? (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                              Low Stocks
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              In Stock
+                            </span>
+                          )}
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700">
+                            Shared Threshold
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-center">
+                        {chemicalBatch?.qr_code ? (
+                          <button
+                            onClick={() => {
+                              if (!chemicalBatch?.batch_id || !chemicalBatch.qr_code) return;
+                              void downloadBatchQrWithLabel(chemicalBatch.qr_code, chemicalBatch.batch_id);
+                            }}
+                            className="inline-block"
+                            title="Download QR Code"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img 
+                              src={chemicalBatch.qr_code} 
+                              alt={`QR Code for ${chemical.name}`}
+                              className="w-12 h-12 mx-auto hover:scale-110 transition-transform cursor-pointer"
+                            />
+                          </button>
+                        ) : (
+                          <span className="text-gray-400 text-xs">No QR</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-center">
+                        <div className="flex justify-center gap-2">
+                          <button
+                            onClick={() => toggleExpandedChemical(chemical.chemical_id)}
+                            className="px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                            title={isExpanded ? "Hide Containers" : "Show Containers"}
+                          >
+                            {isExpanded ? "Hide" : "Show"}
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (chemicalBatch) {
+                                window.location.href = `/RAStaffUI/RAStaffDashBoard/Features/RAStaffInventory/batch/${chemicalBatch.batch_id}`;
+                              }
+                            }}
+                            className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                            title="View Batches"
+                          >
+                            <Package size={18} />
+                          </button>
+                          <button
+                            onClick={() => handleEdit(chemical)}
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="Edit"
+                          >
+                            <Edit size={18} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+
+                    {isExpanded && (
+                      <tr className="bg-slate-50">
+                        <td colSpan={11} className="px-6 py-4">
+                          <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
+                            <div className="px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600 bg-slate-100 border-b border-slate-200">
+                              Containers for {chemical.name}
+                            </div>
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-sm">
+                                <thead className="bg-slate-50 text-slate-700">
+                                  <tr>
+                                    <th className="px-4 py-2 text-left font-semibold">Batch ID</th>
+                                    <th className="px-4 py-2 text-left font-semibold">Lot</th>
+                                    <th className="px-4 py-2 text-left font-semibold">Qty</th>
+                                    <th className="px-4 py-2 text-left font-semibold">Exp. Date</th>
+                                    <th className="px-4 py-2 text-left font-semibold">Location</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                  {sortedBatches.length === 0 ? (
+                                    <tr>
+                                      <td colSpan={5} className="px-4 py-3 text-slate-500">
+                                        No bottle records found.
+                                      </td>
+                                    </tr>
+                                  ) : (
+                                    sortedBatches.map((batch) => (
+                                      <tr key={batch.batch_id}>
+                                        <td className="px-4 py-3 font-medium text-slate-900">#{batch.batch_id}</td>
+                                        <td className="px-4 py-3 text-slate-700">{(batch.lot_number || "NO-LOT").trim() || "NO-LOT"}</td>
+                                        <td className="px-4 py-3 text-slate-700">
+                                          {batch.quantity} {chemical.unit}
+                                        </td>
+                                        <td className="px-4 py-3 text-slate-700">
+                                          {batch.expiration_date ? new Date(batch.expiration_date).toLocaleDateString() : "N/A"}
+                                        </td>
+                                        <td className="px-4 py-3 text-slate-700">{batch.location || "N/A"}</td>
+                                      </tr>
+                                    ))
+                                  )}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                   );
                 })
               )}
