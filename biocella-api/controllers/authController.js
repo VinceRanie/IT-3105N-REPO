@@ -324,6 +324,13 @@ exports.login = async (req, res) => {
     }
 
     if (!user.password) {
+      if (Number(user.is_setup_complete) === 1) {
+        return res.status(HttpStatus.CONFLICT).json({
+          message: "Your Email is deactivated by Admin",
+          statusCode: HttpStatus.CONFLICT,
+        });
+      }
+
       return res.status(HttpStatus.CONFLICT).json({
         message: "Account setup is not complete. Please finish finalize setup.",
         statusCode: HttpStatus.CONFLICT,

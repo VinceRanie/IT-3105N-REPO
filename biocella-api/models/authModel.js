@@ -29,7 +29,7 @@ exports.createUserByAdmin = async (email, resetToken, role = "student", resetTok
 // READ - Get user by email
 exports.getUserByEmail = async (email) => {
   const [rows] = await db.execute(
-    "SELECT user_id, email, password, failed_login_attempts, lockout_until, role, reset_token, reset_token_expires FROM user WHERE email = ?",
+    "SELECT user_id, email, password, failed_login_attempts, lockout_until, role, reset_token, reset_token_expires, is_setup_complete FROM user WHERE email = ?",
     [email]
   );
   return rows[0] || null;
