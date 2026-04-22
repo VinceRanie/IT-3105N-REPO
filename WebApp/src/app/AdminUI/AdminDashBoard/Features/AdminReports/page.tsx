@@ -17,10 +17,55 @@ import {
   Cell,
   Legend,
 } from "recharts";
-import { Download, FileText, RefreshCcw, Trash2, Loader2 } from "lucide-react";
+import { Download, FileText, RefreshCcw, Trash2, Loader2, TrendingUp, ListOrdered, TriangleAlert } from "lucide-react";
 import { jsPDF } from "jspdf";
 
 type ReportPeriod = "weekly" | "monthly";
+
+type TopUsedChemicalItem = {
+  rank: number;
+  chemical_id: number;
+  chemical_name: string;
+  chemical_type: string;
+  unit: string;
+  total_used: number;
+  usage_logs: number;
+  last_used_at: string | null;
+};
+
+type TopChemicalsResponse = {
+  period: ReportPeriod;
+  items: TopUsedChemicalItem[];
+};
+
+type ForecastItem = {
+  chemical_id: number;
+  chemical_name: string;
+  chemical_type: string;
+  unit: string;
+  lead_time_days: number;
+  safety_stock: number;
+  current_stock: number;
+  avg_daily_usage: number;
+  forecast_days: number;
+  forecast_usage: number;
+  days_to_stockout: number | null;
+  reorder_point: number;
+  recommended_reorder_qty: number;
+  risk_level: "stable" | "low" | "medium" | "high";
+};
+
+type ForecastResponse = {
+  period: ReportPeriod;
+  forecast_days: number;
+  overview: {
+    total_items: number;
+    at_risk_count: number;
+    high_risk_count: number;
+    predicted_usage_total: number;
+  };
+  items: ForecastItem[];
+};
 
 type AppointmentItem = {
   appointment_id?: number | string | null;
@@ -99,6 +144,20 @@ const PIE_COLORS = ["#113F67", "#10B981", "#F59E0B", "#EF4444", "#6B7280", "#3B8
 const toNumber = (value: number | string | null | undefined) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const formatCount = (value: number) => new Intl.NumberFormat().format(value);
+
+const formatQuantity = (value: number, unit?: string) => {
+  const formatted = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(value);
+  return `${formatted}${unit ? ` ${unit}` : ""}`;
+};
+
+const getRiskPillClass = (risk: ForecastItem["risk_level"]) => {
+  if (risk === "high") return "bg-red-100 text-red-700";
+  if (risk === "medium") return "bg-amber-100 text-amber-700";
+  if (risk === "low") return "bg-emerald-100 text-emerald-700";
+  return "bg-slate-100 text-slate-700";
 };
 
 const parseDate = (value: string | Date | null | undefined) => {
@@ -380,6 +439,15 @@ export default function AdminReportsPage() {
   const [period, setPeriod] = useState<ReportPeriod>("weekly");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [forecastLoading, setForecastLoading] = useState(false);
+  const [topUsedChemicals, setTopUsedChemicals] = useState<TopUsedChemicalItem[]>([]);
+  const [forecastItems, setForecastItems] = useState<ForecastItem[]>([]);
+  const [forecastOverview, setForecastOverview] = useState<ForecastResponse["overview"]>({
+    total_items: 0,
+    at_risk_count: 0,
+    high_risk_count: 0,
+    predicted_usage_total: 0,
+  });
   const [savedReports, setSavedReports] = useState<ReportSnapshot[]>([]);
   const [currentReport, setCurrentReport] = useState<ReportSnapshot | null>(null);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
@@ -418,6 +486,73 @@ export default function AdminReportsPage() {
       setInitialLoading(false);
     });
   }, []);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const fetchInventoryForecasting = async () => {
+      setForecastLoading(true);
+      const headers = {
+        "Content-Type": "application/json",
+        ...getAuthHeader(),
+      };
+
+      try {
+        const [topRes, forecastRes] = await Promise.all([
+          fetch(`${API_URL}/usage/top-chemicals?period=${period}&limit=5`, { headers }),
+          fetch(`${API_URL}/usage/forecast?period=${period}&limit=6`, { headers }),
+        ]);
+
+        const topData = (topRes.ok ? await topRes.json() : { items: [] }) as TopChemicalsResponse;
+        const forecastData = (forecastRes.ok
+          ? await forecastRes.json()
+          : {
+              overview: {
+                total_items: 0,
+                at_risk_count: 0,
+                high_risk_count: 0,
+                predicted_usage_total: 0,
+              },
+              items: [],
+            }) as ForecastResponse;
+
+        if (!isCancelled) {
+          setTopUsedChemicals(Array.isArray(topData.items) ? topData.items : []);
+          setForecastItems(Array.isArray(forecastData.items) ? forecastData.items : []);
+          setForecastOverview(
+            forecastData.overview || {
+              total_items: 0,
+              at_risk_count: 0,
+              high_risk_count: 0,
+              predicted_usage_total: 0,
+            }
+          );
+        }
+      } catch (err) {
+        console.error("Error fetching inventory forecasting analytics:", err);
+        if (!isCancelled) {
+          setTopUsedChemicals([]);
+          setForecastItems([]);
+          setForecastOverview({
+            total_items: 0,
+            at_risk_count: 0,
+            high_risk_count: 0,
+            predicted_usage_total: 0,
+          });
+        }
+      } finally {
+        if (!isCancelled) {
+          setForecastLoading(false);
+        }
+      }
+    };
+
+    fetchInventoryForecasting();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [period]);
 
   const generateReport = async () => {
     setLoading(true);
@@ -668,6 +803,111 @@ export default function AdminReportsPage() {
         {error && (
           <p className="mt-3 text-sm text-red-600">{error}</p>
         )}
+      </div>
+
+      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900">Inventory Forecasting (Weekly/Monthly)</h3>
+            <p className="text-xs text-gray-500">Most-used ranking, stockout risk, and reorder suggestions.</p>
+          </div>
+          <p className="text-xs text-gray-500">
+            Follows selected report period: {period === "weekly" ? "Weekly (7 days)" : "Monthly (30 days)"}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
+          <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+            <div className="flex items-center justify-between">
+              <p className="text-xs uppercase text-gray-500">Predicted Usage</p>
+              <TrendingUp className="h-4 w-4 text-[#113F67]" />
+            </div>
+            <p className="text-2xl font-bold text-[#113F67]">{formatQuantity(forecastOverview.predicted_usage_total)}</p>
+            <p className="text-xs text-gray-500">For the next {period === "weekly" ? "7" : "30"} days</p>
+          </div>
+
+          <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+            <div className="flex items-center justify-between">
+              <p className="text-xs uppercase text-gray-500">At Risk Items</p>
+              <TriangleAlert className="h-4 w-4 text-amber-600" />
+            </div>
+            <p className="text-2xl font-bold text-[#113F67]">{formatCount(forecastOverview.at_risk_count)}</p>
+            <p className="text-xs text-gray-500">Including {formatCount(forecastOverview.high_risk_count)} high-risk items</p>
+          </div>
+
+          <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+            <div className="flex items-center justify-between">
+              <p className="text-xs uppercase text-gray-500">Forecasted Items</p>
+              <ListOrdered className="h-4 w-4 text-[#113F67]" />
+            </div>
+            <p className="text-2xl font-bold text-[#113F67]">{formatCount(forecastOverview.total_items)}</p>
+            <p className="text-xs text-gray-500">Based on historical usage logs</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div className="rounded-xl border border-gray-100 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Top Used Reagents and Chemicals</p>
+
+            {forecastLoading ? (
+              <div className="flex items-center gap-2 text-sm text-gray-500">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading ranking...
+              </div>
+            ) : topUsedChemicals.length > 0 ? (
+              <div className="space-y-2">
+                {topUsedChemicals.map((item) => (
+                  <div key={`top-${item.chemical_id}`} className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">#{item.rank} {item.chemical_name}</p>
+                      <p className="text-xs text-gray-500 truncate">{item.chemical_type || "General"} • {item.usage_logs} logs</p>
+                    </div>
+                    <p className="text-xs font-semibold text-[#113F67] ml-3">{formatQuantity(item.total_used, item.unit)}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">No usage ranking data for this period.</p>
+            )}
+          </div>
+
+          <div className="rounded-xl border border-gray-100 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Stockout Risk and Reorder Suggestions</p>
+
+            {forecastLoading ? (
+              <div className="flex items-center gap-2 text-sm text-gray-500">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Running forecast...
+              </div>
+            ) : forecastItems.length > 0 ? (
+              <div className="space-y-2">
+                {forecastItems.map((item) => (
+                  <div key={`forecast-${item.chemical_id}`} className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{item.chemical_name}</p>
+                        <p className="text-xs text-gray-500 truncate">
+                          Stock: {formatQuantity(item.current_stock, item.unit)} • Forecast: {formatQuantity(item.forecast_usage, item.unit)}
+                        </p>
+                      </div>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase ${getRiskPillClass(item.risk_level)}`}>
+                        {item.risk_level}
+                      </span>
+                    </div>
+
+                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-600">
+                      <span>Days to stockout: {item.days_to_stockout === null ? "N/A" : item.days_to_stockout.toFixed(1)}</span>
+                      <span>Reorder point: {formatQuantity(item.reorder_point, item.unit)}</span>
+                      <span>Suggested order: {formatQuantity(item.recommended_reorder_qty, item.unit)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">No forecast data available for this period.</p>
+            )}
+          </div>
+        </div>
       </div>
 
       {currentReport && (

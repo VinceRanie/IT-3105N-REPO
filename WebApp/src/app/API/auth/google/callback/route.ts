@@ -7,20 +7,44 @@ import { requireEnv } from "@/app/API/lib/routeEnv";
 // then redirect to the finalize form with profile data in the URL.
 
 export async function GET(request: NextRequest) {
-  const env = requireEnv([
-    "NEXT_PUBLIC_API_URL",
-    "NEXT_PUBLIC_APP_BASE_URL",
-    "GMAIL_CLIENT_ID",
-    "GMAIL_CLIENT_SECRET",
-  ] as const);
+  const env = requireEnv(["NEXT_PUBLIC_API_URL"] as const);
   if (!env.ok) return env.response;
 
   const API_BASE_URL = env.values.NEXT_PUBLIC_API_URL;
-  const APP_BASE_URL = env.values.NEXT_PUBLIC_APP_BASE_URL;
+  const clientId = process.env.GMAIL_CLIENT_ID || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GMAIL_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET;
+
+  const forwardedProto = request.headers.get("x-forwarded-proto");
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  const host = request.headers.get("host");
+  const requestOrigin = new URL(request.url).origin;
+
+  const forwardedOrigin =
+    forwardedProto && forwardedHost
+      ? `${forwardedProto.split(",")[0].trim()}://${forwardedHost.split(",")[0].trim()}`
+      : null;
+
+  const hostOrigin = host
+    ? `${request.nextUrl.protocol.replace(":", "") || "https"}://${host}`
+    : null;
+
+  const APP_BASE_URL = (
+    process.env.NEXT_PUBLIC_APP_BASE_URL || forwardedOrigin || hostOrigin || requestOrigin
+  ).replace(/\/+$/, "");
+
+  if (!clientId || !clientSecret) {
+    console.error(
+      "Server misconfiguration: Missing Google OAuth credentials. " +
+        "Expected GMAIL_CLIENT_ID (or NEXT_PUBLIC_GOOGLE_CLIENT_ID) and GMAIL_CLIENT_SECRET (or GOOGLE_CLIENT_SECRET)."
+    );
+    return NextResponse.redirect(
+      `${APP_BASE_URL}/signup/finalize?error=${encodeURIComponent("Google authentication is not configured on the server.")}`
+    );
+  }
 
   const oauth2Client = new google.auth.OAuth2(
-    env.values.GMAIL_CLIENT_ID,
-    env.values.GMAIL_CLIENT_SECRET,
+    clientId,
+    clientSecret,
     `${APP_BASE_URL}/API/auth/google/callback`
   );
 

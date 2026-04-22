@@ -31,6 +31,23 @@ exports.getReagentById = async (id) => {
   return rows[0];
 };
 
+// READ ONE BY IDENTITY (name + type + unit), used to attach new lots to an existing chemical
+exports.findReagentByIdentity = async ({ name, type, unit }) => {
+  const [rows] = await db.execute(
+    `
+      SELECT *
+      FROM reagents_chemicals
+      WHERE LOWER(TRIM(name)) = LOWER(TRIM(?))
+        AND LOWER(TRIM(type)) = LOWER(TRIM(?))
+        AND unit = ?
+      LIMIT 1
+    `,
+    [name, type, unit]
+  );
+
+  return rows[0] || null;
+};
+
 // UPDATE
 exports.updateReagent = async (id, data) => {
   const { name, type, quantity, unit, threshold } = data;

@@ -69,7 +69,7 @@ interface Specimen {
   special_reqs?: string;
   activity?: string;
   result?: string;
-  custom_fields?: Record<string, string>;
+  custom_fields?: Record<string, any>;
 }
 
 export default function AdminCollectionPage() {

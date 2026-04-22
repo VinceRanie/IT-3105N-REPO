@@ -21,6 +21,21 @@ interface Batch {
   qr_code: string | null;
 }
 
+interface UsageGuidance {
+  current_batch_id: number;
+  preferred_batch_id: number | null;
+  should_warn: boolean;
+  message: string;
+  preferred_batch: {
+    batch_id: number;
+    lot_number: string | null;
+    remaining: number;
+    unit: string | null;
+    expiration_date: string | null;
+    location: string | null;
+  } | null;
+}
+
 export default function RAStaffBatchEditPage() {
   // Protect route
   useProtectedRoute({ requiredRole: "staff" });
@@ -33,6 +48,8 @@ export default function RAStaffBatchEditPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [usageGuidance, setUsageGuidance] = useState<UsageGuidance | null>(null);
+  const [allowOutOfOrderUse, setAllowOutOfOrderUse] = useState(false);
 
   // Usage form
   const [amountUsedInput, setAmountUsedInput] = useState("");
@@ -108,6 +125,17 @@ export default function RAStaffBatchEditPage() {
       const data = await response.json();
       setBatch(data);
       setUsageUnit(data.chemical_unit || "");
+
+      const guidanceResponse = await fetch(`${API_URL}/batches/${batchId}/usage-guidance`, {
+        headers: getAuthHeader(),
+      });
+      if (guidanceResponse.ok) {
+        const guidanceData = (await guidanceResponse.json()) as UsageGuidance;
+        setUsageGuidance(guidanceData);
+      } else {
+        setUsageGuidance(null);
+      }
+      setAllowOutOfOrderUse(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
@@ -145,6 +173,10 @@ export default function RAStaffBatchEditPage() {
 
       if (overage > ROUNDING_TOLERANCE) {
         throw new Error("Cannot use more than available quantity");
+      }
+
+      if (usageGuidance?.should_warn && !allowOutOfOrderUse) {
+        throw new Error("This is not the recommended batch. Confirm override to continue.");
       }
 
       const amountToLog = Math.min(normalizedAmountUsed, remainingBeforeUse);
@@ -194,6 +226,7 @@ export default function RAStaffBatchEditPage() {
       await fetchBatch();
       setAmountUsedInput("");
       setPurpose("");
+      setAllowOutOfOrderUse(false);
       alert("Usage logged successfully!");
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
@@ -365,6 +398,28 @@ export default function RAStaffBatchEditPage() {
               />
             </div>
 
+            {usageGuidance?.should_warn && usageGuidance.preferred_batch && (
+              <div className="p-3 bg-amber-50 border border-amber-300 rounded">
+                <p className="text-sm text-amber-800 font-medium">{usageGuidance.message}</p>
+                <p className="text-xs text-amber-700 mt-1">
+                  Preferred batch: #{usageGuidance.preferred_batch.batch_id}
+                  {usageGuidance.preferred_batch.lot_number
+                    ? ` (Lot ${usageGuidance.preferred_batch.lot_number})`
+                    : ""}
+                  {` • Remaining ${usageGuidance.preferred_batch.remaining} ${usageGuidance.preferred_batch.unit || ""}`}
+                </p>
+                <label className="mt-2 flex items-start gap-2 text-xs text-amber-800 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={allowOutOfOrderUse}
+                    onChange={(e) => setAllowOutOfOrderUse(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  I understand and still want to log usage for this batch.
+                </label>
+              </div>
+            )}
+
             {error && (
               <div className="p-3 bg-red-100 border border-red-400 text-red-700 rounded text-sm">
                 {error}
@@ -373,7 +428,7 @@ export default function RAStaffBatchEditPage() {
 
             <button
               type="submit"
-              disabled={saving || remainingQuantity === 0}
+              disabled={saving || remainingQuantity === 0 || Boolean(usageGuidance?.should_warn && !allowOutOfOrderUse)}
               className="w-full flex items-center justify-center gap-2 bg-[#113F67] text-white px-4 py-3 rounded-lg hover:bg-[#0d2f4d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Save size={20} />

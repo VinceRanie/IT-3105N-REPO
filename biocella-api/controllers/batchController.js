@@ -103,6 +103,73 @@ exports.getById = async (req, res) => {
   }
 };
 
+// READ GUIDANCE FOR USAGE ORDERING
+// Prefer already-opened containers first, then FEFO (earliest expiration), then oldest received.
+exports.getUsageGuidance = async (req, res) => {
+  try {
+    const currentBatch = await Batch.getBatchById(req.params.id);
+    if (!currentBatch) return res.status(404).json({ message: "Batch not found" });
+
+    const chemicalBatches = await Batch.getAllBatches({ chemical_id: currentBatch.chemical_id });
+
+    const withRemaining = chemicalBatches
+      .map((batch) => {
+        const quantity = Number(batch.quantity) || 0;
+        const used = Number(batch.used_quantity) || 0;
+        const remaining = Math.max(0, quantity - used);
+        return {
+          ...batch,
+          quantity,
+          used_quantity: used,
+          remaining,
+        };
+      })
+      .filter((batch) => batch.remaining > 0);
+
+    const sortByOperationalOrder = (a, b) => {
+      const aOpened = a.used_quantity > 0 ? 1 : 0;
+      const bOpened = b.used_quantity > 0 ? 1 : 0;
+      if (aOpened !== bOpened) return bOpened - aOpened;
+
+      const aExp = a.expiration_date ? new Date(a.expiration_date).getTime() : Number.POSITIVE_INFINITY;
+      const bExp = b.expiration_date ? new Date(b.expiration_date).getTime() : Number.POSITIVE_INFINITY;
+      if (aExp !== bExp) return aExp - bExp;
+
+      const aReceived = a.date_received ? new Date(a.date_received).getTime() : Number.POSITIVE_INFINITY;
+      const bReceived = b.date_received ? new Date(b.date_received).getTime() : Number.POSITIVE_INFINITY;
+      if (aReceived !== bReceived) return aReceived - bReceived;
+
+      return Number(a.batch_id) - Number(b.batch_id);
+    };
+
+    const ordered = withRemaining.sort(sortByOperationalOrder);
+    const preferred = ordered[0] || null;
+    const shouldWarn = Boolean(preferred && Number(preferred.batch_id) !== Number(currentBatch.batch_id));
+
+    return res.json({
+      current_batch_id: Number(currentBatch.batch_id),
+      chemical_id: Number(currentBatch.chemical_id),
+      preferred_batch_id: preferred ? Number(preferred.batch_id) : null,
+      should_warn: shouldWarn,
+      message: shouldWarn
+        ? `Recommended to use batch #${preferred.batch_id} first to avoid opening untouched containers.`
+        : "This is the recommended batch to consume now.",
+      preferred_batch: preferred
+        ? {
+            batch_id: Number(preferred.batch_id),
+            lot_number: preferred.lot_number || null,
+            remaining: Number(preferred.remaining),
+            unit: preferred.chemical_unit || null,
+            expiration_date: preferred.expiration_date || null,
+            location: preferred.location || null,
+          }
+        : null,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
 // UPDATE
 exports.update = async (req, res) => {
   try {

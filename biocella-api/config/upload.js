@@ -37,7 +37,7 @@ const fileFilter = (req, file, cb) => {
   const imageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
   const textTypes = ['text/plain', 'application/octet-stream']; // FASTA files
   
-  if (file.fieldname === 'image') {
+  if (file.fieldname === 'image' || file.fieldname === 'custom_images') {
     if (imageTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {

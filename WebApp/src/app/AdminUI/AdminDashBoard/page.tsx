@@ -6,7 +6,7 @@ import { getAuthHeader } from "@/app/utils/authUtil";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 
-import { Microscope,FlaskConical,AlertTriangle,CalendarClock,Users,Package,BarChart3,Clock,Loader2,} from "lucide-react";
+import { Microscope,FlaskConical,AlertTriangle,CalendarClock,Users,Package,BarChart3,Clock,Loader2 } from "lucide-react";
 
 import {BarChart,Bar,XAxis,YAxis,CartesianGrid,Tooltip,ResponsiveContainer,} from "recharts";
 

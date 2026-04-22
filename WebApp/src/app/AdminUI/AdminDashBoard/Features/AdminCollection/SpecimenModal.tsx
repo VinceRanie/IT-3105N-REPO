@@ -6,13 +6,33 @@ import Image from "next/image";
 import { API_URL } from "@/config/api";
 
 type SectionKey = "basic" | "molecular" | "biochemical" | "morphology" | "culture";
-type CustomFieldType = "text" | "textarea" | "status" | "file";
+type CustomFieldType = "text" | "textarea" | "status" | "file" | "image_description";
+
+type CustomImageDescriptionValue = {
+  image_url: string;
+  description: string;
+};
 
 type CustomFieldEntry = {
   label: string;
   section: SectionKey;
   type: CustomFieldType;
-  value: string;
+  value: string | CustomImageDescriptionValue;
+};
+
+const toCustomImageDescriptionValue = (value: unknown): CustomImageDescriptionValue => {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const raw = value as Record<string, unknown>;
+    return {
+      image_url: String(raw.image_url || ""),
+      description: String(raw.description || ""),
+    };
+  }
+
+  return {
+    image_url: "",
+    description: String(value || ""),
+  };
 };
 
 interface SpecimenModalProps {
@@ -50,7 +70,7 @@ const normalizeCustomFieldMap = (input: any): Record<string, CustomFieldEntry> =
       const normalizedSection: SectionKey = ["basic", "molecular", "biochemical", "morphology", "culture"].includes(String(entry.section))
         ? (entry.section as SectionKey)
         : "basic";
-      const normalizedType: CustomFieldType = ["text", "textarea", "status", "file"].includes(String(entry.type))
+      const normalizedType: CustomFieldType = ["text", "textarea", "status", "file", "image_description"].includes(String(entry.type))
         ? (entry.type as CustomFieldType)
         : "text";
 
@@ -58,7 +78,9 @@ const normalizeCustomFieldMap = (input: any): Record<string, CustomFieldEntry> =
         label: String(entry.label || key).trim() || key,
         section: normalizedSection,
         type: normalizedType,
-        value: String(entry.value || ""),
+        value: normalizedType === "image_description"
+          ? toCustomImageDescriptionValue(entry.value)
+          : String(entry.value || ""),
       };
       return acc;
     }
@@ -146,6 +168,8 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
   
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>("");
+  const [customFieldImageFiles, setCustomFieldImageFiles] = useState<Record<string, File>>({});
+  const [customFieldImagePreviews, setCustomFieldImagePreviews] = useState<Record<string, string>>({});
   const [fastaFile, setFastaFile] = useState<File | null>(null);
   const [blastStatus, setBlastStatus] = useState<string>("");
   const [blastResults, setBlastResults] = useState<any>(null);
@@ -201,6 +225,9 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
       if (specimen.blast_results) {
         setBlastResults(specimen.blast_results);
       }
+
+      setCustomFieldImageFiles({});
+      setCustomFieldImagePreviews({});
     } else {
       // Reset for new specimen
       setFormData({
@@ -239,6 +266,8 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
       setFastaFile(null);
       setBlastStatus("");
       setBlastResults(null);
+      setCustomFieldImageFiles({});
+      setCustomFieldImagePreviews({});
     }
   }, [specimen]);
 
@@ -355,7 +384,9 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
           label: fieldName,
           section,
           type: inputType,
-          value: "",
+          value: inputType === "image_description"
+            ? { image_url: "", description: "" }
+            : "",
         },
       },
     }));
@@ -371,6 +402,16 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
         ...prev,
         custom_fields: rest,
       };
+    });
+
+    setCustomFieldImageFiles((prev) => {
+      const { [fieldId]: _removed, ...rest } = prev;
+      return rest;
+    });
+
+    setCustomFieldImagePreviews((prev) => {
+      const { [fieldId]: _removed, ...rest } = prev;
+      return rest;
     });
   };
 
@@ -390,6 +431,60 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
         },
       };
     });
+  };
+
+  const handleCustomImageDescriptionChange = (
+    fieldId: string,
+    key: keyof CustomImageDescriptionValue,
+    value: string
+  ) => {
+    setFormData((prev) => {
+      const existing = prev.custom_fields[fieldId];
+      if (!existing || existing.type !== "image_description") return prev;
+
+      const currentValue = toCustomImageDescriptionValue(existing.value);
+      return {
+        ...prev,
+        custom_fields: {
+          ...prev.custom_fields,
+          [fieldId]: {
+            ...existing,
+            value: {
+              ...currentValue,
+              [key]: value,
+            },
+          },
+        },
+      };
+    });
+  };
+
+  const handleCustomImageFileChange = (fieldId: string, file: File | null) => {
+    if (!file) {
+      setCustomFieldImageFiles((prev) => {
+        const { [fieldId]: _removed, ...rest } = prev;
+        return rest;
+      });
+      setCustomFieldImagePreviews((prev) => {
+        const { [fieldId]: _removed, ...rest } = prev;
+        return rest;
+      });
+      return;
+    }
+
+    setCustomFieldImageFiles((prev) => ({
+      ...prev,
+      [fieldId]: file,
+    }));
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setCustomFieldImagePreviews((prev) => ({
+        ...prev,
+        [fieldId]: reader.result as string,
+      }));
+    };
+    reader.readAsDataURL(file);
   };
 
   const renderCustomFieldsForSection = (section: SectionKey) => {
@@ -416,7 +511,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
 
               {entry.type === "textarea" && (
                 <textarea
-                  value={entry.value}
+                  value={String(entry.value || "")}
                   onChange={(e) => handleCustomFieldChange(fieldId, e.target.value)}
                   rows={3}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
@@ -425,7 +520,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
 
               {entry.type === "status" && (
                 <select
-                  value={entry.value}
+                  value={String(entry.value || "")}
                   onChange={(e) => handleCustomFieldChange(fieldId, e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
                 >
@@ -440,17 +535,57 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
               {entry.type === "file" && (
                 <input
                   type="text"
-                  value={entry.value}
+                  value={String(entry.value || "")}
                   onChange={(e) => handleCustomFieldChange(fieldId, e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
                   placeholder="File name or file link"
                 />
               )}
 
+              {entry.type === "image_description" && (
+                <div className="space-y-3">
+                  <label className="flex w-full cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-[#113F67] px-3 py-4 text-center hover:bg-[#113F67]/5">
+                    <Upload className="mb-2 h-6 w-6 text-gray-500" />
+                    <span className="text-xs text-gray-600">Upload reaction image</span>
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept="image/*"
+                      onChange={(e) => handleCustomImageFileChange(fieldId, e.target.files?.[0] || null)}
+                    />
+                  </label>
+
+                  {customFieldImageFiles[fieldId] && (
+                    <p className="text-xs text-green-600">Selected: {customFieldImageFiles[fieldId].name}</p>
+                  )}
+
+                  {(customFieldImagePreviews[fieldId] || toCustomImageDescriptionValue(entry.value).image_url) && (
+                    <div className="relative h-40 w-full overflow-hidden rounded-lg border border-gray-200">
+                      <Image
+                        src={customFieldImagePreviews[fieldId]
+                          ? customFieldImagePreviews[fieldId]
+                          : `${API_URL}${toCustomImageDescriptionValue(entry.value).image_url}`}
+                        alt={`${entry.label} preview`}
+                        fill
+                        className="object-cover"
+                      />
+                    </div>
+                  )}
+
+                  <textarea
+                    value={toCustomImageDescriptionValue(entry.value).description}
+                    onChange={(e) => handleCustomImageDescriptionChange(fieldId, "description", e.target.value)}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                    placeholder="Add description for this reaction image"
+                  />
+                </div>
+              )}
+
               {entry.type === "text" && (
                 <input
                   type="text"
-                  value={entry.value}
+                  value={String(entry.value || "")}
                   onChange={(e) => handleCustomFieldChange(fieldId, e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
                 />
@@ -482,6 +617,27 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
     setIsSubmitting(true);
     
     const submitData = new FormData();
+    const customImageMap: Record<string, number> = {};
+    let customImageIndex = 0;
+
+    Object.entries(formData.custom_fields).forEach(([fieldId, entry]) => {
+      if (entry.type !== "image_description") {
+        return;
+      }
+
+      const imageFileForField = customFieldImageFiles[fieldId];
+      if (!imageFileForField) {
+        return;
+      }
+
+      submitData.append("custom_images", imageFileForField);
+      customImageMap[fieldId] = customImageIndex;
+      customImageIndex += 1;
+    });
+
+    if (Object.keys(customImageMap).length > 0) {
+      submitData.append("custom_image_map", JSON.stringify(customImageMap));
+    }
     
     // Add all form fields
     Object.entries(formData).forEach(([key, value]) => {
@@ -1394,6 +1550,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
                   <option value="textarea">Long Text</option>
                   <option value="status">Status (+ / - / weak)</option>
                   <option value="file">File Reference</option>
+                  <option value="image_description">Upload Image + Description</option>
                 </select>
               </div>
             </div>
