@@ -52,7 +52,7 @@ export default function ForgotPasswordPage() {
                 <input
                   id="email"
                   type="email"
-                  placeholder="usc.edu.ph"
+                  placeholder="Enter your Email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="text-[#113F67] w-full pl-10 pr-3 py-2 border border-[#113F67] rounded-md focus:ring-2 focus:ring-[#113F67] focus:border-transparent"

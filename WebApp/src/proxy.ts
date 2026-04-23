@@ -51,7 +51,6 @@ const decodeJwtPayloadRole = (token: string): string | undefined => {
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const pathnameLower = pathname.toLowerCase();
   const isLandingPage = pathname === "/";
 
   // Normalize common lowercase URL typed in browser to the actual route casing.
@@ -78,7 +77,8 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith(path)
   );
 
-  // Reset links should stay accessible even if the user is already logged in.
+  const isSignupPage = pathname === "/signup" || pathname.startsWith("/signup/");
+
   const isResetPasswordPage =
     pathname === "/forgot-password/reset" ||
     pathname.startsWith("/forgot-password/reset/");
@@ -105,7 +105,7 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(new URL(getDashboardPath(fallbackRole), request.url));
     }
 
-    if (isAuthPage && fallbackRole) {
+    if (isAuthPage && !isResetPasswordPage && !isSignupPage && fallbackRole) {
       return NextResponse.redirect(new URL(getDashboardPath(fallbackRole), request.url));
     }
 
@@ -132,7 +132,7 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(new URL(getDashboardPath(role), request.url));
     }
 
-    if (isAuthPage && role) {
+    if (isAuthPage && !isResetPasswordPage && !isSignupPage && role) {
       return NextResponse.redirect(new URL(getDashboardPath(role), request.url));
     }
 
