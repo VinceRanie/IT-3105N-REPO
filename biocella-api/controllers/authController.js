@@ -41,7 +41,7 @@ if (!APP_BASE_URL) {
 const RESET_LINK_TTL_MS = 60 * 60 * 1000; // 1 hour
 const RESET_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const PASSWORD_STRENGTH_ERROR_MESSAGE = "Password must be at least 8 characters long and contain at least one uppercase, one lowercase, and a number.";
-const OPAQUE_FORGOT_PASSWORD_MESSAGE = "If an account exists, a reset email will be sent.";
+const OPAQUE_AUTH_MESSAGE = "If gmail is registered, an email will be sent.";
 
 // Used only for verifyGoogleProfile
 const googleOauthClient = new google.auth.OAuth2(
@@ -148,10 +148,10 @@ const buildPasswordResetStatus = (user) => {
   };
 };
 
-const sendOpaqueForgotPasswordResponse = (res) =>
-  res.status(HttpStatus.OK).json({
-    message: OPAQUE_FORGOT_PASSWORD_MESSAGE,
-    statusCode: HttpStatus.OK,
+const sendOpaqueAuthResponse = (res, statusCode = HttpStatus.OK) =>
+  res.status(statusCode).json({
+    message: OPAQUE_AUTH_MESSAGE,
+    statusCode: statusCode,
   });
 
 
@@ -457,10 +457,7 @@ exports.register = async (req, res) => {
     const existingUser = await authModel.getUserByEmail(email);
     if (existingUser) {
       if (existingUser.password) {
-        return res.status(HttpStatus.CONFLICT).json({
-          message: "User already registered.",
-          statusCode: HttpStatus.CONFLICT,
-        });
+        return sendOpaqueAuthResponse(res, HttpStatus.CONFLICT);
       }
 
       const tokenExpiryMs = existingUser.reset_token_expires
@@ -538,12 +535,12 @@ exports.forgotPassword = async (req, res) => {
     const user = await authModel.getUserByEmail(email);
 
     if (!user) {
-      return sendOpaqueForgotPasswordResponse(res);
+      return sendOpaqueAuthResponse(res);
     }
 
     const resetResult = await issuePasswordResetForUser(user);
     if (!resetResult.ok && resetResult.statusCode === HttpStatus.SERVICE_UNAVAILABLE) {
-      return sendOpaqueForgotPasswordResponse(res);
+      return sendOpaqueAuthResponse(res);
     }
 
     return res.status(resetResult.statusCode).json({
@@ -629,10 +626,7 @@ exports.adminInvite = async (req, res) => {
 
     const existingUser = await authModel.userExists(email);
     if (existingUser) {
-      return res.status(HttpStatus.CONFLICT).json({
-        message: "User already exists.",
-        statusCode: HttpStatus.CONFLICT,
-      });
+      return sendOpaqueAuthResponse(res, HttpStatus.CONFLICT);
     }
 
     const resetToken = uuidv4();
