@@ -25,6 +25,21 @@ export default function AppointmentForm() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  const formatLocalDateTime = (value: string) => {
+    if (!value) return value;
+    return `${value.replace('T', ' ')}:00`;
+  };
+
+  const getLocalDateTimeMin = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
+
   useEffect(() => {
     setIsMounted(true);
   }, []);
@@ -53,7 +68,6 @@ export default function AppointmentForm() {
     setSuccess('');
 
     try {
-      // Get user_id from auth context
       if (!userId) {
         setError('User not authenticated. Please log in first.');
         return;
@@ -61,11 +75,10 @@ export default function AppointmentForm() {
 
       const response = await fetch('/API/appointments', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...formData,
+          date: formatLocalDateTime(formData.date),
           user_id: userId,
         }),
       });
@@ -80,8 +93,7 @@ export default function AppointmentForm() {
           purpose: '',
           date: '',
         });
-        
-        // Redirect to appointments page after 2 seconds
+
         setTimeout(() => {
           router.push('/UsersUI/appointments');
         }, 2000);
@@ -96,119 +108,143 @@ export default function AppointmentForm() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto p-6">
-      <div className="bg-white rounded-lg shadow-md p-8">
-        <h2 className="text-2xl font-bold mb-6 text-gray-800">Request an Appointment</h2>
-        
-        {error && (
-          <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
-            {error}
-          </div>
-        )}
-        
-        {success && (
-          <div className="mb-4 p-4 bg-green-100 border border-green-400 text-green-700 rounded">
-            {success}
-          </div>
-        )}
+    <div className="min-h-screen bg-gradient-to-br from-white via-[#f4f8fb] to-[#eaf1f8] flex items-center justify-center p-6">
+      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-[#113F67]/10 overflow-hidden">
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label htmlFor="student_id" className="block text-sm font-medium text-gray-700 mb-2">
-              Student ID *
-            </label>
-            <input
-              type="text"
-              id="student_id"
-              name="student_id"
-              value={formData.student_id}
-              onChange={handleChange}
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Enter your student ID"
-            />
+        {/* Header */}
+        <div className="bg-[#113F67] px-8 py-6 text-white">
+          <h2 className="text-2xl font-bold tracking-tight">
+            Request an Appointment
+          </h2>
+          <p className="text-sm opacity-80 mt-1">
+            Fill out the form below to schedule your visit
+          </p>
+        </div>
+
+        <div className="p-8">
+
+          {/* Alerts */}
+          {error && (
+            <div className="mb-5 p-4 rounded-lg border border-red-200 bg-red-50 text-red-700 text-sm shadow-sm">
+              {error}
+            </div>
+          )}
+
+          {success && (
+            <div className="mb-5 p-4 rounded-lg border border-[#113F67]/30 bg-[#113F67]/10 text-[#113F67] text-sm shadow-sm">
+              {success}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-6">
+
+            {/* Student ID */}
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-[#113F67]">
+                Student ID *
+              </label>
+              <input
+                type="text"
+                id="student_id"
+                name="student_id"
+                value={formData.student_id}
+                onChange={handleChange}
+                required
+                placeholder="Enter your student ID"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#113F67]/40 focus:border-[#113F67] transition"
+              />
+            </div>
+
+            {/* Department */}
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-[#113F67]">
+                Department *
+              </label>
+              <select
+                id="department"
+                name="department"
+                value={formData.department}
+                onChange={handleChange}
+                required
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#113F67]/40 focus:border-[#113F67] transition"
+              >
+                <option value="">Select a department</option>
+                <option value="Biology">Biology</option>
+                <option value="Chemistry">Chemistry</option>
+                <option value="Microbiology">Microbiology</option>
+                <option value="Biochemistry">Biochemistry</option>
+                <option value="Research">Research</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
+            {/* Purpose */}
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-[#113F67]">
+                Purpose of Visit *
+              </label>
+              <textarea
+                id="purpose"
+                name="purpose"
+                value={formData.purpose}
+                onChange={handleChange}
+                required
+                rows={4}
+                placeholder="Please describe the purpose of your visit"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#113F67]/40 focus:border-[#113F67] transition resize-none"
+              />
+            </div>
+
+            {/* Date */}
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-[#113F67]">
+                Preferred Date & Time *
+              </label>
+              <input
+                type="datetime-local"
+                id="date"
+                name="date"
+                value={formData.date}
+                onChange={handleChange}
+                required
+                min={getLocalDateTimeMin()}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#113F67]/40 focus:border-[#113F67] transition"
+              />
+            </div>
+
+            {/* Buttons */}
+            <div className="flex gap-4 pt-2">
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex-1 bg-[#113F67] text-white py-3 rounded-lg font-semibold hover:bg-[#0d2f4d] shadow-md hover:shadow-lg transition disabled:bg-gray-400"
+              >
+                {loading ? 'Submitting...' : 'Submit Request'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => router.back()}
+                className="flex-1 border border-[#113F67]/30 text-[#113F67] py-3 rounded-lg font-semibold hover:bg-[#113F67]/10 transition"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+
+          {/* Info Box */}
+          <div className="mt-8 p-5 bg-[#113F67]/10 border border-[#113F67]/20 rounded-xl">
+            <h3 className="font-semibold text-[#113F67] mb-2">
+              What happens next?
+            </h3>
+            <ul className="text-sm text-gray-700 space-y-1 list-disc list-inside">
+              <li>Your request will be reviewed by our admin team</li>
+              <li>You'll receive an email notification with the decision</li>
+              <li>If approved, you'll get a QR code to present when you arrive</li>
+              <li>Please arrive on time for your scheduled appointment</li>
+            </ul>
           </div>
 
-          <div>
-            <label htmlFor="department" className="block text-sm font-medium text-gray-700 mb-2">
-              Department *
-            </label>
-            <select
-              id="department"
-              name="department"
-              value={formData.department}
-              onChange={handleChange}
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="">Select a department</option>
-              <option value="Biology">Biology</option>
-              <option value="Chemistry">Chemistry</option>
-              <option value="Microbiology">Microbiology</option>
-              <option value="Biochemistry">Biochemistry</option>
-              <option value="Research">Research</option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
-
-          <div>
-            <label htmlFor="purpose" className="block text-sm font-medium text-gray-700 mb-2">
-              Purpose of Visit *
-            </label>
-            <textarea
-              id="purpose"
-              name="purpose"
-              value={formData.purpose}
-              onChange={handleChange}
-              required
-              rows={4}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Please describe the purpose of your visit"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-2">
-              Preferred Date & Time *
-            </label>
-            <input
-              type="datetime-local"
-              id="date"
-              name="date"
-              value={formData.date}
-              onChange={handleChange}
-              required
-              min={new Date().toISOString().slice(0, 16)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-
-          <div className="flex gap-4">
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex-1 bg-blue-600 text-white py-3 px-6 rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
-            >
-              {loading ? 'Submitting...' : 'Submit Request'}
-            </button>
-            <button
-              type="button"
-              onClick={() => router.back()}
-              className="flex-1 bg-gray-200 text-gray-700 py-3 px-6 rounded-md hover:bg-gray-300 transition-colors font-medium"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
-
-        <div className="mt-6 p-4 bg-blue-50 rounded-md">
-          <h3 className="font-semibold text-blue-900 mb-2">What happens next?</h3>
-          <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
-            <li>Your request will be reviewed by our admin team</li>
-            <li>You'll receive an email notification with the decision</li>
-            <li>If approved, you'll get a QR code to present when you arrive</li>
-            <li>Please arrive on time for your scheduled appointment</li>
-          </ul>
         </div>
       </div>
     </div>

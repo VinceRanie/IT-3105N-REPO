@@ -36,7 +36,7 @@ export default function Navbar() {
         .reverse()
         .find((section) => scrollPosition >= section.top)
 
-      setActiveHash(current?.href || "#")
+      setActiveHash(current?.href || navigation[0].href)
     }
 
     window.addEventListener("scroll", handleScroll)

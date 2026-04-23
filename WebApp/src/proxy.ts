@@ -3,6 +3,7 @@ import { jwtVerify } from "jose";
 
 const JWT_TOKEN = process.env.JWT_TOKEN;
 const JWT_SECRET = JWT_TOKEN ? new TextEncoder().encode(JWT_TOKEN) : null;
+const ENABLE_LOCAL_BYPASS = process.env.LOCAL_BYPASS === "true";
 
 const roleAccess: Record<string, string[]> = {
   "/AdminUI": ["admin"],
@@ -24,17 +25,63 @@ const getDashboardPath = (role: string) => {
   const normalizedRole = normalizeRole(role);
   if (normalizedRole === "admin") return "/AdminUI/AdminDashBoard";
   if (normalizedRole === "student" || normalizedRole === "faculty") {
-    return "/UsersUI/UsersDashBoard";
+    return "/UsersUI/UsersDashBoard/Features/UserCollection";
   }
   return "/RAStaffUI/RAStaffDashBoard";
 };
 
+const decodeJwtPayloadRole = (token: string): string | undefined => {
+  try {
+    const [, payload] = token.split(".");
+    if (!payload) return undefined;
+
+    const normalizedPayload = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const padding = normalizedPayload.length % 4;
+    const paddedPayload = padding
+      ? normalizedPayload + "=".repeat(4 - padding)
+      : normalizedPayload;
+
+    const decoded = atob(paddedPayload);
+    const parsed = JSON.parse(decoded) as { role?: string };
+    return parsed?.role ? normalizeRole(parsed.role) : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const pathnameLower = pathname.toLowerCase();
+  const isLandingPage = pathname === "/";
+
+  // Normalize common lowercase URL typed in browser to the actual route casing.
+  if (pathname === "/adminui/admindashboard") {
+    return NextResponse.redirect(
+      new URL("/AdminUI/AdminDashBoard", request.url)
+    );
+  }
+
+  const isLocalHost =
+    request.nextUrl.hostname === "localhost" ||
+    request.nextUrl.hostname === "127.0.0.1";
+  const shouldBypassAdminAuth =
+    ENABLE_LOCAL_BYPASS &&
+    process.env.NODE_ENV !== "production" &&
+    isLocalHost
+
+  // Allow direct Admin UI access for local-only visual testing when explicitly enabled.
+  if (shouldBypassAdminAuth) {
+    return NextResponse.next();
+  }
 
   const matchedPath = Object.keys(roleAccess).find((path) =>
     pathname.startsWith(path)
   );
+
+  // Reset links should stay accessible even if the user is already logged in.
+  const isResetPasswordPage =
+    pathname === "/forgot-password/reset" ||
+    pathname.startsWith("/forgot-password/reset/");
 
   const isAuthPage = authPages.some(
     (path) => pathname === path || pathname.startsWith(`${path}/`)
@@ -52,10 +99,24 @@ export async function proxy(request: NextRequest) {
   }
 
   if (!JWT_SECRET) {
-    const response = matchedPath
-      ? redirectToLogin(request)
-      : NextResponse.next();
-    return clearAuthCookie(response);
+    const fallbackRole = decodeJwtPayloadRole(token);
+
+    if (isLandingPage && fallbackRole) {
+      return NextResponse.redirect(new URL(getDashboardPath(fallbackRole), request.url));
+    }
+
+    if (isAuthPage && fallbackRole) {
+      return NextResponse.redirect(new URL(getDashboardPath(fallbackRole), request.url));
+    }
+
+    if (matchedPath) {
+      const allowedRoles = roleAccess[matchedPath];
+      if (!fallbackRole || !allowedRoles.includes(fallbackRole)) {
+        return redirectToLogin(request);
+      }
+    }
+
+    return NextResponse.next();
   }
 
   try {
@@ -66,6 +127,10 @@ export async function proxy(request: NextRequest) {
 
     const rawRole = payload.role as string | undefined;
     const role = rawRole ? normalizeRole(rawRole) : undefined;
+
+    if (isLandingPage && role) {
+      return NextResponse.redirect(new URL(getDashboardPath(role), request.url));
+    }
 
     if (isAuthPage && role) {
       return NextResponse.redirect(new URL(getDashboardPath(role), request.url));
@@ -89,7 +154,9 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
+    "/",
     "/AdminUI/:path*",
+    "/adminui/:path*",
     "/UsersUI/:path*",
     "/RAStaffUI/:path*",
     "/Login",

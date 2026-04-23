@@ -13,6 +13,82 @@ interface SpecimenDetailProps {
   }>;
 }
 
+type NormalizedCustomField = {
+  id: string;
+  label: string;
+  section: string;
+  type: string;
+  value: string;
+  rawValue: any;
+};
+
+const normalizeCustomImageDescriptionValue = (value: any) => {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return {
+      image_url: String(value.image_url || ""),
+      description: String(value.description || ""),
+    };
+  }
+
+  return {
+    image_url: "",
+    description: String(value || ""),
+  };
+};
+
+const CUSTOM_SECTION_LABELS: Record<string, string> = {
+  basic: "Required Information",
+  molecular: "Molecular & Genetic Data",
+  biochemical: "Biochemical Tests & Microbial Properties",
+  morphology: "Cell & Colony Morphology",
+  culture: "Culture Requirements",
+};
+
+const CUSTOM_SECTION_ORDER = ["basic", "molecular", "biochemical", "morphology", "culture"];
+
+const normalizeCustomFields = (customFields: any): NormalizedCustomField[] => {
+  if (!customFields || typeof customFields !== "object") return [];
+
+  return Object.entries(customFields).map(([key, value]) => {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      const raw = value as any;
+      return {
+        id: key,
+        label: String(raw.label || key).trim() || key,
+        section: String(raw.section || "basic").trim().toLowerCase(),
+        type: String(raw.type || "text").trim().toLowerCase(),
+        value: String(raw.value || ""),
+        rawValue: raw.value,
+      };
+    }
+
+    return {
+      id: key,
+      label: key.replace(/_/g, " "),
+      section: "basic",
+      type: "text",
+      value: String(value || ""),
+      rawValue: value,
+    };
+  });
+};
+
+const groupCustomFieldsBySection = (customFields: any) => {
+  const normalized = normalizeCustomFields(customFields);
+  const bySection = new Map<string, NormalizedCustomField[]>();
+
+  normalized.forEach((field) => {
+    const section = CUSTOM_SECTION_ORDER.includes(field.section) ? field.section : "basic";
+    const current = bySection.get(section) || [];
+    current.push(field);
+    bySection.set(section, current);
+  });
+
+  return CUSTOM_SECTION_ORDER
+    .map((section) => ({ section, fields: bySection.get(section) || [] }))
+    .filter((entry) => entry.fields.length > 0);
+};
+
 export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
   const resolvedParams = use(params);
   const [specimen, setSpecimen] = useState<any>(null);
@@ -38,7 +114,7 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
     try {
       setLoading(true);
       console.log("Fetching specimen with ID:", resolvedParams.id);
-      const response = await fetch(`${API_URL}/microbials/${resolvedParams.id}`);
+      const response = await fetch(`${API_URL}/microbials/${resolvedParams.id}?role=admin`);
       if (response.ok) {
         const data = await response.json();
         setSpecimen(data);
@@ -301,17 +377,23 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
         }
       };
 
-      // Title
+      const headerLogoData = await getImageBase64('/UI/img/logo-biocella.png');
+
+      // Header
+      if (headerLogoData) {
+        doc.addImage(headerLogoData, 'PNG', margin, yPos - 4, 12, 12);
+      }
+
       doc.setFontSize(18);
       doc.setFont("helvetica", "bold");
-      doc.text("Specimen Information Report", margin, yPos);
-      yPos += 10;
+      doc.text("BIOCELLA Specimen Overview", headerLogoData ? margin + 16 : margin, yPos + 4);
+      yPos += 12;
 
       // Horizontal line
       doc.setDrawColor(17, 63, 103);
       doc.setLineWidth(0.5);
       doc.line(margin, yPos, pageWidth - margin, yPos);
-      yPos += 10;
+      yPos += 8;
 
       // Add specimen image on the left if available
       let imageHeight = 0;
@@ -452,6 +534,49 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
       }
     }
 
+    // Cell and Colony Morphology
+    const morphologyEntries: Array<[string, any]> = [];
+    if (specimen.morphology) {
+      morphologyEntries.push(
+        ["Shape", specimen.morphology.shape],
+        ["Cell Size", specimen.morphology.cell_size],
+        ["Colony Size", specimen.morphology.colony_size],
+        ["Pigmentation", specimen.morphology.pigmentation],
+        ["Form", specimen.morphology.form],
+        ["Elevation", specimen.morphology.elevation],
+        ["Margin", specimen.morphology.margin],
+        ["Colony Surface", specimen.morphology.colony_surface],
+        ["Opacity", specimen.morphology.opacity],
+        ["Texture", specimen.morphology.texture],
+        ["Spore Formation", specimen.morphology.spore_formation],
+        ["Mycelium Formation", specimen.morphology.mycelium_formation],
+        ["Description", specimen.morphology.description],
+      );
+    }
+    const filledMorphologyEntries = morphologyEntries.filter(
+      ([_, value]) => value && String(value).trim() !== ""
+    );
+
+    if (filledMorphologyEntries.length > 0) {
+      yPos += 5;
+      checkPageBreak(20);
+      doc.setFontSize(14);
+      doc.setFont("helvetica", "bold");
+      doc.text("Cell and Colony Morphology", margin, yPos);
+      yPos += lineHeight;
+
+      doc.setFontSize(10);
+      filledMorphologyEntries.forEach(([label, value]) => {
+        checkPageBreak();
+        doc.setFont("helvetica", "bold");
+        doc.text(`${label}:`, margin, yPos);
+        doc.setFont("helvetica", "normal");
+        const wrappedValue = doc.splitTextToSize(String(value), contentWidth - 52);
+        doc.text(wrappedValue, margin + 52, yPos);
+        yPos += lineHeight * Math.max(1, wrappedValue.length);
+      });
+    }
+
     // Bioactivity
     if (specimen.activity || specimen.result) {
       yPos += 5;
@@ -525,38 +650,47 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
       doc.setFont("helvetica", "bold");
       doc.text("Additional Information", margin, yPos);
       yPos += lineHeight;
-      
+
+      const groupedCustomFields = groupCustomFieldsBySection(specimen.custom_fields);
       doc.setFontSize(10);
-      doc.setFont("helvetica", "normal");
-      
-      Object.entries(specimen.custom_fields).forEach(([key, value]) => {
-        checkPageBreak();
+
+      groupedCustomFields.forEach((group) => {
+        checkPageBreak(10);
         doc.setFont("helvetica", "bold");
-        doc.text(`${key.replace(/_/g, ' ')}:`, margin, yPos);
-        doc.setFont("helvetica", "normal");
-        doc.text(String(value), margin + 50, yPos);
+        doc.text(CUSTOM_SECTION_LABELS[group.section] || group.section, margin, yPos);
         yPos += lineHeight;
+
+        group.fields.forEach((field) => {
+          checkPageBreak(10);
+          doc.setFont("helvetica", "bold");
+          doc.text(`${field.label}:`, margin, yPos);
+          doc.setFont("helvetica", "normal");
+          const printableValue = field.type === "image_description"
+            ? (() => {
+                const normalized = normalizeCustomImageDescriptionValue(field.rawValue);
+                if (!normalized.image_url && !normalized.description) {
+                  return "N/A";
+                }
+                return [
+                  normalized.description ? `Description: ${normalized.description}` : null,
+                  normalized.image_url ? `Image: ${normalized.image_url}` : null,
+                ].filter(Boolean).join(" | ");
+              })()
+            : (field.value || "N/A");
+          const valueText = doc.splitTextToSize(printableValue, contentWidth - 55);
+          doc.text(valueText, margin + 55, yPos);
+          yPos += Math.max(lineHeight, valueText.length * 5);
+        });
+
+        yPos += 2;
       });
     }
 
-    // Footer with logo on first page and branding
-    const logoUrl = '/UI/img/BiocellaLogo.png';
-    const logoData = await getImageBase64(logoUrl);
+    // Footer branding
     
     const pageCount = doc.getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
       doc.setPage(i);
-      
-      // Add logo to top right corner on first page only
-      if (i === 1 && logoData) {
-        try {
-          const logoWidth = 30;
-          const logoHeight = 20;
-          doc.addImage(logoData, 'PNG', pageWidth - margin - logoWidth, 8, logoWidth, logoHeight);
-        } catch (error) {
-          console.error("Error adding logo to PDF:", error);
-        }
-      }
       
       // Add footer text
       doc.setFontSize(8);
@@ -667,7 +801,7 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
         {/* Tabs */}
         <div className="mb-6 border-b border-gray-200">
           <div className="flex gap-4">
-            {["info", "bioactivity", "biochemical", "genome"].map((tab) => (
+            {["info", "bioactivity", "biochemical", "morphology", "genome"].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -772,9 +906,48 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
                 {specimen.custom_fields && Object.keys(specimen.custom_fields).length > 0 && (
                   <div className="bg-white shadow rounded-xl p-6">
                     <h2 className="text-lg font-semibold mb-4">Additional Information</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {Object.entries(specimen.custom_fields).map(([key, value]: [string, any]) => (
-                        <InfoItem key={key} label={key.replace(/_/g, " ")} value={value || "N/A"} />
+                    <div className="space-y-6">
+                      {groupCustomFieldsBySection(specimen.custom_fields).map((group) => (
+                        <div key={group.section}>
+                          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">
+                            {CUSTOM_SECTION_LABELS[group.section] || group.section}
+                          </h3>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {group.fields.map((field) => (
+                              field.type === "image_description" ? (
+                                <div key={field.id} className="md:col-span-2 rounded-lg border border-gray-200 p-4">
+                                  <h4 className="text-sm font-semibold text-gray-700">{field.label}</h4>
+                                  <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                                    <div>
+                                      {normalizeCustomImageDescriptionValue(field.rawValue).image_url ? (
+                                        <div className="relative h-48 w-full overflow-hidden rounded-lg border border-gray-200">
+                                          <Image
+                                            src={`${API_URL}${normalizeCustomImageDescriptionValue(field.rawValue).image_url}`}
+                                            alt={field.label}
+                                            fill
+                                            className="object-cover"
+                                          />
+                                        </div>
+                                      ) : (
+                                        <div className="flex h-48 items-center justify-center rounded-lg border border-dashed border-gray-300 text-sm text-gray-400">
+                                          No image uploaded
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div>
+                                      <p className="text-xs font-medium uppercase text-gray-500">Description</p>
+                                      <p className="mt-1 text-sm text-gray-800 whitespace-pre-wrap">
+                                        {normalizeCustomImageDescriptionValue(field.rawValue).description || "N/A"}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : (
+                                <InfoItem key={field.id} label={field.label} value={field.value || "N/A"} />
+                              )
+                            ))}
+                          </div>
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -841,6 +1014,33 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
                   </>
                 ) : (
                   <p className="text-gray-500 text-sm">No biochemical data available yet.</p>
+                )}
+              </div>
+            )}
+
+            {activeTab === "morphology" && (
+              <div className="bg-white shadow rounded-xl p-6">
+                <h2 className="text-lg font-semibold mb-4">Cell and Colony Morphology</h2>
+                {specimen.morphology ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <InfoItem label="Shape" value={specimen.morphology.shape || "N/A"} />
+                    <InfoItem label="Cell Size" value={specimen.morphology.cell_size || "N/A"} />
+                    <InfoItem label="Colony Size" value={specimen.morphology.colony_size || "N/A"} />
+                    <InfoItem label="Pigmentation" value={specimen.morphology.pigmentation || "N/A"} />
+                    <InfoItem label="Form" value={specimen.morphology.form || "N/A"} />
+                    <InfoItem label="Elevation" value={specimen.morphology.elevation || "N/A"} />
+                    <InfoItem label="Margin" value={specimen.morphology.margin || "N/A"} />
+                    <InfoItem label="Colony Surface" value={specimen.morphology.colony_surface || "N/A"} />
+                    <InfoItem label="Opacity" value={specimen.morphology.opacity || "N/A"} />
+                    <InfoItem label="Texture" value={specimen.morphology.texture || "N/A"} />
+                    <InfoItem label="Spore Formation" value={specimen.morphology.spore_formation || "N/A"} />
+                    <InfoItem label="Mycelium Formation" value={specimen.morphology.mycelium_formation || "N/A"} />
+                    <div className="md:col-span-2">
+                      <InfoItem label="Description" value={specimen.morphology.description || "N/A"} />
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-gray-500 text-sm">No morphology data available yet.</p>
                 )}
               </div>
             )}

@@ -38,6 +38,11 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
       const response = await fetch(`${API_URL}/microbials/${resolvedParams.id}`);
       if (response.ok) {
         const data = await response.json();
+        const status = String(data?.publish_status || "published").trim().toLowerCase();
+        if (status !== "published") {
+          setSpecimen(null);
+          return;
+        }
         setSpecimen(data);
       } else {
         console.error("Failed to fetch specimen:", response.status, response.statusText);
@@ -135,17 +140,23 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
         }
       };
 
-      // Title
+      const headerLogoData = await getImageBase64('/UI/img/logo-biocella.png');
+
+      // Header
+      if (headerLogoData) {
+        doc.addImage(headerLogoData, 'PNG', margin, yPos - 4, 12, 12);
+      }
+
       doc.setFontSize(18);
       doc.setFont("helvetica", "bold");
-      doc.text("Specimen Information Report", margin, yPos);
-      yPos += 10;
+      doc.text("BIOCELLA Specimen Overview", headerLogoData ? margin + 16 : margin, yPos + 4);
+      yPos += 12;
 
       // Horizontal line
       doc.setDrawColor(17, 63, 103);
       doc.setLineWidth(0.5);
       doc.line(margin, yPos, pageWidth - margin, yPos);
-      yPos += 10;
+      yPos += 8;
 
       // Add specimen image on the left if available
       let imageHeight = 0;
@@ -373,24 +384,11 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
       });
     }
 
-    // Footer with logo on first page and branding
-    const logoUrl = '/UI/img/BiocellaLogo.png';
-    const logoData = await getImageBase64(logoUrl);
+    // Footer branding
     
     const pageCount = doc.getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
       doc.setPage(i);
-      
-      // Add logo to top right corner on first page only
-      if (i === 1 && logoData) {
-        try {
-          const logoWidth = 30;
-          const logoHeight = 20;
-          doc.addImage(logoData, 'PNG', pageWidth - margin - logoWidth, 8, logoWidth, logoHeight);
-        } catch (error) {
-          console.error("Error adding logo to PDF:", error);
-        }
-      }
       
       // Add footer text
       doc.setFontSize(8);

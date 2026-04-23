@@ -109,16 +109,22 @@ export default function SpecimenPublicView({ params, searchParams }: SpecimenPub
         }
       };
 
-      // Title
+      const headerLogoData = await getImageBase64('/UI/img/logo-biocella.png');
+
+      // Header
+      if (headerLogoData) {
+        doc.addImage(headerLogoData, 'PNG', margin, yPos - 4, 12, 12);
+      }
+
       doc.setFontSize(18);
       doc.setFont("helvetica", "bold");
-      doc.text("Specimen Information Report", margin, yPos);
-      yPos += 10;
+      doc.text("BIOCELLA Specimen Overview", headerLogoData ? margin + 16 : margin, yPos + 4);
+      yPos += 12;
 
       doc.setDrawColor(17, 63, 103);
       doc.setLineWidth(0.5);
       doc.line(margin, yPos, pageWidth - margin, yPos);
-      yPos += 10;
+      yPos += 8;
 
       // Add specimen image if available
       let imageHeight = 0;
@@ -249,6 +255,49 @@ export default function SpecimenPublicView({ params, searchParams }: SpecimenPub
         }
       }
 
+      // Cell and Colony Morphology
+      const morphologyEntries: Array<[string, any]> = [];
+      if (specimen.morphology) {
+        morphologyEntries.push(
+          ["Shape", specimen.morphology.shape],
+          ["Cell Size", specimen.morphology.cell_size],
+          ["Colony Size", specimen.morphology.colony_size],
+          ["Pigmentation", specimen.morphology.pigmentation],
+          ["Form", specimen.morphology.form],
+          ["Elevation", specimen.morphology.elevation],
+          ["Margin", specimen.morphology.margin],
+          ["Colony Surface", specimen.morphology.colony_surface],
+          ["Opacity", specimen.morphology.opacity],
+          ["Texture", specimen.morphology.texture],
+          ["Spore Formation", specimen.morphology.spore_formation],
+          ["Mycelium Formation", specimen.morphology.mycelium_formation],
+          ["Description", specimen.morphology.description],
+        );
+      }
+      const filledMorphologyEntries = morphologyEntries.filter(
+        ([_, value]) => value && String(value).trim() !== ""
+      );
+
+      if (filledMorphologyEntries.length > 0) {
+        yPos += 5;
+        checkPageBreak(20);
+        doc.setFontSize(14);
+        doc.setFont("helvetica", "bold");
+        doc.text("Cell and Colony Morphology", margin, yPos);
+        yPos += lineHeight;
+
+        doc.setFontSize(10);
+        filledMorphologyEntries.forEach(([label, value]) => {
+          checkPageBreak();
+          doc.setFont("helvetica", "bold");
+          doc.text(`${label}:`, margin, yPos);
+          doc.setFont("helvetica", "normal");
+          const wrappedValue = doc.splitTextToSize(String(value), contentWidth - 52);
+          doc.text(wrappedValue, margin + 52, yPos);
+          yPos += lineHeight * Math.max(1, wrappedValue.length);
+        });
+      }
+
       // Genome Data
       if (specimen.fasta_file || specimen.fasta_sequence) {
         yPos += 5;
@@ -308,24 +357,11 @@ export default function SpecimenPublicView({ params, searchParams }: SpecimenPub
         });
       }
 
-      // Footer with logo on first page and branding
-      const logoUrl = '/UI/img/BiocellaLogo.png';
-      const logoData = await getImageBase64(logoUrl);
+      // Footer branding
       const pageCount = doc.getNumberOfPages();
       
       for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
-        
-        // Add logo to top right corner on first page only
-        if (i === 1 && logoData) {
-          try {
-            const logoWidth = 30;
-            const logoHeight = 20;
-            doc.addImage(logoData, 'PNG', pageWidth - margin - logoWidth, 8, logoWidth, logoHeight);
-          } catch (error) {
-            console.error("Error adding logo to PDF:", error);
-          }
-        }
         
         // Add footer text
         doc.setFontSize(8);
@@ -494,6 +530,7 @@ export default function SpecimenPublicView({ params, searchParams }: SpecimenPub
                 {[
                   { key: "info", label: "Basic Info" },
                   { key: "biochemical", label: "Biochemical" },
+                  { key: "morphology", label: "Morphology" },
                   { key: "genome", label: "Genome Data" },
                 ].map((tab) => (
                   <button
@@ -577,6 +614,32 @@ export default function SpecimenPublicView({ params, searchParams }: SpecimenPub
                       </>
                     ) : (
                       <p className="text-gray-500 text-sm">No biochemical data available</p>
+                    )}
+                  </div>
+                )}
+
+                {activeTab === "morphology" && (
+                  <div className="space-y-4">
+                    {specimen.morphology ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <InfoItem label="Shape" value={specimen.morphology.shape || "N/A"} />
+                        <InfoItem label="Cell Size" value={specimen.morphology.cell_size || "N/A"} />
+                        <InfoItem label="Colony Size" value={specimen.morphology.colony_size || "N/A"} />
+                        <InfoItem label="Pigmentation" value={specimen.morphology.pigmentation || "N/A"} />
+                        <InfoItem label="Form" value={specimen.morphology.form || "N/A"} />
+                        <InfoItem label="Elevation" value={specimen.morphology.elevation || "N/A"} />
+                        <InfoItem label="Margin" value={specimen.morphology.margin || "N/A"} />
+                        <InfoItem label="Colony Surface" value={specimen.morphology.colony_surface || "N/A"} />
+                        <InfoItem label="Opacity" value={specimen.morphology.opacity || "N/A"} />
+                        <InfoItem label="Texture" value={specimen.morphology.texture || "N/A"} />
+                        <InfoItem label="Spore Formation" value={specimen.morphology.spore_formation || "N/A"} />
+                        <InfoItem label="Mycelium Formation" value={specimen.morphology.mycelium_formation || "N/A"} />
+                        <div className="md:col-span-2">
+                          <InfoItem label="Description" value={specimen.morphology.description || "N/A"} />
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-gray-500 text-sm">No morphology data available</p>
                     )}
                   </div>
                 )}

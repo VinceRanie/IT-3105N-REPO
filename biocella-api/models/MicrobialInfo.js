@@ -61,14 +61,38 @@ const microbialInfoSchema = new Schema({
   special_reqs: String,
   activity: String,
   result: String,
+
+  // Cell and Colony Morphology
+  morphology: {
+    shape: String,
+    cell_size: String,
+    colony_size: String,
+    pigmentation: String,
+    form: String,
+    elevation: String,
+    margin: String,
+    colony_surface: String,
+    opacity: String,
+    texture: String,
+    spore_formation: String,
+    mycelium_formation: String,
+    description: String
+  },
   
   // Description/Notes
   description: String,
+  update_notes: String,
+  updated_by: String,
   
   // Flexible custom fields for any additional data
   custom_fields: { type: Schema.Types.Mixed },
   
   // Metadata
+  publish_status: {
+    type: String,
+    enum: ['published', 'unpublished'],
+    default: 'unpublished'
+  },
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now }
 }, { strict: false }); // Allow dynamic fields

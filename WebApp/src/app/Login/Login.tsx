@@ -4,17 +4,7 @@ import { useState } from 'react';
 import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { setAuthToken, setUserData } from '@/app/utils/authUtil';
-
-const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || 'https://22102959.dcism.org/biocella-api').replace(/\/$/, '');
-
-const setAuthCookie = (token: string) => {
-  if (typeof window === 'undefined') return;
-
-  const isHttps = window.location.protocol === 'https:';
-  const secureFlag = isHttps ? '; Secure' : '';
-  document.cookie = `auth_token=${encodeURIComponent(token)}; Path=/; Max-Age=3600; SameSite=Lax${secureFlag}`;
-};
+import { setAuthToken, setUserData, redirectByRole } from '@/app/utils/authUtil';
 
 export default function LoginForm() {
   const router = useRouter();
@@ -35,7 +25,7 @@ export default function LoginForm() {
     setMessage(null); 
 
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      const response = await fetch("/API/auth/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -46,11 +36,8 @@ export default function LoginForm() {
       const data = await response.json();
 
       if (response.ok) {
-        setMessage({ text: data.message || 'Login successful!', type: 'success' });
-
-        if (data.token && data.userId && data.email && data.role) {
+        if (data?.token && data?.userId && data?.email && data?.role) {
           setAuthToken(data.token);
-          setAuthCookie(data.token);
           setUserData({
             userId: data.userId,
             email: data.email,
@@ -58,19 +45,10 @@ export default function LoginForm() {
           });
         }
 
-        const normalizedRole = (data.role || '').toString().trim().toLowerCase();
+        setMessage({ text: data.message || 'Login successful!', type: 'success' });
 
         // Redirect based on role
-        if (normalizedRole === 'admin') {
-          router.push('/AdminUI/AdminDashBoard');
-        } else if (normalizedRole === 'ra' || normalizedRole === 'staff') {
-          router.push('/RAStaffUI/RAStaffDashBoard');
-        } else if (normalizedRole === 'student' || normalizedRole === 'faculty') {
-          router.push('/UsersUI/UsersDashBoard');
-        } else {
-          // Unknown or missing role falls back to general user dashboard.
-          router.push('/UsersUI/UsersDashBoard');
-        }
+        redirectByRole(router, data.role);
       } else {
         setMessage({ text: data.message || 'Invalid credentials. Please try again.', type: 'error' });
       }
@@ -91,11 +69,9 @@ export default function LoginForm() {
       {/* Left: Image Section */}
       <div className="relative hidden md:block">
         <Image
-          src="/UI/img/Laboratory.jpg"
-          alt="Scientific laboratory research"
+          src="/UI/img/Biobuilding.webp"
+          alt="USC Biology Building (Arnoldus Science Building)"
           fill
-          sizes="(max-width: 768px) 0px, 50vw"
-          priority
           className="object-cover"
         />
         <div className="absolute inset-0 bg-gradient-to-l from-transparent to-background/10" />
@@ -119,7 +95,7 @@ export default function LoginForm() {
                 Email Address
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[#113F67] h-4 w-4" />
                 <input
                   id="email"
                   type="email"
@@ -204,6 +180,14 @@ export default function LoginForm() {
 
           {/* Sign Up Link */}
           <div className="text-center pt-4 border-t border-gray-200">
+            <button
+              type="button"
+              className="text-sm text-[#113F67] hover:text-[#0a2a4a] font-medium transition-colors cursor-pointer hover:underline"
+              onClick={() => router.push('/')}
+            >
+              Back to Homepage
+            </button>
+            <p className="text-sm text-gray-400 mt-2">or</p>
             <p className="text-sm text-gray-600">
               Don&apos;t have an account?{' '}
 

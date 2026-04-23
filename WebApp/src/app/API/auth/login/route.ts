@@ -1,154 +1,53 @@
 import { NextResponse } from "next/server";
-import { RowDataPacket } from "mysql2";
-import bcrypt from "bcryptjs";
-import jwt from 'jsonwebtoken'; 
-import { query } from "@/app/API/lib/mysql";
-
-const HttpStatus = {
-    OK: 200,
-    CREATED: 201,
-    BAD_REQUEST: 400,
-    UNAUTHORIZED: 401,
-    FORBIDDEN: 403,
-    NOT_FOUND: 404,
-    METHOD_NOT_ALLOWED: 405,
-    INTERNAL_SERVER_ERROR: 500,
-};
-
-interface LoginRequestBody {
-    email: string;
-    password?: string;
-}
-
-interface UserRow extends RowDataPacket {
-    user_id: number;
-    email: string;
-    password: string;
-    role: 'admin' | 'student' | 'faculty' | 'staff';
-    is_setup_complete: number;
-    failed_login_attempts: number;
-    lockout_until: Date | null;
-    reset_token?: string | null;
-}
-
-const getJwtSecret = () => process.env.JWT_TOKEN || process.env.JWT_SECRET;
+import { requireEnv } from "@/app/API/lib/routeEnv";
 
 export async function POST(req: Request) {
     try {
-        const {email, password}: LoginRequestBody = await req.json();
-        if (!email || !password){
-            return NextResponse.json(
-                {message: 'Email and Password are required.', statusCode: HttpStatus.BAD_REQUEST},
-                {status: HttpStatus.BAD_REQUEST}
-            );
+        const env = requireEnv(["NEXT_PUBLIC_API_URL"] as const);
+        if (!env.ok) return env.response;
+        const API_BASE_URL = env.values.NEXT_PUBLIC_API_URL;
+
+        const body = await req.json();
+        const backendResponse = await fetch(`${API_BASE_URL}/auth/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        });
+
+        const raw = await backendResponse.text();
+        let data: Record<string, unknown> = {};
+
+        try {
+            data = raw ? JSON.parse(raw) : {};
+        } catch {
+            const isVercelProtection = raw.includes("Authentication Required") || raw.includes("Vercel Authentication");
+            data = {
+                message: isVercelProtection
+                    ? "Request blocked by Vercel deployment protection. Sign in to Vercel or disable protection for this deployment."
+                    : "Upstream service returned a non-JSON response.",
+            };
         }
 
-        const jwtSecret = getJwtSecret();
-        if (!jwtSecret) {
-            return NextResponse.json(
-                {
-                    message: 'Authentication service is not configured.',
-                    statusCode: HttpStatus.INTERNAL_SERVER_ERROR
-                },
-                { status: HttpStatus.INTERNAL_SERVER_ERROR }
-            );
-        }
+        const response = NextResponse.json(data, { status: backendResponse.status });
 
-        const users = await query<UserRow>(
-            'SELECT user_id, email, password, role, is_setup_complete, failed_login_attempts, lockout_until FROM user WHERE email = ?',
-            [email]
-        );
-
-        const user = users[0];
-        
-        if(!user){
-            return NextResponse.json(
-                {message: 'Invalid Credentials', statusCode: HttpStatus.UNAUTHORIZED},
-                {status: HttpStatus.UNAUTHORIZED}
-            );
-        }
-
-        if (user.is_setup_complete !== 1) {
-            return NextResponse.json(
-                { message: 'Account setup is not complete. Please finish registration.', statusCode: HttpStatus.FORBIDDEN },
-                { status: HttpStatus.FORBIDDEN }
-            );
-        }
-
-        if (user.lockout_until && new Date() < new Date(user.lockout_until)){
-            return NextResponse.json(
-                { message: 'Account is locked please try again.', statusCode: HttpStatus.FORBIDDEN },
-                { status: HttpStatus.FORBIDDEN}
-            );
-        }
-        
-        const passwordMatch = await bcrypt.compare(password, user.password);
-        
-        if(passwordMatch){
-            await query(
-                'UPDATE user set failed_login_attempts = 0, lockout_until = NULL WHERE user_id = ?', [user.user_id]
-            );
-
-            const token = jwt.sign(
-                { userId: user.user_id, email: user.email, role: user.role}, jwtSecret, {expiresIn: '1h'}
-            )
-
-            const response = NextResponse.json(
-                {
-                    message: 'Login was successful!',
-                    token,
-                    role: user.role,
-                    userId: user.user_id,
-                    email: user.email,
-                    statusCode: HttpStatus.OK
-                },
-                {status: HttpStatus.OK}
-            );
-
-            response.cookies.set('auth_token', token, {
+        const token = typeof data?.token === "string" ? data.token : null;
+        if (backendResponse.ok && token) {
+            response.cookies.set("auth_token", token, {
                 httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: 'lax',
-                path: '/',
-                maxAge: 60 * 60, // 1 hour
+                secure: process.env.NODE_ENV === "production",
+                sameSite: "lax",
+                path: "/",
+                maxAge: 60 * 60,
             });
-
-            return response;
-        }else{
-            const newAttempts = user.failed_login_attempts + 1;
-            let message: string = 'Invalid email or password.';
-            const lockoutTime: Date | null = newAttempts >= 5? new Date( new Date().getTime() + 15 * 60000): null;
-
-            if(lockoutTime){
-                message = 'Maximum login attemptes exceeded. Account locked for 15 minutes';
-            }
-
-            await query(
-                'UPDATE user SET failed_login_attempts = ?, lockout_until = ? WHERE user_id = ?',
-                [newAttempts, lockoutTime, user.user_id]
-            );
-
-            return NextResponse.json(
-                { message, statusCode: HttpStatus.UNAUTHORIZED },
-                { status: HttpStatus.UNAUTHORIZED }
-            );
         }
+
+        return response;
     }
     catch (error: unknown ){
-        console.error('Login Error', error);
-        let errorMessage = 'Internal Server Error';
-        if(error instanceof Error){
-            errorMessage = error.message;
-        }else if (typeof error === 'object' && error !== null && 'message' in error) {
-            errorMessage = String((error as { message : unknown }).message);
-        }
+        console.error("Login proxy error", error);
         return NextResponse.json(
-            {
-                message: 'An Unexpected error occured during login.',
-                error: errorMessage,
-                statusCode: HttpStatus.INTERNAL_SERVER_ERROR
-            },
-            {status: HttpStatus.INTERNAL_SERVER_ERROR}
+            { message: "An unexpected error occurred during login." },
+            { status: 500 }
         );
     }
 }

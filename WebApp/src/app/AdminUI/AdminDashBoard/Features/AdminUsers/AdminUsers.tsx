@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { API_URL } from "@/config/api";
-import { getAuthHeader, getUserData } from "@/app/utils/authUtil";
+import { getAuthHeader } from "@/app/utils/authUtil";
 import AdminControls from "./AdminControls";
 import { ChevronUp, ChevronDown } from "lucide-react";
 interface User {
@@ -14,6 +14,7 @@ interface User {
   course: string;
   role: string;
   is_setup_complete: number;
+  deleted_at: string | null;
 }
 
 const roleLabels: Record<string, string> = {
@@ -27,6 +28,7 @@ export default function UserTable() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeRole, setActiveRole] = useState("all");
+  const [viewMode, setViewMode] = useState<"active" | "deactivated">("active");
   const [search, setSearch] = useState("");
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -86,6 +88,8 @@ export default function UserTable() {
   const filteredUsers = useMemo(() => {
     const query = search.toLowerCase();
     let filtered = users.filter((u) => {
+      const isDeactivated = Boolean(u.deleted_at);
+      const matchesView = viewMode === "deactivated" ? isDeactivated : !isDeactivated;
       const matchesRole = activeRole === "all" ? true : u.role?.toLowerCase() === activeRole;
       const matchesSearch =
         !query ||
@@ -93,7 +97,7 @@ export default function UserTable() {
         u.email.toLowerCase().includes(query) ||
         (u.department || "").toLowerCase().includes(query) ||
         (u.course || "").toLowerCase().includes(query);
-      return matchesRole && matchesSearch;
+      return matchesView && matchesRole && matchesSearch;
     });
 
     // Apply sorting
@@ -119,7 +123,7 @@ export default function UserTable() {
 
     // Show newest users first by reversing
     return [...filtered].reverse();
-  }, [activeRole, search, users, sortColumn, sortOrder]);
+  }, [activeRole, search, users, sortColumn, sortOrder, viewMode]);
 
   const SortIcon = ({ column }: { column: string }) => {
     if (sortColumn !== column) return <div className="w-4 h-4" />;
@@ -225,6 +229,82 @@ export default function UserTable() {
     });
   };
 
+  const handleDeactivateUser = async (id: number) => {
+    try {
+      const headers = {
+        "Content-Type": "application/json",
+        ...getAuthHeader(),
+      };
+
+      const res = await fetch(`${API_URL}/auth/users/${id}/deactivate`, {
+        method: "PATCH",
+        headers,
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to deactivate user");
+      }
+
+      setUsers((prev) =>
+        prev.map((u) => (u.user_id === id ? { ...u, deleted_at: new Date().toISOString() } : u))
+      );
+      setSelectedUserId(null);
+      setMessage({ text: "User deactivated successfully", type: "success" });
+    } catch (err: any) {
+      setMessage({ text: err.message || "Failed to deactivate user", type: "error" });
+    }
+  };
+
+  const handleReactivateUser = async (id: number) => {
+    try {
+      const headers = {
+        "Content-Type": "application/json",
+        ...getAuthHeader(),
+      };
+
+      const res = await fetch(`${API_URL}/auth/users/${id}/reactivate`, {
+        method: "PATCH",
+        headers,
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to reactivate user");
+      }
+
+      setUsers((prev) =>
+        prev.map((u) => (u.user_id === id ? { ...u, deleted_at: null } : u))
+      );
+      setSelectedUserId(null);
+      setMessage({ text: "User reactivated. Password setup email sent.", type: "success" });
+    } catch (err: any) {
+      setMessage({ text: err.message || "Failed to reactivate user", type: "error" });
+    }
+  };
+
+  const confirmDeactivate = (user: User) => {
+    setConfirmDialog({
+      title: "Deactivate user?",
+      message: `User: ${user.email}\nThis will disable login until reactivated.`,
+      onConfirm: () => {
+        setConfirmDialog(null);
+        handleDeactivateUser(user.user_id);
+      },
+    });
+  };
+
+  const confirmReactivate = (user: User) => {
+    setConfirmDialog({
+      title: "Reactivate user?",
+      message: `User: ${user.email}\nA password setup email will be sent.`,
+      onConfirm: () => {
+        setConfirmDialog(null);
+        handleReactivateUser(user.user_id);
+      },
+    });
+  };
+
   if (!isMounted) {
     return null;
   }
@@ -259,6 +339,8 @@ export default function UserTable() {
       <AdminControls
         active={activeRole}
         onRoleChange={setActiveRole}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
         search={search}
         onSearchChange={setSearch}
       />
@@ -274,13 +356,13 @@ export default function UserTable() {
           <input
             type="email"
             placeholder="Email"
-            className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm"
+            className="flex-1 border border-[#113F67] rounded-md px-3 py-2 text-sm"
             value={inviteEmail}
             onChange={(e) => setInviteEmail(e.target.value)}
             required
           />
           <select
-            className="border border-gray-300 rounded-md px-3 py-2 text-sm"
+            className="border border-gray-300 bg-[#113F67] text-white rounded-md px-3 py-2 text-sm"
             value={inviteRole}
             onChange={(e) => setInviteRole(e.target.value)}
           >
@@ -345,7 +427,14 @@ export default function UserTable() {
                         {`${user.first_name || ""} ${user.last_name || ""}`.trim() || "Pending setup"}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600">{user.email}</td>
-                      <td className="px-4 py-3 text-sm text-gray-800">{roleLabels[user.role?.toLowerCase()] || user.role}</td>
+                      <td className="px-4 py-3 text-sm text-gray-800">
+                        {roleLabels[user.role?.toLowerCase()] || user.role}
+                        {Boolean(user.deleted_at) && (
+                          <span className="ml-2 inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                            Deactivated
+                          </span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-sm text-gray-800">{user.department || "—"}</td>
                       <td className="px-4 py-3 text-sm text-gray-800">{user.course || "—"}</td>
                     </tr>
@@ -354,21 +443,38 @@ export default function UserTable() {
                       <tr className="bg-gray-50">
                         <td colSpan={5}>
                           <div className="flex flex-wrap justify-end gap-3 p-3">
-                            {Object.entries(roleLabels).map(([value, label]) => (
+                            {Boolean(user.deleted_at) ? (
                               <button
-                                key={value}
-                                onClick={() => confirmRoleChange(user, value)}
-                                className={`px-3 py-1 rounded-md shadow text-white cursor-pointer ${
-                                  value === "student"
-                                    ? "bg-green-500 hover:bg-green-600"
-                                    : value === "faculty"
-                                    ? "bg-blue-500 hover:bg-blue-600"
-                                    : "bg-yellow-500 hover:bg-yellow-600"
-                                }`}
+                                onClick={() => confirmReactivate(user)}
+                                className="px-3 py-1 rounded-md shadow text-white cursor-pointer bg-green-600 hover:bg-green-700"
                               >
-                                {label}
+                                Reactivate User
                               </button>
-                            ))}
+                            ) : (
+                              <>
+                                {Object.entries(roleLabels).map(([value, label]) => (
+                                  <button
+                                    key={value}
+                                    onClick={() => confirmRoleChange(user, value)}
+                                    className={`px-3 py-1 rounded-md shadow text-white cursor-pointer ${
+                                      value === "student"
+                                        ? "bg-green-500 hover:bg-green-600"
+                                        : value === "faculty"
+                                        ? "bg-blue-500 hover:bg-blue-600"
+                                        : "bg-yellow-500 hover:bg-yellow-600"
+                                    }`}
+                                  >
+                                    {label}
+                                  </button>
+                                ))}
+                                <button
+                                  onClick={() => confirmDeactivate(user)}
+                                  className="px-3 py-1 rounded-md shadow text-white cursor-pointer bg-red-600 hover:bg-red-700"
+                                >
+                                  Deactivate User
+                                </button>
+                              </>
+                            )}
                           </div>
                         </td>
                       </tr>

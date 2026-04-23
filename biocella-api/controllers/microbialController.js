@@ -5,6 +5,128 @@ const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
 const AdmZip = require('adm-zip');
+const db = require('../config/mysql');
+
+const PUBLISH_STATUSES = new Set(['published', 'unpublished']);
+const PRIVILEGED_ROLES = new Set(['admin', 'staff']);
+
+const normalizeRole = (role) => {
+  if (!role) return '';
+  const normalized = String(role).trim().toLowerCase();
+  return normalized === 'ra' ? 'staff' : normalized;
+};
+
+const normalizePublishStatus = (status, fallback = 'unpublished') => {
+  const normalized = String(status || '').trim().toLowerCase();
+  return PUBLISH_STATUSES.has(normalized) ? normalized : fallback;
+};
+
+const canViewUnpublished = (req) => {
+  const roleFromQuery = req.query?.role;
+  const roleFromHeader = req.headers?.['x-user-role'];
+  const normalized = normalizeRole(roleFromQuery || roleFromHeader);
+  return PRIVILEGED_ROLES.has(normalized);
+};
+
+const publishedFilter = {
+  $or: [
+    { publish_status: 'published' },
+    { publish_status: { $exists: false } }
+  ]
+};
+
+const buildVisibilityFilter = (req) => {
+  const requestedStatus = normalizePublishStatus(req.query?.status, '');
+
+  if (canViewUnpublished(req)) {
+    if (PUBLISH_STATUSES.has(requestedStatus)) {
+      return { publish_status: requestedStatus };
+    }
+    return {};
+  }
+
+  return publishedFilter;
+};
+
+const normalizeImageDescriptionValue = (value) => {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return {
+      image_url: String(value.image_url || ''),
+      description: String(value.description || ''),
+    };
+  }
+
+  return {
+    image_url: '',
+    description: String(value || ''),
+  };
+};
+
+const applyCustomImageUploads = ({ customFields, customImageMapRaw, uploadedCustomImages, oldCustomFields }) => {
+  if (!customFields || typeof customFields !== 'object' || Array.isArray(customFields)) {
+    return customFields;
+  }
+
+  let customImageMap = customImageMapRaw;
+  if (typeof customImageMap === 'string') {
+    try {
+      customImageMap = JSON.parse(customImageMap);
+    } catch {
+      customImageMap = null;
+    }
+  }
+
+  if (!customImageMap || typeof customImageMap !== 'object' || Array.isArray(customImageMap)) {
+    return customFields;
+  }
+
+  const nextCustomFields = { ...customFields };
+  const oldFields = oldCustomFields && typeof oldCustomFields === 'object' ? oldCustomFields : {};
+
+  Object.entries(customImageMap).forEach(([fieldId, fileIndexValue]) => {
+    const field = nextCustomFields[fieldId];
+    if (!field || typeof field !== 'object' || Array.isArray(field)) {
+      return;
+    }
+
+    if (String(field.type || '').toLowerCase() !== 'image_description') {
+      return;
+    }
+
+    const fileIndex = Number(fileIndexValue);
+    if (!Number.isInteger(fileIndex) || fileIndex < 0 || fileIndex >= uploadedCustomImages.length) {
+      return;
+    }
+
+    const uploadedFile = uploadedCustomImages[fileIndex];
+    if (!uploadedFile?.filename) {
+      return;
+    }
+
+    const previousValue = normalizeImageDescriptionValue(field.value);
+    const oldField = oldFields[fieldId];
+    const oldValue = oldField && typeof oldField === 'object' && !Array.isArray(oldField)
+      ? normalizeImageDescriptionValue(oldField.value)
+      : null;
+
+    if (oldValue?.image_url && oldValue.image_url.startsWith('/uploads/')) {
+      const oldImagePath = path.join(__dirname, '..', oldValue.image_url);
+      if (fs.existsSync(oldImagePath)) {
+        fs.unlinkSync(oldImagePath);
+      }
+    }
+
+    nextCustomFields[fieldId] = {
+      ...field,
+      value: {
+        ...previousValue,
+        image_url: `/uploads/specimens/${uploadedFile.filename}`,
+      },
+    };
+  });
+
+  return nextCustomFields;
+};
 
 // CREATE
 exports.createMicrobial = async (req, res) => {
@@ -30,16 +152,21 @@ exports.createMicrobial = async (req, res) => {
       }
     }
 
+    const extractedAccession = extractAccessionFromFasta(fasta_sequence);
+    const providedAccession = (req.body.accession_no || '').trim();
+
     // Prepare specimen data
     const specimenData = {
       ...req.body,
       image_url: image_url,
       fasta_file: fasta_file,
-      fasta_sequence: fasta_sequence
+      fasta_sequence: fasta_sequence,
+      accession_no: providedAccession || extractedAccession || req.body.accession_no,
+      publish_status: normalizePublishStatus(req.body.publish_status, 'unpublished')
     };
 
     // Parse JSON fields if they're strings (from multipart form data)
-    const jsonFields = ['custom_fields', 'biochemical_tests'];
+    const jsonFields = ['custom_fields', 'biochemical_tests', 'morphology'];
     jsonFields.forEach(field => {
       if (typeof specimenData[field] === 'string') {
         try {
@@ -49,6 +176,14 @@ exports.createMicrobial = async (req, res) => {
         }
       }
     });
+
+    specimenData.custom_fields = applyCustomImageUploads({
+      customFields: specimenData.custom_fields,
+      customImageMapRaw: req.body.custom_image_map,
+      uploadedCustomImages: req.files?.custom_images || [],
+      oldCustomFields: null,
+    });
+    delete specimenData.custom_image_map;
 
     const microbial = new MicrobialInfo(specimenData);
     await microbial.save();
@@ -102,10 +237,72 @@ const generateSpecimenQRCode = async (specimenId) => {
 // READ ALL
 exports.getMicrobials = async (req, res) => {
   try {
-    const microbials = await MicrobialInfo.find().populate('project_id');
+    const filter = buildVisibilityFilter(req);
+    const microbials = await MicrobialInfo.find(filter).populate('project_id');
     res.json(microbials);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch microbial info' });
+  }
+};
+
+// PUBLIC HOMEPAGE STATS
+exports.getPublicStats = async (_req, res) => {
+  try {
+    const [studentRows] = await db.execute(
+      "SELECT COUNT(*) AS count FROM user WHERE role = 'student'"
+    );
+
+    const totalSpecimens = await MicrobialInfo.countDocuments(publishedFilter);
+
+    const specimenTypesRaw = await MicrobialInfo.aggregate([
+      {
+        $match: publishedFilter,
+      },
+      {
+        $project: {
+          specimenType: {
+            $trim: {
+              input: {
+                $ifNull: ['$classification', 'Unknown'],
+              },
+            },
+          },
+        },
+      },
+      {
+        $addFields: {
+          specimenType: {
+            $cond: [{ $eq: ['$specimenType', ''] }, 'Unknown', '$specimenType'],
+          },
+        },
+      },
+      {
+        $group: {
+          _id: '$specimenType',
+          count: { $sum: 1 },
+        },
+      },
+      {
+        $sort: {
+          count: -1,
+          _id: 1,
+        },
+      },
+    ]);
+
+    const specimenTypes = specimenTypesRaw.map((item) => ({
+      type: item._id,
+      count: item.count,
+    }));
+
+    res.json({
+      carolinianCount: Number(studentRows?.[0]?.count || 0),
+      totalSpecimens,
+      specimenTypes,
+    });
+  } catch (err) {
+    console.error('Failed to fetch public stats:', err);
+    res.status(500).json({ error: 'Failed to fetch public stats' });
   }
 };
 
@@ -114,6 +311,12 @@ exports.getMicrobialById = async (req, res) => {
   try {
     const microbial = await MicrobialInfo.findById(req.params.id).populate('project_id');
     if (!microbial) return res.status(404).json({ error: 'Not found' });
+
+    const status = normalizePublishStatus(microbial.publish_status, 'published');
+    if (status === 'unpublished' && !canViewUnpublished(req)) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
     res.json(microbial);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch microbial info' });
@@ -125,9 +328,10 @@ exports.updateMicrobial = async (req, res) => {
   try {
     // Handle file uploads if new files are provided
     let updateData = { ...req.body };
+    let oldSpecimen = null;
     
     if (req.files) {
-      const oldSpecimen = await MicrobialInfo.findById(req.params.id);
+      oldSpecimen = await MicrobialInfo.findById(req.params.id);
       
       // Handle new image upload
       if (req.files.image && req.files.image[0]) {
@@ -156,11 +360,21 @@ exports.updateMicrobial = async (req, res) => {
         // Read new FASTA file content
         const fastaPath = path.join(__dirname, '..', updateData.fasta_file);
         updateData.fasta_sequence = fs.readFileSync(fastaPath, 'utf8');
+
+        const extractedAccession = extractAccessionFromFasta(updateData.fasta_sequence);
+        const providedAccession = (updateData.accession_no || '').trim();
+        if (!providedAccession && extractedAccession) {
+          updateData.accession_no = extractedAccession;
+        }
       }
     }
 
+    if (!oldSpecimen) {
+      oldSpecimen = await MicrobialInfo.findById(req.params.id);
+    }
+
     // Parse JSON fields if they're strings (from multipart form data)
-    const jsonFields = ['custom_fields', 'biochemical_tests'];
+    const jsonFields = ['custom_fields', 'biochemical_tests', 'morphology'];
     jsonFields.forEach(field => {
       if (typeof updateData[field] === 'string') {
         try {
@@ -170,6 +384,24 @@ exports.updateMicrobial = async (req, res) => {
         }
       }
     });
+
+    const hasCustomFieldsPayload = Object.prototype.hasOwnProperty.call(updateData, 'custom_fields');
+    const hasCustomImageUploads = (req.files?.custom_images || []).length > 0;
+
+    if (hasCustomFieldsPayload || hasCustomImageUploads) {
+      updateData.custom_fields = applyCustomImageUploads({
+        customFields: updateData.custom_fields,
+        customImageMapRaw: req.body.custom_image_map,
+        uploadedCustomImages: req.files?.custom_images || [],
+        oldCustomFields: oldSpecimen?.custom_fields || null,
+      });
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updateData, 'publish_status')) {
+      updateData.publish_status = normalizePublishStatus(updateData.publish_status, 'unpublished');
+    }
+
+    delete updateData.custom_image_map;
     
     // Update timestamp
     updateData.updated_at = Date.now();
@@ -282,7 +514,7 @@ exports.submitBlast = async (req, res) => {
     const params = new URLSearchParams();
     params.append('CMD', 'Put');
     params.append('PROGRAM', fastaValidation.blastProgram);
-    params.append('DATABASE', fastaValidation.seqType === 'protein' ? 'nr' : 'nt');
+    params.append('DATABASE', fastaValidation.blastDatabase);
     params.append('QUERY', cleanedFasta);
     params.append('EMAIL', EMAIL);
     params.append('TOOL', TOOL);
@@ -292,7 +524,7 @@ exports.submitBlast = async (req, res) => {
     
     console.log(`🔬 BLAST Parameters:`);
     console.log(`  - Program: ${fastaValidation.blastProgram.toUpperCase()}`);
-    console.log(`  - Database: ${fastaValidation.seqType === 'protein' ? 'nr (Non-redundant)' : 'nt (Nucleotide)'}`);
+    console.log(`  - Database: ${fastaValidation.blastDatabase}`);
     console.log(`  - Sequence Type: ${fastaValidation.seqType.toUpperCase()}`);
 
     let submitRes;
@@ -387,7 +619,7 @@ exports.submitBlast = async (req, res) => {
       fastaValidation: {
         sequence_type: fastaValidation.seqType.toUpperCase(),
         blast_program: fastaValidation.blastProgram.toUpperCase(),
-        database: fastaValidation.seqType === 'protein' ? 'nr (Non-redundant)' : 'nt (Nucleotide)',
+        database: fastaValidation.blastDatabase,
         original_length: microbial.fasta_sequence.length,
         cleaned_length: cleanedFasta.length,
         warnings: fastaValidation.warnings,
@@ -687,24 +919,42 @@ exports.getBlastResults = async (req, res) => {
 function detectSequenceType(sequence) {
   // Extract just the sequence part (remove headers and whitespace)
   const seqLines = sequence.split(/\n/).filter(line => !line.startsWith('>') && line.trim().length > 0);
-  const seqContent = seqLines.join('').toUpperCase();
+  const seqContent = seqLines.join('').toUpperCase().replace(/\s+/g, '');
   
   if (seqContent.length === 0) return null;
-  
-  // Count character types
-  const proteinOnly = /[EFIPQZ]/gi; // Amino acids only in proteins
-  const nucleotidesOnly = /[U]/gi;  // U is only in RNA
-  
-  const proteinCount = (seqContent.match(proteinOnly) || []).length;
-  const nucleotidesCount = (seqContent.match(/[ATGCN]/gi) || []).length;
-  const totalValidChars = (seqContent.match(/[ATGCNRYSWKMBDHVEFIPQZ\-\*U]/gi) || []).length;
-  
-  // If we find protein-only amino acids, it's a protein sequence
-  if (proteinCount > totalValidChars * 0.05) { // More than 5% protein-specific
+
+  const nucleotideSet = new Set(['A', 'T', 'G', 'C', 'U', 'R', 'Y', 'S', 'W', 'K', 'M', 'B', 'D', 'H', 'V', 'N', '-', '.']);
+  // Include ambiguous/rare amino acids that NCBI BLAST can accept.
+  const proteinSet = new Set(['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y', 'B', 'Z', 'X', 'J', 'O', 'U', '*', '-']);
+
+  let proteinOnlyCount = 0;
+  let nucleotideLikeCount = 0;
+  let proteinLikeCount = 0;
+
+  for (const ch of seqContent) {
+    const isNucleotide = nucleotideSet.has(ch);
+    const isProtein = proteinSet.has(ch);
+
+    if (isNucleotide) nucleotideLikeCount++;
+    if (isProtein) proteinLikeCount++;
+    if (isProtein && !isNucleotide) proteinOnlyCount++;
+  }
+
+  // Any true amino-acid-only symbols (e.g., E, F, I, L, P, Q, Z, X, J, O, *) indicate protein input.
+  if (proteinOnlyCount > 0) {
     return 'protein';
   }
-  
-  // Otherwise assume nucleotide
+
+  // Strong nucleotide signal defaults to nucleotide.
+  if (nucleotideLikeCount >= seqContent.length * 0.9) {
+    return 'nucleotide';
+  }
+
+  // Fallback: if more protein-like than nucleotide-like symbols, treat as protein.
+  if (proteinLikeCount > nucleotideLikeCount) {
+    return 'protein';
+  }
+
   return 'nucleotide';
 }
 
@@ -728,12 +978,11 @@ function selectBlastProgram(queryType, options = {}) {
     }
   } else {
     // nucleotide query
-    if (searchProteinDb && searchNucleotideDb) {
-      return { program: 'blastx', database: 'nr', description: 'Translated nucleotide query vs protein database' };
+    // Prefer blastn/nt for typical FASTA uploads to maximize NCBI compatibility.
+    if (searchNucleotideDb) {
+      return { program: 'blastn', database: 'nt', description: 'Nucleotide query vs nucleotide database' };
     } else if (searchProteinDb) {
       return { program: 'blastx', database: 'nr', description: 'Translated nucleotide query vs protein database' };
-    } else if (searchNucleotideDb) {
-      return { program: 'blastn', database: 'nt', description: 'Nucleotide query vs nucleotide database' };
     }
   }
   
@@ -769,6 +1018,10 @@ function validateAndCleanFasta(fastaSequence) {
   
   // Detect sequence type BEFORE cleaning
   const detectedType = detectSequenceType(cleaned);
+  if (!detectedType) {
+    result.errors.push('Unable to detect sequence type from FASTA content');
+    return result;
+  }
   result.seqType = detectedType;
   
   // Select appropriate BLAST program
@@ -800,13 +1053,14 @@ function validateAndCleanFasta(fastaSequence) {
   // Separate headers from sequence
   const processedLines = [];
   let inSequence = false;
-  let sequenceOnly = '';
+  let currentEntryLength = 0;
+  let totalSequenceLength = 0;
   
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     
     if (line.startsWith('>')) {
-      if (inSequence && sequenceOnly.length === 0) {
+      if (inSequence && currentEntryLength === 0) {
         result.warnings.push(`Header at line ${i + 1} found with no sequence before it`);
       }
       
@@ -814,7 +1068,7 @@ function validateAndCleanFasta(fastaSequence) {
       if (line.length > 1) {
         processedLines.push(line);
         inSequence = true;
-        sequenceOnly = '';
+        currentEntryLength = 0;
       } else {
         result.errors.push(`Invalid header at line ${i + 1}: header is too short`);
       }
@@ -834,8 +1088,8 @@ function validateAndCleanFasta(fastaSequence) {
       
       let validPattern;
       if (result.seqType === 'protein' || isProteinLine) {
-        // Protein: Allow standard amino acids
-        validPattern = /[ACDEFGHIKLMNPQRSTVWYX\*\-]/gi;
+        // Protein: Allow standard plus ambiguous/rare amino acid symbols.
+        validPattern = /[ACDEFGHIKLMNPQRSTVWYBXZJOU\*\-]/gi;
       } else {
         // Nucleotide: Allow IUPAC codes
         validPattern = /[ATGCNRYSWKMBDHVU\-]/gi;
@@ -856,25 +1110,26 @@ function validateAndCleanFasta(fastaSequence) {
         for (let j = 0; j < cleanedSeq.length; j += 60) {
           processedLines.push(cleanedSeq.substring(j, j + 60));
         }
-        sequenceOnly += cleanedSeq;
+        currentEntryLength += cleanedSeq.length;
+        totalSequenceLength += cleanedSeq.length;
       }
     }
   }
   
   // Final validation
-  if (sequenceOnly.length === 0) {
+  if (totalSequenceLength === 0) {
     result.errors.push('No valid sequence data found after cleaning');
     return result;
   }
   
   const minLength = result.seqType === 'protein' ? 20 : 30;
-  if (sequenceOnly.length < minLength) {
-    result.errors.push(`Sequence is too short (${sequenceOnly.length} ${result.seqType}). Minimum ${minLength} required for BLAST.`);
+  if (totalSequenceLength < minLength) {
+    result.errors.push(`Sequence is too short (${totalSequenceLength} ${result.seqType}). Minimum ${minLength} required for BLAST.`);
     return result;
   }
   
-  if (sequenceOnly.length > 5000000) {
-    result.warnings.push(`Sequence is very long (${sequenceOnly.length} characters). BLAST may take longer to process.`);
+  if (totalSequenceLength > 5000000) {
+    result.warnings.push(`Sequence is very long (${totalSequenceLength} characters). BLAST may take longer to process.`);
   }
   
   // Reconstruct cleaned FASTA
@@ -886,7 +1141,7 @@ function validateAndCleanFasta(fastaSequence) {
   console.log(`  - BLAST program: ${result.blastProgram.toUpperCase()}`);
   console.log(`  - Database: ${result.blastDatabase.toUpperCase()} (${result.blastDatabase === 'nr' ? 'Non-redundant protein' : 'Nucleotide collection'})`);
   console.log('  - Original length:', fastaSequence.length);
-  console.log('  - Cleaned sequence length:', sequenceOnly.length);
+  console.log('  - Cleaned sequence length:', totalSequenceLength);
   console.log('  - Warnings:', result.warnings.length);
   console.log('  - Errors:', result.errors.length);
   console.log('  - Changes made:', result.changes.length);
@@ -896,6 +1151,41 @@ function validateAndCleanFasta(fastaSequence) {
   }
   
   return result;
+}
+
+// Extract accession IDs from FASTA headers when present.
+function extractAccessionFromFasta(fastaSequence) {
+  if (!fastaSequence || typeof fastaSequence !== 'string') {
+    return '';
+  }
+
+  const lines = fastaSequence.split(/\r?\n/);
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line.startsWith('>')) {
+      continue;
+    }
+
+    const header = line.slice(1).trim();
+    if (!header) {
+      continue;
+    }
+
+    // NCBI-style pipe headers: gi|...|ref|NC_000913.3| or gb|MN908947.3|
+    const pipeTokens = header.split('|').map(t => t.trim()).filter(Boolean);
+    const pipeAccession = pipeTokens.find(token => /^[A-Z]{1,4}_[A-Z0-9]+(?:\.[0-9]+)?$/i.test(token) || /^[A-Z]{1,3}[0-9]{5,}(?:\.[0-9]+)?$/i.test(token));
+    if (pipeAccession) {
+      return pipeAccession.toUpperCase();
+    }
+
+    // Generic first-token accession in FASTA header.
+    const firstToken = header.split(/\s+/)[0] || '';
+    if (/^[A-Z]{1,4}_[A-Z0-9]+(?:\.[0-9]+)?$/i.test(firstToken) || /^[A-Z]{1,3}[0-9]{5,}(?:\.[0-9]+)?$/i.test(firstToken)) {
+      return firstToken.toUpperCase();
+    }
+  }
+
+  return '';
 }
 
 // Helper function to parse BLAST JSON results

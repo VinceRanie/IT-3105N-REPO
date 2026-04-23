@@ -7,6 +7,7 @@ const app = express();
 
 const connectMongo = require('./config/mongo');
 const mainRoutes = require('./routes/routes');
+const { testRefreshToken } = require('./config/email.js'); // ✅ import the helper
 
 // Global error handlers - prevent process crashes
 process.on('unhandledRejection', (reason, promise) => {
@@ -15,7 +16,6 @@ process.on('unhandledRejection', (reason, promise) => {
 
 process.on('uncaughtException', (error) => {
   console.error('❌ Uncaught Exception:', error);
-  // Note: After uncaught exception, you should ideally restart the process
 });
 
 // Enable CORS
@@ -26,23 +26,20 @@ app.use(cors({
     'http://localhost:3002', 
     'http://localhost:3000',
     'https://it-3105-n-repo-98sx.vercel.app',
-    'https://it-3105-n-repo-sqsf.vercel.app'
+    'https://it-3105-n-repo-sqsf.vercel.app',
+    'https://test-biocella.vercel.app',
+    'https://test22.dcism.org',
+    'https://testbiocella.dcism.org'
   ],
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   credentials: true
 }));
 
-// Body parser middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// Serve uploaded files statically
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-// Routes - mounted at root because Apache proxy already adds /api
 app.use('/', mainRoutes);
 
-// Global error handler middleware
 app.use((err, req, res, next) => {
   console.error('❌ Global error handler caught:', err);
   res.status(err.status || 500).json({
@@ -51,15 +48,20 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start server with MongoDB connection
 const PORT = process.env.PORT || 3000;
 
 const startServer = async () => {
   try {
-    // Connect to MongoDB first (hybrid SQL + NoSQL approach)
     await connectMongo();
-    
-    // Start Express server after successful MongoDB connection
+
+    // Run Gmail refresh token check at startup, but don’t block server if it fails
+    try {
+      await testRefreshToken();
+    } catch (error) {
+      console.warn('⚠️ Gmail refresh token check failed at startup:', error.message);
+      console.warn('   Email sending may still work when retried.');
+    }
+
     app.listen(PORT, () => {
       console.log(`🚀 Server is running on port ${PORT}`);
       console.log('📊 Hybrid database system ready (MySQL + MongoDB)');
@@ -70,7 +72,6 @@ const startServer = async () => {
   }
 };
 
-// Graceful shutdown
 process.on('SIGINT', async () => {
   console.log('\n⚠️  Shutting down gracefully...');
   process.exit(0);

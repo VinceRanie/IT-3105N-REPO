@@ -41,15 +41,15 @@ export default function FinalizeSignup({
       return;
     }
 
-    if (formData.password.length < 6) {
+    if (formData.password.length < 8) {
       setMessage({
-        text: "Password must be at least 6 characters with at least one uppercase, one lowercase, and one number.",
+        text: "Password must be at least 8 characters with at least one uppercase, one lowercase, and one number.",
         type: "error",
       });
       return;
     }
 
-    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{6,}$/;
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
     if (!passwordRegex.test(formData.password)) {
       setMessage({
         text: "Password must include at least one uppercase, one lowercase, and one number.",
@@ -100,10 +100,9 @@ export default function FinalizeSignup({
       {/* Left Side Image */}
       <div className="relative hidden md:block">
         <Image
-          src="/UI/img/Laboratory.jpg"
-          alt="Laboratory Background"
+          src="/UI/img/BioOffice.webp"
+          alt="USC Biology Department Office"
           fill
-          sizes="(max-width: 768px) 0px, 50vw"
           className="object-cover"
         />
         <div className="absolute inset-0 bg-gradient-to-r from-transparent to-white/70" />

@@ -44,7 +44,7 @@ export default function ProjectModal({ isOpen, onClose, onSave, project }: Proje
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-white bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4">
         <div className="flex items-center justify-between p-4 border-b">
           <h2 className="text-xl font-semibold text-[#113F67]">
@@ -62,41 +62,41 @@ export default function ProjectModal({ isOpen, onClose, onSave, project }: Proje
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Project Title *
+                Project Title      <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
                 required
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                className="w-full px-3 py-2 border border-[#113F67] text-sm text-[#113F67] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
                 placeholder="e.g., NRCP Sediment Project"
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Project Code *
+                Project Code      <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
                 required
                 value={formData.code}
                 onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                className="w-full px-3 py-2 border border-[#113F67] text-sm text-[#113F67] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
                 placeholder="e.g., NRCP-2024-001"
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Classification *
+          Classification      <span className="text-red-500">*</span>
               </label>
               <select
                 required
                 value={formData.classification}
                 onChange={(e) => setFormData({ ...formData, classification: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+                className="cursor-pointer w-full px-3 py-2 border border-[#113F67] text-sm text-[#113F67] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
               >
                 <option value="">Select Classification</option>
                 <option value="Bacteria">Bacteria</option>
@@ -111,17 +111,17 @@ export default function ProjectModal({ isOpen, onClose, onSave, project }: Proje
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 mt-6">
+          <div className="flex justify-end gap-3 mt-6"> 
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              className="cursor-pointer px-4 py-2 border border-[#113F67] text-[#113F67] rounded-lg hover:bg-gray-50 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-[#113F67] text-white rounded-lg hover:bg-[#0d2f4d] transition-colors"
+              className="cursor-pointer px-4 py-2 bg-[#113F67] text-white rounded-lg hover:bg-[#0d2f4d] transition-colors"
             >
               {project ? "Update" : "Create"} Project
             </button>

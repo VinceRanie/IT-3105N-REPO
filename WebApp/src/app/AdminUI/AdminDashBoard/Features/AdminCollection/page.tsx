@@ -7,17 +7,21 @@ import AdminControls from "./AdminControls";
 import ProjectModal from "./ProjectModal";
 import SpecimenModal from "./SpecimenModal";
 import { useRouter } from "next/navigation";
+import AlertModal from "./AlertModal";
 
 interface Project {
   _id: string;
   title: string;
   code: string;
   classification: string;
-  user_id: number;
+  user_id?: number | string;
 }
+
+
 
 interface Specimen {
   _id: string;
+  publish_status?: 'published' | 'unpublished';
   code_name: string;
   classification: string;
   source: string;
@@ -65,7 +69,7 @@ interface Specimen {
   special_reqs?: string;
   activity?: string;
   result?: string;
-  custom_fields?: Record<string, string>;
+  custom_fields?: Record<string, any>;
 }
 
 export default function AdminCollectionPage() {
@@ -73,14 +77,43 @@ export default function AdminCollectionPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "unpublished" | "published">("all");
   
   // Modal states
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
   const [isSpecimenModalOpen, setIsSpecimenModalOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [selectedSpecimen, setSelectedSpecimen] = useState<Specimen | null>(null);
+  const [alertModal, setAlertModal] = useState<{
+    title: string;
+    message: string;
+  } | null>(null);
+
+  const showAlert = (title: string, message: string) => {
+    setAlertModal({ title, message });
+  };
   
   const router = useRouter();
+
+  const getCurrentUserDisplayName = () => {
+    if (typeof window === "undefined") return "";
+
+    try {
+      const fromUserData = localStorage.getItem("userData");
+      const fromUser = localStorage.getItem("user");
+      const raw = fromUserData || fromUser;
+      if (!raw) return "";
+
+      const parsed = JSON.parse(raw);
+      const firstName = String(parsed.first_name || parsed.firstName || "").trim();
+      const lastName = String(parsed.last_name || parsed.lastName || "").trim();
+      const fullName = `${firstName} ${lastName}`.trim();
+
+      return fullName || String(parsed.name || parsed.email || parsed.username || "").trim();
+    } catch {
+      return "";
+    }
+  };
 
   // Fetch projects
   const fetchProjects = async () => {
@@ -99,7 +132,7 @@ export default function AdminCollectionPage() {
   const fetchSpecimens = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_URL}/microbials`);
+      const response = await fetch(`${API_URL}/microbials?role=admin`);
       if (response.ok) {
         const data = await response.json();
         console.log("Fetched specimens:", data);
@@ -120,6 +153,17 @@ export default function AdminCollectionPage() {
     fetchSpecimens();
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("modal") !== "add-specimen") return;
+
+    setSelectedSpecimen(null);
+    setIsSpecimenModalOpen(true);
+    window.history.replaceState({}, "", window.location.pathname);
+  }, []);
+
   // Project handlers
   const handleSaveProject = async (projectData: any) => {
     try {
@@ -138,14 +182,20 @@ export default function AdminCollectionPage() {
         await fetchProjects();
         setIsProjectModalOpen(false);
         setSelectedProject(null);
-        alert(selectedProject ? "Project updated successfully!" : "Project created successfully!");
+        showAlert(
+          "Success",
+          selectedProject
+            ? "Project updated successfully!"
+            : "Project created successfully!"
+        );
+
       } else {
         const error = await response.json();
-        alert(`Error: ${error.message || "Failed to save project"}`);
+        showAlert("Error", error.message || "Failed to save project");
       }
     } catch (error) {
       console.error("Error saving project:", error);
-      alert("Error saving project");
+      showAlert("Error", "Error saving project");
     }
   };
 
@@ -157,6 +207,14 @@ export default function AdminCollectionPage() {
         ? `${API_URL}/microbials/${selectedSpecimen._id}`
         : `${API_URL}/microbials`;
 
+      if (selectedSpecimen) {
+        const updatedBy = getCurrentUserDisplayName();
+        specimenData.set("updated_at", new Date().toISOString());
+        if (updatedBy) {
+          specimenData.set("updated_by", updatedBy);
+        }
+      }
+
       const response = await fetch(url, {
         method,
         // Don't set Content-Type header - let browser set it with boundary for multipart/form-data
@@ -167,14 +225,19 @@ export default function AdminCollectionPage() {
         await fetchSpecimens();
         setIsSpecimenModalOpen(false);
         setSelectedSpecimen(null);
-        alert(selectedSpecimen ? "Specimen updated successfully! QR code has been generated." : "Specimen added successfully! QR code has been generated.");
+        showAlert(
+          "Success",
+          selectedSpecimen
+            ? "Specimen updated successfully! QR code has been generated."
+            : "Specimen added successfully! QR code has been generated."
+        );
       } else {
         const error = await response.json();
-        alert(`Error: ${error.error || "Failed to save specimen"}`);
+        showAlert("Error", error.error || "Failed to save specimen");
       }
     } catch (error) {
       console.error("Error saving specimen:", error);
-      alert("Error saving specimen");
+      showAlert("Error", "Error saving specimen");
     }
   };
 
@@ -186,20 +249,48 @@ export default function AdminCollectionPage() {
 
       if (response.ok) {
         await fetchSpecimens();
-        alert("Specimen deleted successfully!");
+        showAlert("Success", "Specimen deleted successfully!");
       } else {
-        alert("Failed to delete specimen");
+        showAlert("Error", "Failed to delete specimen");
       }
     } catch (error) {
       console.error("Error deleting specimen:", error);
-      alert("Error deleting specimen");
+      showAlert("Error", "Error deleting specimen");
+    }
+  };
+
+  const handleTogglePublish = async (specimen: Specimen) => {
+    try {
+      const nextStatus = specimen.publish_status === 'published' ? 'unpublished' : 'published';
+      const payload = new FormData();
+      payload.append('publish_status', nextStatus);
+
+      const response = await fetch(`${API_URL}/microbials/${specimen._id}`, {
+        method: 'PUT',
+        body: payload,
+      });
+
+      if (response.ok) {
+        await fetchSpecimens();
+        showAlert(
+          "Success",
+          nextStatus === "published"
+            ? "Specimen published successfully!"
+            : "Specimen unpublished successfully!"
+        );
+      } else {
+        showAlert("Error", "Failed to update publish status");
+      }
+    } catch (error) {
+      console.error('Error updating publish status:', error);
+      showAlert("Error", "Error updating publish status");
     }
   };
 
   const handleViewSpecimen = (specimen: any) => {
     console.log("View specimen:", specimen);
     if (!specimen._id) {
-      alert("Error: Specimen ID is missing");
+      showAlert("Error", "Specimen ID is missing");
       return;
     }
     // Navigate to specimen details page or open a detailed modal
@@ -209,7 +300,7 @@ export default function AdminCollectionPage() {
   const handleEditSpecimen = (specimen: any) => {
     console.log("Edit specimen:", specimen);
     if (!specimen._id) {
-      alert("Error: Specimen ID is missing");
+      showAlert("Error", "Specimen ID is missing");
       return;
     }
     setSelectedSpecimen(specimen);
@@ -218,8 +309,14 @@ export default function AdminCollectionPage() {
 
   // Filter specimens based on search query
   const filteredSpecimens = specimens.filter((specimen: any) => {
+    const matchesStatus =
+      statusFilter === "all" ||
+      (specimen.publish_status || "unpublished") === statusFilter;
+
+    if (!matchesStatus) return false;
+
     if (!searchQuery) return true;
-    
+
     const query = searchQuery.toLowerCase();
     return (
       specimen.code_name?.toLowerCase().includes(query) ||
@@ -256,6 +353,8 @@ export default function AdminCollectionPage() {
         }}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
+        statusFilter={statusFilter}
+        onStatusFilterChange={setStatusFilter}
       />
       
       <AdminCollection
@@ -263,6 +362,7 @@ export default function AdminCollectionPage() {
         onEdit={handleEditSpecimen}
         onDelete={handleDeleteSpecimen}
         onView={handleViewSpecimen}
+        onTogglePublish={handleTogglePublish}
       />
 
       <ProjectModal
@@ -285,6 +385,14 @@ export default function AdminCollectionPage() {
         specimen={selectedSpecimen}
         projects={projects}
       />
+
+    <AlertModal
+      isOpen={!!alertModal}
+      title={alertModal?.title || ""}
+      message={alertModal?.message || ""}
+      onClose={() => setAlertModal(null)}
+    />
+
     </>
   );
 }
