@@ -235,8 +235,9 @@ exports.generateQRCode = async (appointmentId) => {
   // Generate unique verification token
   const qrData = crypto.randomBytes(16).toString('hex');
   
-  // Create verification URL that admin will scan
-  const verificationUrl = `https://it-3105-n-repo-sqsf.vercel.app/AdminUI/verify-appointment?token=${qrData}&id=${appointmentId}`;
+  // Create a neutral scan URL so scanner role can be resolved by the frontend.
+  const baseUrl = (process.env.FRONTEND_URL || 'https://testbiocella.dcism.org').replace(/\/+$/, '');
+  const verificationUrl = `${baseUrl}/scan/appointment?token=${qrData}&id=${appointmentId}`;
   
   // Generate QR code with the URL
   const qrCodeDataUrl = await QRCode.toDataURL(verificationUrl);

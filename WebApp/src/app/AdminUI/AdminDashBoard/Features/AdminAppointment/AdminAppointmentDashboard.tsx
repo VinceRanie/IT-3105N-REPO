@@ -223,8 +223,8 @@ export default function AdminAppointmentDashboard() {
       return;
     }
 
-    // Check if it's a valid appointment verification URL
-    if (qrInput.includes('/verify-appointment?')) {
+    // Check if it's a valid appointment verification URL.
+    if (qrInput.includes('/verify-appointment?') || qrInput.includes('/scan/appointment?')) {
       try {
         const url = new URL(qrInput);
         const token = url.searchParams.get('token');

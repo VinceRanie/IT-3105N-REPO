@@ -205,7 +205,7 @@ export default function RAStaffAppointmentDashboard() {
       return;
     }
 
-    if (qrInput.includes('/verify-appointment?')) {
+    if (qrInput.includes('/verify-appointment?') || qrInput.includes('/scan/appointment?')) {
       try {
         const url = new URL(qrInput);
         const token = url.searchParams.get('token');

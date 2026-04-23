@@ -224,9 +224,9 @@ const generateSpecimenQRCode = async (specimenId) => {
   // Generate unique token for the specimen
   const qrToken = crypto.randomBytes(16).toString('hex');
   
-  // Create public view URL (adjust based on your frontend deployment URL)
-  const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
-  const verificationUrl = `${baseUrl}/specimen/${specimenId}?token=${qrToken}`;
+  // Create role-resolved scan URL.
+  const baseUrl = (process.env.FRONTEND_URL || 'https://testbiocella.dcism.org').replace(/\/+$/, '');
+  const verificationUrl = `${baseUrl}/scan/specimen/${specimenId}?token=${qrToken}`;
   
   // Generate QR code as data URL
   const qrCodeDataUrl = await QRCode.toDataURL(verificationUrl);

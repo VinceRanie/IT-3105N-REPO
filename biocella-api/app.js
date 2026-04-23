@@ -28,7 +28,8 @@ app.use(cors({
     'https://it-3105-n-repo-98sx.vercel.app',
     'https://it-3105-n-repo-sqsf.vercel.app',
     'https://test-biocella.vercel.app',
-    'https://test22.dcism.org'
+    'https://test22.dcism.org',
+    'https://testbiocella.dcism.org'
   ],
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   credentials: true
