@@ -41,7 +41,8 @@ if (!APP_BASE_URL) {
 const RESET_LINK_TTL_MS = 60 * 60 * 1000; // 1 hour
 const RESET_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const PASSWORD_STRENGTH_ERROR_MESSAGE = "Password must be at least 8 characters long and contain at least one uppercase, one lowercase, and a number.";
-const OPAQUE_AUTH_MESSAGE = "If gmail is registered, an email will be sent.";
+const ACCOUNT_REGISTERED_MESSAGE = "Account is already registered.";
+const ACCOUNT_NOT_REGISTERED_MESSAGE = "Account is not registered.";
 
 // Used only for verifyGoogleProfile
 const googleOauthClient = new google.auth.OAuth2(
@@ -148,9 +149,9 @@ const buildPasswordResetStatus = (user) => {
   };
 };
 
-const sendOpaqueAuthResponse = (res, statusCode = HttpStatus.OK) =>
+const sendAuthMessageResponse = (res, message, statusCode = HttpStatus.OK) =>
   res.status(statusCode).json({
-    message: OPAQUE_AUTH_MESSAGE,
+    message,
     statusCode: statusCode,
   });
 
@@ -457,7 +458,7 @@ exports.register = async (req, res) => {
     const existingUser = await authModel.getUserByEmail(email);
     if (existingUser) {
       if (existingUser.password) {
-        return sendOpaqueAuthResponse(res, HttpStatus.CONFLICT);
+        return sendAuthMessageResponse(res, ACCOUNT_REGISTERED_MESSAGE, HttpStatus.CONFLICT);
       }
 
       const tokenExpiryMs = existingUser.reset_token_expires
@@ -535,12 +536,12 @@ exports.forgotPassword = async (req, res) => {
     const user = await authModel.getUserByEmail(email);
 
     if (!user) {
-      return sendOpaqueAuthResponse(res);
+      return sendAuthMessageResponse(res, ACCOUNT_NOT_REGISTERED_MESSAGE);
     }
 
     const resetResult = await issuePasswordResetForUser(user);
     if (!resetResult.ok && resetResult.statusCode === HttpStatus.SERVICE_UNAVAILABLE) {
-      return sendOpaqueAuthResponse(res);
+      return sendAuthMessageResponse(res, ACCOUNT_REGISTERED_MESSAGE);
     }
 
     return res.status(resetResult.statusCode).json({
@@ -626,7 +627,7 @@ exports.adminInvite = async (req, res) => {
 
     const existingUser = await authModel.userExists(email);
     if (existingUser) {
-      return sendOpaqueAuthResponse(res, HttpStatus.CONFLICT);
+      return sendAuthMessageResponse(res, ACCOUNT_REGISTERED_MESSAGE, HttpStatus.CONFLICT);
     }
 
     const resetToken = uuidv4();
