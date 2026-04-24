@@ -24,6 +24,11 @@ function ForgotResetContent() {
   const [verifying, setVerifying] = useState(true);
   const [message, setMessage] = useState<{ text: string; type: "error" | "success" } | null>(null);
 
+  const hasMinLength = password.length >= 8;
+  const hasLowercase = /[a-z]/.test(password);
+  const hasUppercase = /[A-Z]/.test(password);
+  const hasNumber = /\d/.test(password);
+
   useEffect(() => {
     const load = async () => {
       if (!token) {
@@ -126,9 +131,12 @@ function ForgotResetContent() {
             <>
               {details?.profile_photo && (
                 <div className="flex items-center gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
-                  <img
+                  <Image
                     src={details.profile_photo}
                     alt="Profile"
+                    width={64}
+                    height={64}
+                    unoptimized
                     className="w-16 h-16 rounded-full border-2 border-[#113F67]"
                     referrerPolicy="no-referrer"
                   />
@@ -166,6 +174,15 @@ function ForgotResetContent() {
                   <div>
                     <label className="text-sm text-gray-500">Course</label>
                     <input type="text" value={details.course} readOnly className="w-full border rounded-md px-3 py-2 bg-gray-100 text-gray-500" />
+                  </div>
+                  <div className="col-span-full rounded-md border border-[#113F67]/20 bg-[#113F67]/5 px-3 py-2 text-sm">
+                    <p className="mb-1 text-[#113F67] font-medium">New password cannot be the same as the old password.</p>
+                    <ul className="list-disc pl-5 space-y-1">
+                      <li className={hasMinLength ? "text-green-600" : "text-red-600"}>At least 8 characters long</li>
+                      <li className={hasLowercase ? "text-green-600" : "text-red-600"}>Has a lowercase letter</li>
+                      <li className={hasUppercase ? "text-green-600" : "text-red-600"}>Has an uppercase letter</li>
+                      <li className={hasNumber ? "text-green-600" : "text-red-600"}>Has a number</li>
+                    </ul>
                   </div>
                   <div>
                     <label className="text-sm text-gray-700">Password</label>
