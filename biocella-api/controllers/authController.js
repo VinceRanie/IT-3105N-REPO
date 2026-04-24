@@ -41,8 +41,8 @@ if (!APP_BASE_URL) {
 const RESET_LINK_TTL_MS = 60 * 60 * 1000; // 1 hour
 const RESET_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const PASSWORD_STRENGTH_ERROR_MESSAGE = "Password must be at least 8 characters long and contain at least one uppercase, one lowercase, and a number.";
-const ACCOUNT_REGISTERED_MESSAGE = "Account is already registered.";
-const ACCOUNT_NOT_REGISTERED_MESSAGE = "Account is not registered.";
+const ACCOUNT_REGISTERED_MESSAGE = "An account with this email is already registered.";
+const ACCOUNT_NOT_REGISTERED_MESSAGE = "No account is registered with this email.";
 
 // Used only for verifyGoogleProfile
 const googleOauthClient = new google.auth.OAuth2(
@@ -443,14 +443,14 @@ exports.register = async (req, res) => {
 
     if (!email || typeof email !== "string") {
       return res.status(HttpStatus.BAD_REQUEST).json({
-        message: "Valid email is required.",
+        message: "Please enter a valid email address.",
         statusCode: HttpStatus.BAD_REQUEST,
       });
     }
 
     if (!authModel.validateEmailDomain(email)) {
       return res.status(HttpStatus.BAD_REQUEST).json({
-        message: "Invalid email format or not USC email. Please use a valid USC email address.",
+        message: "Please enter a valid USC email address.",
         statusCode: HttpStatus.BAD_REQUEST,
       });
     }
@@ -505,8 +505,8 @@ exports.register = async (req, res) => {
 
     const userId = await authModel.createUser(email, resetToken, tokenExpiry);
 
-    return res.status(HttpStatus.CREATED).json({
-      message: "User registered successfully. A password setup link has been sent to your email.",
+         return res.status(HttpStatus.CREATED).json({
+           message: "Registration successful. Please check your email for a password setup link.",
       userId,
       email,
       statusCode: HttpStatus.CREATED,
