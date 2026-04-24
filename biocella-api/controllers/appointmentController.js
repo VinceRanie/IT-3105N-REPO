@@ -160,7 +160,13 @@ exports.getAll = async (req, res) => {
   try {
     console.log('📋 Fetching all appointments');
     await autoExpireOngoingAppointments();
-    const appointments = await Appointment.getAllAppointments();
+    const userId = req.query?.user_id ? Number(req.query.user_id) : null;
+    const studentId = req.query?.student_id ? String(req.query.student_id).trim() : null;
+
+    const appointments = await Appointment.getAllAppointments({
+      user_id: Number.isFinite(userId) && userId > 0 ? userId : null,
+      student_id: studentId || null,
+    });
     console.log(`✅ Successfully fetched ${appointments.length} appointments`);
     res.json(appointments);
   } catch (err) {

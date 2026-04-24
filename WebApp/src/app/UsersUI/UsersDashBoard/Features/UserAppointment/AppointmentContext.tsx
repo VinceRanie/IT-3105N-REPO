@@ -88,7 +88,23 @@ export function AppointmentProvider({ children }: { children: React.ReactNode })
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/API/appointments", {
+      const identity = extractUserIdentity();
+      if (!identity.userId && !identity.studentId) {
+        setAppointments([]);
+        setError("Could not identify logged-in user. Please log in again.");
+        setLoading(false);
+        return;
+      }
+
+      const params = new URLSearchParams();
+      if (identity.userId) {
+        params.set("user_id", String(identity.userId));
+      }
+      if (identity.studentId) {
+        params.set("student_id", identity.studentId);
+      }
+
+      const res = await fetch(`/API/appointments?${params.toString()}`, {
         headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
       });
       if (!res.ok) {
@@ -99,7 +115,6 @@ export function AppointmentProvider({ children }: { children: React.ReactNode })
 
       const raw = await res.json();
       const source = Array.isArray(raw?.data) ? raw.data : Array.isArray(raw) ? raw : [];
-      const identity = extractUserIdentity();
 
       const mine = source.filter((item: any) => {
         if (identity.userId && item.user_id) {
@@ -108,7 +123,7 @@ export function AppointmentProvider({ children }: { children: React.ReactNode })
         if (identity.studentId && item.student_id) {
           return String(item.student_id).toLowerCase() === identity.studentId.toLowerCase();
         }
-        return true;
+        return false;
       });
 
       const mapped: Appointment[] = mine.map((item: any) => ({

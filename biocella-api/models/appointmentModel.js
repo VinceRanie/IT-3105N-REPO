@@ -125,11 +125,24 @@ exports.isDateUnavailable = async (date) => {
   return rows[0] || null;
 };
 
-// READ ALL
-exports.getAllAppointments = async () => {
-  const [rows] = await db.execute(
-    "SELECT * FROM appointment WHERE deleted_at IS NULL OR status = 'no_show' ORDER BY date DESC"
-  );
+// READ ALL (optionally scoped to a user/student)
+exports.getAllAppointments = async ({ user_id = null, student_id = null } = {}) => {
+  let query = "SELECT * FROM appointment WHERE (deleted_at IS NULL OR status = 'no_show')";
+  const params = [];
+
+  if (user_id) {
+    query += " AND user_id = ?";
+    params.push(user_id);
+  }
+
+  if (student_id) {
+    query += " AND student_id = ?";
+    params.push(student_id);
+  }
+
+  query += " ORDER BY date DESC";
+
+  const [rows] = await db.execute(query, params);
   return rows;
 };
 

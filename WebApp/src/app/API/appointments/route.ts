@@ -2,9 +2,27 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://22102959.dcism.org/biocella-api';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const response = await fetch(`${API_BASE_URL}/appointments`, {
+    const searchParams = request.nextUrl.searchParams;
+    const scopedParams = new URLSearchParams();
+
+    const userId = searchParams.get('user_id');
+    const studentId = searchParams.get('student_id');
+
+    if (userId) {
+      scopedParams.set('user_id', userId);
+    }
+
+    if (studentId) {
+      scopedParams.set('student_id', studentId);
+    }
+
+    const backendUrl = `${API_BASE_URL}/appointments${
+      scopedParams.toString() ? `?${scopedParams.toString()}` : ''
+    }`;
+
+    const response = await fetch(backendUrl, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
