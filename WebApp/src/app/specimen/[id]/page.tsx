@@ -38,9 +38,15 @@ export default function SpecimenPublicView({ params, searchParams }: SpecimenPub
       const userData = getUserData();
       const role = userData?.role || localStorage.getItem('userRole');
       
-      if (role === 'admin' || role === 'RA' || role === 'ra') {
+      if (role === 'admin') {
         setRedirecting(true);
         router.push(`/AdminUI/AdminDashBoard/Features/AdminCollection/specimen/${params.id}`);
+        return;
+      }
+
+      if (role === 'RA' || role === 'ra' || role === 'staff') {
+        setRedirecting(true);
+        router.push(`/RAStaffUI/RAStaffDashBoard/Features/RAStaffCollection/specimen/${params.id}`);
         return;
       }
       
