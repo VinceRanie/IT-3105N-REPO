@@ -6,9 +6,14 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const scopedParams = new URLSearchParams();
+    const scope = searchParams.get('scope');
 
-    const userId = searchParams.get('user_id');
-    const studentId = searchParams.get('student_id');
+    if (scope === 'self') {
+      scopedParams.set('scope', 'self');
+    }
+
+    const userId = scope === 'self' ? searchParams.get('user_id') : null;
+    const studentId = scope === 'self' ? searchParams.get('student_id') : null;
 
     if (userId) {
       scopedParams.set('user_id', userId);
