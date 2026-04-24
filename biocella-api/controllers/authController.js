@@ -40,6 +40,8 @@ if (!APP_BASE_URL) {
 
 const RESET_LINK_TTL_MS = 60 * 60 * 1000; // 1 hour
 const RESET_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const PASSWORD_STRENGTH_ERROR_MESSAGE = "Password must be at least 8 characters long and contain at least one uppercase, one lowercase, and a number.";
+const OPAQUE_AUTH_MESSAGE = "If gmail is registered, an email will be sent.";
 
 // Used only for verifyGoogleProfile
 const googleOauthClient = new google.auth.OAuth2(
@@ -145,6 +147,12 @@ const buildPasswordResetStatus = (user) => {
         : `You can request another password reset in ${formattedDuration}.`,
   };
 };
+
+const sendOpaqueAuthResponse = (res, statusCode = HttpStatus.OK) =>
+  res.status(statusCode).json({
+    message: OPAQUE_AUTH_MESSAGE,
+    statusCode: statusCode,
+  });
 
 
 const sendFinalizeSetupEmail = async (email, resetToken) => {
@@ -359,6 +367,13 @@ exports.login = async (req, res) => {
     }
 
     if (!user.password) {
+      if (Number(user.is_setup_complete) === 1) {
+        return res.status(HttpStatus.CONFLICT).json({
+          message: "Your Email is deactivated by Admin",
+          statusCode: HttpStatus.CONFLICT,
+        });
+      }
+
       return res.status(HttpStatus.CONFLICT).json({
         message: "Account setup is not complete. Please finish finalize setup.",
         statusCode: HttpStatus.CONFLICT,
@@ -393,23 +408,23 @@ exports.login = async (req, res) => {
         email: user.email,
         statusCode: HttpStatus.OK,
       });
-    } else {
-      const newAttempts = user.failed_login_attempts + 1;
-      let message = "Invalid email or password.";
-      let lockoutTime = null;
-
-      if (newAttempts >= 5) {
-        lockoutTime = new Date(new Date().getTime() + 15 * 60000);
-        message = "Maximum login attempts exceeded. Account locked for 15 minutes.";
-      }
-
-      await authModel.incrementFailedLoginAttempts(user.user_id, newAttempts, lockoutTime);
-
-      return res.status(HttpStatus.UNAUTHORIZED).json({
-        message,
-        statusCode: HttpStatus.UNAUTHORIZED,
-      });
     }
+
+    const newAttempts = user.failed_login_attempts + 1;
+    let message = "Invalid email or password.";
+    let lockoutTime = null;
+
+    if (newAttempts >= 5) {
+      lockoutTime = new Date(Date.now() + 15 * 60000);
+      message = "Maximum login attempts exceeded. Account locked for 15 minutes.";
+    }
+
+    await authModel.incrementFailedLoginAttempts(user.user_id, newAttempts, lockoutTime);
+
+    return res.status(HttpStatus.UNAUTHORIZED).json({
+      message,
+      statusCode: HttpStatus.UNAUTHORIZED,
+    });
   } catch (error) {
     console.error("Login Error:", error);
     return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
@@ -442,10 +457,7 @@ exports.register = async (req, res) => {
     const existingUser = await authModel.getUserByEmail(email);
     if (existingUser) {
       if (existingUser.password) {
-        return res.status(HttpStatus.CONFLICT).json({
-          message: "User already registered.",
-          statusCode: HttpStatus.CONFLICT,
-        });
+        return sendOpaqueAuthResponse(res, HttpStatus.CONFLICT);
       }
 
       const tokenExpiryMs = existingUser.reset_token_expires
@@ -523,18 +535,12 @@ exports.forgotPassword = async (req, res) => {
     const user = await authModel.getUserByEmail(email);
 
     if (!user) {
-      return res.status(HttpStatus.OK).json({
-        message: "If an account exists, a reset email will be sent.",
-        statusCode: HttpStatus.OK,
-      });
+      return sendOpaqueAuthResponse(res);
     }
 
     const resetResult = await issuePasswordResetForUser(user);
     if (!resetResult.ok && resetResult.statusCode === HttpStatus.SERVICE_UNAVAILABLE) {
-      return res.status(HttpStatus.OK).json({
-        message: "If an account exists, a reset email will be sent.",
-        statusCode: HttpStatus.OK,
-      });
+      return sendOpaqueAuthResponse(res);
     }
 
     return res.status(resetResult.statusCode).json({
@@ -583,6 +589,9 @@ exports.requestPasswordResetAuthenticated = async (req, res) => {
     const resetResult = await issuePasswordResetForUser(user);
     return res.status(resetResult.statusCode).json({
       message: resetResult.message,
+      ...(resetResult.passwordResetStatus
+        ? { passwordResetStatus: resetResult.passwordResetStatus }
+        : {}),
       statusCode: resetResult.statusCode,
     });
   } catch (error) {
@@ -617,10 +626,7 @@ exports.adminInvite = async (req, res) => {
 
     const existingUser = await authModel.userExists(email);
     if (existingUser) {
-      return res.status(HttpStatus.CONFLICT).json({
-        message: "User already exists.",
-        statusCode: HttpStatus.CONFLICT,
-      });
+      return sendOpaqueAuthResponse(res, HttpStatus.CONFLICT);
     }
 
     const resetToken = uuidv4();
@@ -667,7 +673,7 @@ exports.resetPassword = async (req, res) => {
 
     if (!authModel.validatePasswordStrength(newPassword)) {
       return res.status(HttpStatus.BAD_REQUEST).json({
-        message: "Password must be at least 8 characters long and contain at least one uppercase, one lowercase, and a number.",
+        message: PASSWORD_STRENGTH_ERROR_MESSAGE,
         statusCode: HttpStatus.BAD_REQUEST,
       });
     }
@@ -766,7 +772,7 @@ exports.finalizeSetup = async (req, res) => {
 
     if (!authModel.validatePasswordStrength(password)) {
       return res.status(HttpStatus.BAD_REQUEST).json({
-        message: "Password must be at least 8 characters long and contain at least one uppercase, one lowercase, and a number.",
+        message: PASSWORD_STRENGTH_ERROR_MESSAGE,
         statusCode: HttpStatus.BAD_REQUEST,
       });
     }
@@ -897,7 +903,7 @@ exports.updateUserProfile = async (req, res) => {
 
       if (!authModel.validatePasswordStrength(newPassword)) {
         return res.status(HttpStatus.BAD_REQUEST).json({
-          message: "Password must be at least 8 characters long and contain at least one uppercase, one lowercase, and a number.",
+          message: PASSWORD_STRENGTH_ERROR_MESSAGE,
           statusCode: HttpStatus.BAD_REQUEST,
         });
       }
@@ -1034,20 +1040,11 @@ exports.getUserByToken = async (req, res) => {
 };
 
 // LOGOUT
-exports.logout = async (req, res) => {
-  try {
-    return res.status(HttpStatus.OK).json({
-      message: "Logout successful.",
-      statusCode: HttpStatus.OK,
-    });
-  } catch (error) {
-    console.error("Logout Error:", error);
-    return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-      message: "An unexpected error occurred during logout.",
-      error: error.message || error,
-      statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-    });
-  }
+exports.logout = async (_req, res) => {
+  return res.status(HttpStatus.OK).json({
+    message: "Logout successful.",
+    statusCode: HttpStatus.OK,
+  });
 };
 
 // GET ALL NON-ADMIN USERS
