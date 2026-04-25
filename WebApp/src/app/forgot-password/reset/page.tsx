@@ -131,12 +131,9 @@ function ForgotResetContent() {
             <>
               {details?.profile_photo && (
                 <div className="flex items-center gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
-                  <Image
+                  <img
                     src={details.profile_photo}
                     alt="Profile"
-                    width={64}
-                    height={64}
-                    unoptimized
                     className="w-16 h-16 rounded-full border-2 border-[#113F67]"
                     referrerPolicy="no-referrer"
                   />
