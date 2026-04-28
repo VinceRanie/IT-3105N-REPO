@@ -42,3 +42,7 @@ The table includes 75 test cases across:
 - Genome hit visibility and NCBI link behavior
 - QR/PDF actions
 - Error handling, reliability, and edge cases
+
+## Test Environment
+
+The system is deployed at `https://biocella.dcism.org`. When executing these test cases against the live site, please use the instructions in `docs/Test_Environment.md`.
