@@ -148,7 +148,17 @@ exports.createMicrobial = async (req, res) => {
         
         // Read FASTA file content
         const fastaPath = path.join(__dirname, '..', fasta_file);
-        fasta_sequence = fs.readFileSync(fastaPath, 'utf8');
+        try {
+          if (fs.existsSync(fastaPath)) {
+            fasta_sequence = fs.readFileSync(fastaPath, 'utf8');
+          } else {
+            console.warn(`FASTA file not found at ${fastaPath}`);
+            fasta_sequence = '';
+          }
+        } catch (readErr) {
+          console.error('Failed to read FASTA file:', readErr);
+          fasta_sequence = '';
+        }
       }
     }
 
@@ -356,15 +366,24 @@ exports.updateMicrobial = async (req, res) => {
         }
         
         updateData.fasta_file = `/uploads/fasta/${req.files.fasta_file[0].filename}`;
-        
-        // Read new FASTA file content
-        const fastaPath = path.join(__dirname, '..', updateData.fasta_file);
-        updateData.fasta_sequence = fs.readFileSync(fastaPath, 'utf8');
 
-        const extractedAccession = extractAccessionFromFasta(updateData.fasta_sequence);
-        const providedAccession = (updateData.accession_no || '').trim();
-        if (!providedAccession && extractedAccession) {
-          updateData.accession_no = extractedAccession;
+        // Read new FASTA file content safely
+        const fastaPath = path.join(__dirname, '..', updateData.fasta_file);
+        try {
+          if (fs.existsSync(fastaPath)) {
+            updateData.fasta_sequence = fs.readFileSync(fastaPath, 'utf8');
+            const extractedAccession = extractAccessionFromFasta(updateData.fasta_sequence);
+            const providedAccession = (updateData.accession_no || '').trim();
+            if (!providedAccession && extractedAccession) {
+              updateData.accession_no = extractedAccession;
+            }
+          } else {
+            console.warn(`Uploaded FASTA missing at ${fastaPath}`);
+            updateData.fasta_sequence = '';
+          }
+        } catch (readErr) {
+          console.error('Failed to read uploaded FASTA file:', readErr);
+          updateData.fasta_sequence = '';
         }
       }
     }
