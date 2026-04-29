@@ -97,6 +97,7 @@ export function AppointmentProvider({ children }: { children: React.ReactNode })
       }
 
       const params = new URLSearchParams();
+      params.set("scope", "self");
       if (identity.userId) {
         params.set("user_id", String(identity.userId));
       }

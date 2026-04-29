@@ -160,8 +160,9 @@ exports.getAll = async (req, res) => {
   try {
     console.log('📋 Fetching all appointments');
     await autoExpireOngoingAppointments();
-    const userId = req.query?.user_id ? Number(req.query.user_id) : null;
-    const studentId = req.query?.student_id ? String(req.query.student_id).trim() : null;
+    const isSelfScoped = String(req.query?.scope || '').toLowerCase() === 'self';
+    const userId = isSelfScoped && req.query?.user_id ? Number(req.query.user_id) : null;
+    const studentId = isSelfScoped && req.query?.student_id ? String(req.query.student_id).trim() : null;
 
     const appointments = await Appointment.getAllAppointments({
       user_id: Number.isFinite(userId) && userId > 0 ? userId : null,

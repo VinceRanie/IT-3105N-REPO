@@ -13,6 +13,42 @@ interface SpecimenDetailProps {
   }>;
 }
 
+const getCustomFieldLabel = (key: string, value: any) => {
+  if (value && typeof value === "object" && !Array.isArray(value) && value.label) {
+    return String(value.label);
+  }
+  return key.replace(/_/g, " ");
+};
+
+const formatCustomFieldValue = (value: any): string => {
+  if (value === null || value === undefined || value === "") return "N/A";
+
+  if (Array.isArray(value)) {
+    return value.length ? value.map((item) => String(item)).join(", ") : "N/A";
+  }
+
+  if (typeof value === "object") {
+    if ("value" in value) {
+      return formatCustomFieldValue(value.value);
+    }
+
+    if ("description" in value || "image_url" in value) {
+      const description = String(value.description || "").trim();
+      const imageUrl = String(value.image_url || "").trim();
+      if (!description && !imageUrl) return "N/A";
+      return [description, imageUrl].filter(Boolean).join(" | ");
+    }
+
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return "N/A";
+    }
+  }
+
+  return String(value);
+};
+
 export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
   const resolvedParams = use(params);
   const [specimen, setSpecimen] = useState<any>(null);
@@ -376,11 +412,14 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
       
       Object.entries(specimen.custom_fields).forEach(([key, value]) => {
         checkPageBreak();
+        const label = getCustomFieldLabel(key, value);
+        const displayValue = formatCustomFieldValue(value);
         doc.setFont("helvetica", "bold");
-        doc.text(`${key.replace(/_/g, ' ')}:`, margin, yPos);
+        doc.text(`${label}:`, margin, yPos);
         doc.setFont("helvetica", "normal");
-        doc.text(String(value), margin + 50, yPos);
-        yPos += lineHeight;
+        const wrappedValue = doc.splitTextToSize(displayValue, contentWidth - 52);
+        doc.text(wrappedValue, margin + 52, yPos);
+        yPos += lineHeight * Math.max(1, wrappedValue.length);
       });
     }
 
@@ -592,7 +631,11 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
                     <h2 className="text-lg font-semibold mb-4">Additional Information</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {Object.entries(specimen.custom_fields).map(([key, value]: [string, any]) => (
-                        <InfoItem key={key} label={key.replace(/_/g, " ")} value={value || "N/A"} />
+                        <InfoItem
+                          key={key}
+                          label={getCustomFieldLabel(key, value)}
+                          value={formatCustomFieldValue(value)}
+                        />
                       ))}
                     </div>
                   </div>
