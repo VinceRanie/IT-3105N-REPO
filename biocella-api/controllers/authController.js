@@ -40,7 +40,7 @@ if (!APP_BASE_URL) {
 
 const RESET_LINK_TTL_MS = 60 * 60 * 1000; // 1 hour
 const RESET_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-const PASSWORD_STRENGTH_ERROR_MESSAGE = "Password must be at least 8 characters long and contain at least one uppercase, one lowercase, and a number.";
+const PASSWORD_STRENGTH_ERROR_MESSAGE = "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, and one number.";
 const ACCOUNT_REGISTERED_MESSAGE = "An account with this email is already registered.";
 const ACCOUNT_NOT_REGISTERED_MESSAGE = "No account is registered with this email.";
 
@@ -337,7 +337,7 @@ const issuePasswordResetForUser = async (user) => {
   return {
     ok: true,
     statusCode: HttpStatus.OK,
-    message: "Email sent successfully",
+    message: "Email sent successfully.",
     passwordResetStatus: buildPasswordResetStatus({
       ...user,
       reset_token: resetToken,
@@ -362,7 +362,7 @@ exports.login = async (req, res) => {
 
     if (!user) {
       return res.status(HttpStatus.UNAUTHORIZED).json({
-        message: "Invalid credentials",
+        message: "Invalid credentials.",
         statusCode: HttpStatus.UNAUTHORIZED,
       });
     }
@@ -370,13 +370,13 @@ exports.login = async (req, res) => {
     if (!user.password) {
       if (Number(user.is_setup_complete) === 1) {
         return res.status(HttpStatus.CONFLICT).json({
-          message: "Your Email is deactivated by Admin",
+          message: "Your email is deactivated by the admin.",
           statusCode: HttpStatus.CONFLICT,
         });
       }
 
       return res.status(HttpStatus.CONFLICT).json({
-        message: "Account setup is not complete. Please finish finalize setup.",
+        message: "Account setup is not complete. Please finish the setup process.",
         statusCode: HttpStatus.CONFLICT,
       });
     }
@@ -385,7 +385,7 @@ exports.login = async (req, res) => {
       const remainingMs = new Date(user.lockout_until).getTime() - Date.now();
       const minutes = Math.max(1, Math.ceil(remainingMs / 60000));
       return res.status(HttpStatus.UNAUTHORIZED).json({
-        message: `Account is locked. Time remaining: ${minutes} minute${minutes === 1 ? "" : "s"}`,
+        message: `Account is locked. Time remaining: ${minutes} minute${minutes === 1 ? "" : "s"}.`,
         statusCode: HttpStatus.UNAUTHORIZED,
       });
     }
@@ -402,7 +402,7 @@ exports.login = async (req, res) => {
       );
 
       return res.status(HttpStatus.OK).json({
-        message: "Login was successful!",
+        message: "Login was successful.",
         token,
         role: user.role,
         userId: user.user_id,
@@ -469,7 +469,7 @@ exports.register = async (req, res) => {
 
       if (hasActiveFinalizeLink) {
         return res.status(HttpStatus.CONFLICT).json({
-          message: "Finish finalize setup.",
+          message: "Please finish the setup process.",
           statusCode: HttpStatus.CONFLICT,
         });
       }
@@ -528,7 +528,7 @@ exports.forgotPassword = async (req, res) => {
 
     if (!email || typeof email !== "string") {
       return res.status(HttpStatus.BAD_REQUEST).json({
-        message: "Valid email is required.",
+        message: "A valid email address is required.",
         statusCode: HttpStatus.BAD_REQUEST,
       });
     }
@@ -613,7 +613,7 @@ exports.adminInvite = async (req, res) => {
 
     if (!email || typeof email !== "string") {
       return res.status(HttpStatus.BAD_REQUEST).json({
-        message: "Valid email is required.",
+        message: "A valid email address is required.",
         statusCode: HttpStatus.BAD_REQUEST,
       });
     }
@@ -759,7 +759,7 @@ exports.finalizeSetup = async (req, res) => {
 
     if (userByToken.email.toLowerCase() !== email.toLowerCase()) {
       return res.status(HttpStatus.BAD_REQUEST).json({
-        message: "Email does not match this setup token.",
+        message: "The email address does not match this setup token.",
         statusCode: HttpStatus.BAD_REQUEST,
       });
     }
@@ -897,14 +897,14 @@ exports.updateUserProfile = async (req, res) => {
     if (hasPasswordInput) {
       if (!newPassword || !confirmPassword) {
         return res.status(HttpStatus.BAD_REQUEST).json({
-          message: "Both newPassword and confirmPassword are required.",
+          message: "Both new password and confirm password are required.",
           statusCode: HttpStatus.BAD_REQUEST,
         });
       }
 
       if (newPassword !== confirmPassword) {
         return res.status(HttpStatus.BAD_REQUEST).json({
-          message: "Passwords do not match.",
+          message: "New password and confirm password do not match.",
           statusCode: HttpStatus.BAD_REQUEST,
         });
       }
@@ -1258,7 +1258,7 @@ exports.verifyGoogleProfile = async (req, res) => {
     }
 
     return res.status(HttpStatus.OK).json({
-      message: "Google profile verified",
+      message: "Google profile verified.",
       profile: {
         email: profile.email,
         email_verified: profile.email_verified,
