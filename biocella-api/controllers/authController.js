@@ -750,6 +750,13 @@ exports.finalizeSetup = async (req, res) => {
       });
     }
 
+    if (userByToken.reset_token_expires && new Date() > new Date(userByToken.reset_token_expires)) {
+      return res.status(HttpStatus.UNAUTHORIZED).json({
+        message: "This setup link has expired. Request a new one.",
+        statusCode: HttpStatus.UNAUTHORIZED,
+      });
+    }
+
     if (userByToken.email.toLowerCase() !== email.toLowerCase()) {
       return res.status(HttpStatus.BAD_REQUEST).json({
         message: "Email does not match this setup token.",
