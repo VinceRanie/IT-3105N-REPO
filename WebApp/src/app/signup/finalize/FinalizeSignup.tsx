@@ -28,6 +28,11 @@ export default function FinalizeSignup({
   const [message, setMessage] = useState<{ text: string; type: "error" | "success" } | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const hasMinLength = formData.password.length >= 8;
+  const hasLowercase = /[a-z]/.test(formData.password);
+  const hasUppercase = /[A-Z]/.test(formData.password);
+  const hasNumber = /\d/.test(formData.password);
+
   const handleChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
@@ -206,6 +211,16 @@ export default function FinalizeSignup({
                 className="w-full border border-[#113F67] rounded-md px-3 py-2 text-[#113F67] focus:ring-2 focus:ring-[#113F67] focus:border-transparent"
                 required
               />
+            </div>
+
+            <div className="col-span-full rounded-md border border-[#113F67]/20 bg-[#113F67]/5 px-3 py-2 text-sm">
+              <p className="mb-1 text-[#113F67] font-medium">Please create a password with:</p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li className={hasMinLength ? "text-green-600" : "text-red-600"}>At least 8 characters long</li>
+                <li className={hasLowercase ? "text-green-600" : "text-red-600"}>Has a lowercase letter</li>
+                <li className={hasUppercase ? "text-green-600" : "text-red-600"}>Has an uppercase letter</li>
+                <li className={hasNumber ? "text-green-600" : "text-red-600"}>Has a number</li>
+              </ul>
             </div>
 
             {/* Password Fields */}
