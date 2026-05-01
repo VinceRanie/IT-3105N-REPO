@@ -8,7 +8,7 @@ import ProjectModal from "./ProjectModal";
 import SpecimenModal from "./SpecimenModal";
 import { useRouter } from "next/navigation";
 import { useProtectedRoute } from "@/app/hooks/useProtectedRoute";
-import { getAuthHeader } from "@/app/utils/authUtil";
+import { getAuthHeader, getUserData } from "@/app/utils/authUtil";
 
 interface Project {
   _id: string;
@@ -109,6 +109,11 @@ export default function RAStaffCollectionPage() {
     }
   };
 
+  const getCurrentUserId = () => {
+    const user = getUserData();
+    return user?.userId ?? null;
+  };
+
   // Fetch projects
   const fetchProjects = async () => {
     try {
@@ -199,6 +204,11 @@ export default function RAStaffCollectionPage() {
         }
       }
 
+      const userId = getCurrentUserId();
+      if (userId) {
+        specimenData.set("user_id", String(userId));
+      }
+
       const response = await fetch(url, {
         method,
         headers: getAuthHeader(),
@@ -244,6 +254,10 @@ export default function RAStaffCollectionPage() {
       const nextStatus = specimen.publish_status === 'published' ? 'unpublished' : 'published';
       const payload = new FormData();
       payload.append('publish_status', nextStatus);
+      const userId = getCurrentUserId();
+      if (userId) {
+        payload.append('user_id', String(userId));
+      }
 
       const response = await fetch(`${API_URL}/microbials/${specimen._id}`, {
         method: 'PUT',
