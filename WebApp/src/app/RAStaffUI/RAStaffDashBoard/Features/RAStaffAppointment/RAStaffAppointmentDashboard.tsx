@@ -7,6 +7,7 @@ import { Check, X, QrCode, Search } from 'lucide-react';
 
 interface Appointment {
   appointment_id: number;
+  user_id?: number | null;
   student_id: string | null;
   department: string;
   purpose: string;
@@ -15,6 +16,10 @@ interface Appointment {
   appointment_source?: 'internal' | 'outsider';
   requester_name?: string | null;
   requester_email?: string | null;
+  user_email?: string | null;
+  user_first_name?: string | null;
+  user_last_name?: string | null;
+  user_role?: string | null;
   status: 'pending' | 'approved' | 'denied' | 'ongoing' | 'visited' | 'no_show';
   qr_code: string | null;
   admin_remarks: string | null;
@@ -116,6 +121,36 @@ export default function RAStaffAppointmentDashboard() {
     fetchAllAppointmentsAndCount();
     fetchUnavailableDates();
   }, []);
+
+  const getAppointmentDisplay = (appointment: Appointment) => {
+    const source = String(appointment.appointment_source || 'internal').toLowerCase();
+    if (source === 'outsider') {
+      const name =
+        String(appointment.requester_name || '').trim() ||
+        String(appointment.requester_email || '').trim() ||
+        'External Visitor';
+      return { primaryLabel: 'name', primaryValue: name };
+    }
+
+    const userRole = String(appointment.user_role || '').toLowerCase();
+    const userName = `${appointment.user_first_name || ''} ${appointment.user_last_name || ''}`.trim();
+
+    if (userRole === 'faculty') {
+      return {
+        primaryLabel: 'faculty email',
+        primaryValue: appointment.user_email || 'N/A',
+        secondaryLabel: 'name',
+        secondaryValue: userName || 'N/A',
+      };
+    }
+
+    return {
+      primaryLabel: 'Student ID',
+      primaryValue: appointment.student_id || 'N/A',
+      secondaryLabel: 'Name',
+      secondaryValue: userName || 'N/A',
+    };
+  };
 
   const fetchUnavailableDates = async () => {
     try {
@@ -653,11 +688,14 @@ export default function RAStaffAppointmentDashboard() {
               <div className="flex justify-between items-start">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
-                    <h3 className="text-lg font-semibold text-gray-800">
-                      {appointment.appointment_source === 'outsider'
-                        ? `Visitor: ${appointment.requester_name || appointment.requester_email || 'External Visitor'}`
-                        : `Student ID: ${appointment.student_id}`}
-                    </h3>
+                    {(() => {
+                      const display = getAppointmentDisplay(appointment);
+                      return (
+                        <h3 className="text-lg font-semibold text-gray-800">
+                          {display.primaryLabel}: {display.primaryValue}
+                        </h3>
+                      );
+                    })()}
                     {getStatusBadge(appointment.status)}
                     <span className={`px-3 py-1 rounded-full text-xs font-semibold ${appointment.appointment_source === 'outsider' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'}`}>
                       {(appointment.appointment_source || 'internal').toUpperCase()}
@@ -665,6 +703,17 @@ export default function RAStaffAppointmentDashboard() {
                   </div>
                   
                   <div className="grid grid-cols-2 gap-4 text-sm text-gray-600 mb-3">
+                    {(() => {
+                      const display = getAppointmentDisplay(appointment);
+                      if (!display.secondaryLabel || !display.secondaryValue) {
+                        return null;
+                      }
+                      return (
+                        <div>
+                          <span className="font-medium">{display.secondaryLabel}:</span> {display.secondaryValue}
+                        </div>
+                      );
+                    })()}
                     <div>
                       <span className="font-medium">Department:</span> {appointment.department}
                     </div>
