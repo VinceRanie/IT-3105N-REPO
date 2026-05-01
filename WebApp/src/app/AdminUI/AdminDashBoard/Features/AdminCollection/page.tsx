@@ -258,7 +258,11 @@ export default function AdminCollectionPage() {
         method: "DELETE",
         headers: (() => {
           const userId = getCurrentUserId();
-          return userId ? { "x-user-id": String(userId) } : {};
+          const headers = new Headers();
+          if (userId) {
+            headers.set("x-user-id", String(userId));
+          }
+          return headers;
         })(),
       });
 
