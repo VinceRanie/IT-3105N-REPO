@@ -64,7 +64,7 @@ export default function Modal({
     <>
       {/* Overlay */}
       <div
-        className="fixed inset-0 bg-black bg-opacity-10 z-40 transition-opacity"
+        className="fixed inset-0 bg-transparent bg-opacity-10 z-40 transition-opacity"
         onClick={onClose}
         role="presentation"
       />
