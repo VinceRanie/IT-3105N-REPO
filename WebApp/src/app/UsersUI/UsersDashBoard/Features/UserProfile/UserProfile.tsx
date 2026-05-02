@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { User, GraduationCap, Shield, Lock, Save, Upload } from "lucide-react";
 import Image from "next/image";
 import { API_URL } from "@/config/api";
@@ -90,7 +90,7 @@ export default function ProfilePage() {
     return `${seconds}s`;
   };
 
-  const fetchProfile = async () => {
+  const fetchProfile = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -114,12 +114,12 @@ export default function ProfilePage() {
       setProfileImageInput(profile.profile_photo || "");
       setProfileImageSrc(resolveProfilePhotoSrc(profile.profile_photo));
       syncPasswordResetStatus((data.passwordResetStatus as PasswordResetStatus) || null);
-    } catch (err: any) {
-      setError(err.message || "Failed to load profile.");
+    } catch (error: unknown) {
+      setError(error instanceof Error ? error.message : "Failed to load profile.");
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (!passwordResetStatus?.isLocked || !passwordResetStatus.expiresAt) {
@@ -135,7 +135,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     fetchProfile();
-  }, []);
+  }, [fetchProfile]);
 
   const handleSave = async () => {
     if (!userData) {
@@ -176,8 +176,8 @@ export default function ProfilePage() {
       setProfileImageInput(updatedPhoto);
       setProfileImageSrc(resolveProfilePhotoSrc(updatedPhoto));
       alert("Profile Updated: Your profile has been successfully updated.");
-    } catch (err: any) {
-      setError(err.message || "Failed to update profile.");
+    } catch (error: unknown) {
+      setError(error instanceof Error ? error.message : "Failed to update profile.");
     } finally {
       setSaving(false);
     }
@@ -213,8 +213,8 @@ export default function ProfilePage() {
       setUserData(updatedUser);
       setProfileImageInput(updatedUser.profile_photo || "");
       setProfileImageSrc(resolveProfilePhotoSrc(updatedUser.profile_photo));
-    } catch (err: any) {
-      setError(err.message || "Failed to upload profile photo.");
+    } catch (error: unknown) {
+      setError(error instanceof Error ? error.message : "Failed to upload profile photo.");
     } finally {
       setUploadingPhoto(false);
       event.target.value = "";
@@ -251,8 +251,8 @@ export default function ProfilePage() {
       }
 
       alert("A password reset email has been sent to your account email.");
-    } catch (err: any) {
-      setError(err.message || "Failed to request password reset.");
+    } catch (error: unknown) {
+      setError(error instanceof Error ? error.message : "Failed to request password reset.");
     } finally {
       setSendingReset(false);
     }
