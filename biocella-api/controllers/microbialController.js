@@ -6,6 +6,7 @@ const fs = require('fs');
 const axios = require('axios');
 const AdmZip = require('adm-zip');
 const db = require('../config/mysql');
+const CollectionActivity = require('../models/CollectionActivity');
 
 const PUBLISH_STATUSES = new Set(['published', 'unpublished']);
 const PRIVILEGED_ROLES = new Set(['admin', 'staff']);
@@ -19,6 +20,39 @@ const normalizeRole = (role) => {
 const normalizePublishStatus = (status, fallback = 'unpublished') => {
   const normalized = String(status || '').trim().toLowerCase();
   return PUBLISH_STATUSES.has(normalized) ? normalized : fallback;
+};
+
+const getActivityUserId = (req) => {
+  const headerValue = req.headers?.['x-user-id'];
+  const bodyValue = req.body?.user_id;
+  const queryValue = req.query?.user_id;
+  const candidate = headerValue || bodyValue || queryValue;
+  const parsed = Number(candidate);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
+
+const buildActivityDescription = (specimen) => {
+  if (!specimen) return 'Specimen activity';
+  const parts = [specimen.code_name, specimen.classification].filter(Boolean);
+  return parts.length > 0 ? parts.join(' - ') : 'Specimen activity';
+};
+
+const logCollectionActivity = async ({ req, specimen, action, status }) => {
+  try {
+    const payload = {
+      specimen_id: specimen?._id,
+      project_id: specimen?.project_id?._id || specimen?.project_id || null,
+      user_id: getActivityUserId(req),
+      action: String(action || '').toLowerCase() || 'update',
+      status: status ? String(status).toLowerCase() : undefined,
+      description: buildActivityDescription(specimen),
+    };
+
+    if (!payload.specimen_id) return;
+    await CollectionActivity.create(payload);
+  } catch (error) {
+    console.warn('Collection activity log failed:', error.message);
+  }
 };
 
 const canViewUnpublished = (req) => {
@@ -148,7 +182,17 @@ exports.createMicrobial = async (req, res) => {
         
         // Read FASTA file content
         const fastaPath = path.join(__dirname, '..', fasta_file);
-        fasta_sequence = fs.readFileSync(fastaPath, 'utf8');
+        try {
+          if (fs.existsSync(fastaPath)) {
+            fasta_sequence = fs.readFileSync(fastaPath, 'utf8');
+          } else {
+            console.warn(`FASTA file not found at ${fastaPath}`);
+            fasta_sequence = '';
+          }
+        } catch (readErr) {
+          console.error('Failed to read FASTA file:', readErr);
+          fasta_sequence = '';
+        }
       }
     }
 
@@ -197,6 +241,13 @@ exports.createMicrobial = async (req, res) => {
     
     // Populate project data before returning
     await microbial.populate('project_id');
+
+    await logCollectionActivity({
+      req,
+      specimen: microbial,
+      action: 'create',
+      status: microbial.publish_status || 'unpublished',
+    });
     
     res.status(201).json({
       ...microbial.toObject(),
@@ -356,15 +407,24 @@ exports.updateMicrobial = async (req, res) => {
         }
         
         updateData.fasta_file = `/uploads/fasta/${req.files.fasta_file[0].filename}`;
-        
-        // Read new FASTA file content
-        const fastaPath = path.join(__dirname, '..', updateData.fasta_file);
-        updateData.fasta_sequence = fs.readFileSync(fastaPath, 'utf8');
 
-        const extractedAccession = extractAccessionFromFasta(updateData.fasta_sequence);
-        const providedAccession = (updateData.accession_no || '').trim();
-        if (!providedAccession && extractedAccession) {
-          updateData.accession_no = extractedAccession;
+        // Read new FASTA file content safely
+        const fastaPath = path.join(__dirname, '..', updateData.fasta_file);
+        try {
+          if (fs.existsSync(fastaPath)) {
+            updateData.fasta_sequence = fs.readFileSync(fastaPath, 'utf8');
+            const extractedAccession = extractAccessionFromFasta(updateData.fasta_sequence);
+            const providedAccession = (updateData.accession_no || '').trim();
+            if (!providedAccession && extractedAccession) {
+              updateData.accession_no = extractedAccession;
+            }
+          } else {
+            console.warn(`Uploaded FASTA missing at ${fastaPath}`);
+            updateData.fasta_sequence = '';
+          }
+        } catch (readErr) {
+          console.error('Failed to read uploaded FASTA file:', readErr);
+          updateData.fasta_sequence = '';
         }
       }
     }
@@ -401,6 +461,15 @@ exports.updateMicrobial = async (req, res) => {
       updateData.publish_status = normalizePublishStatus(updateData.publish_status, 'unpublished');
     }
 
+    const previousPublishStatus = normalizePublishStatus(oldSpecimen?.publish_status, 'unpublished');
+    const nextPublishStatus = Object.prototype.hasOwnProperty.call(updateData, 'publish_status')
+      ? normalizePublishStatus(updateData.publish_status, previousPublishStatus)
+      : previousPublishStatus;
+    const isPublishChange = previousPublishStatus !== nextPublishStatus;
+    const activityAction = isPublishChange
+      ? (nextPublishStatus === 'published' ? 'publish' : 'unpublish')
+      : 'update';
+
     delete updateData.custom_image_map;
     
     // Update timestamp
@@ -413,6 +482,12 @@ exports.updateMicrobial = async (req, res) => {
     ).populate('project_id');
     
     if (!updated) return res.status(404).json({ error: 'Not found' });
+    await logCollectionActivity({
+      req,
+      specimen: updated,
+      action: activityAction,
+      status: nextPublishStatus,
+    });
     res.json(updated);
   } catch (err) {
     console.error(err);
@@ -452,6 +527,13 @@ exports.deleteMicrobial = async (req, res) => {
         fs.unlinkSync(fastaPath);
       }
     }
+
+    await logCollectionActivity({
+      req,
+      specimen: microbial,
+      action: 'delete',
+      status: normalizePublishStatus(microbial.publish_status, 'unpublished'),
+    });
     
     await MicrobialInfo.findByIdAndDelete(req.params.id);
     res.json({ message: 'Deleted successfully' });

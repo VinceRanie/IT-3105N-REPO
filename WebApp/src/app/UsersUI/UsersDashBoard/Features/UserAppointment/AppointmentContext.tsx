@@ -178,7 +178,7 @@ export function AppointmentProvider({ children }: { children: React.ReactNode })
       }
 
       await refreshAppointments();
-      return { ok: true, message: `Appointment booked. ID: ${data?.appointment_id ?? "N/A"}` };
+      return { ok: true, message: "Appointment request successfully sent." };
     } catch {
       return { ok: false, message: "Network error while booking appointment." };
     } finally {

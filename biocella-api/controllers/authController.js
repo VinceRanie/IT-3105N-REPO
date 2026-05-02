@@ -39,7 +39,7 @@ if (!APP_BASE_URL) {
 }
 
 const RESET_LINK_TTL_MS = 60 * 60 * 1000; // 1 hour
-const RESET_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const RESET_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 hours
 const PASSWORD_STRENGTH_ERROR_MESSAGE = "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, and one number.";
 const ACCOUNT_REGISTERED_MESSAGE = "An account with this email is already registered.";
 const ACCOUNT_NOT_REGISTERED_MESSAGE = "No account is registered with this email.";
@@ -895,6 +895,19 @@ exports.updateUserProfile = async (req, res) => {
     const hasPasswordInput = Boolean(newPassword || confirmPassword);
 
     if (hasPasswordInput) {
+      // Check if user is in password change cooldown period
+      const resetTokenExpiryMs = existingUser.reset_token_expires
+        ? new Date(existingUser.reset_token_expires).getTime()
+        : 0;
+      if (resetTokenExpiryMs > Date.now()) {
+        const remainingMs = resetTokenExpiryMs - Date.now();
+        const remainingHours = Math.ceil(remainingMs / (60 * 60 * 1000));
+        return res.status(429).json({
+          message: `You can change your password again in ${remainingHours} hour${remainingHours === 1 ? '' : 's'}.`,
+          statusCode: 429,
+        });
+      }
+
       if (!newPassword || !confirmPassword) {
         return res.status(HttpStatus.BAD_REQUEST).json({
           message: "Both new password and confirm password are required.",
@@ -916,6 +929,14 @@ exports.updateUserProfile = async (req, res) => {
         });
       }
 
+      const isSameAsOld = await authModel.comparePassword(newPassword, existingUser.password);
+      if (isSameAsOld) {
+        return res.status(HttpStatus.BAD_REQUEST).json({
+          message: "New password must be different from your current password.",
+          statusCode: HttpStatus.BAD_REQUEST,
+        });
+      }
+
       hashedPassword = await authModel.hashPassword(newPassword);
     }
 
@@ -925,6 +946,7 @@ exports.updateUserProfile = async (req, res) => {
       course: nextCourse,
       profilePhoto: nextProfilePhoto || null,
       hashedPassword,
+      nextResetAllowedAt: hasPasswordInput ? new Date(Date.now() + RESET_COOLDOWN_MS) : null,
     });
 
     const updatedUser = await authModel.getUserProfileById(userId);

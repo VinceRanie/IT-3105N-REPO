@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import SearchableSelect from "@/app/components/SearchableSelect";
+import { departments, getProgramsForDepartment } from "@/app/components/departmentPrograms";
 
 interface FinalizeSignupProps {
   token: string;
@@ -32,6 +34,7 @@ export default function FinalizeSignup({
   const hasLowercase = /[a-z]/.test(formData.password);
   const hasUppercase = /[A-Z]/.test(formData.password);
   const hasNumber = /\d/.test(formData.password);
+  const availablePrograms = getProgramsForDepartment(formData.department);
 
   const handleChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -191,25 +194,25 @@ export default function FinalizeSignup({
 
             {/* Editable fields */}
             <div>
-              <label className="text-sm text-gray-700">Department</label>
-              <input
-                type="text"
-                placeholder="Enter department"
+              <SearchableSelect
+                label="Department"
                 value={formData.department}
-                onChange={(e) => handleChange("department", e.target.value)}
-                className="w-full border border-[#113F67] rounded-md px-3 py-2 text-[#113F67] focus:ring-2 focus:ring-[#113F67] focus:border-transparent"
-                required
+                options={departments}
+                placeholder="Search department"
+                onChange={(value) => {
+                  handleChange("department", value);
+                  handleChange("course", "");
+                }}
               />
             </div>
             <div>
-              <label className="text-sm text-gray-700">Course</label>
-              <input
-                type="text"
-                placeholder="Enter course"
+              <SearchableSelect
+                label="Program"
                 value={formData.course}
-                onChange={(e) => handleChange("course", e.target.value)}
-                className="w-full border border-[#113F67] rounded-md px-3 py-2 text-[#113F67] focus:ring-2 focus:ring-[#113F67] focus:border-transparent"
-                required
+                options={availablePrograms}
+                placeholder={formData.department ? "Search program" : "Select department first"}
+                disabled={!formData.department}
+                onChange={(value) => handleChange("course", value)}
               />
             </div>
 

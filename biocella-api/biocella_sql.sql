@@ -36,8 +36,24 @@ CREATE TABLE `appointment` (
   `department` varchar(100) DEFAULT NULL,
   `purpose` varchar(255) DEFAULT NULL,
   `date` datetime DEFAULT NULL,
-  `status` varchar(50) DEFAULT NULL,
-  `qr_code` varchar(255) DEFAULT NULL
+  `end_time` datetime DEFAULT NULL,
+  `appointment_source` enum('internal','outsider') NOT NULL DEFAULT 'internal',
+  `requester_name` varchar(150) DEFAULT NULL,
+  `requester_email` varchar(255) DEFAULT NULL,
+  `requester_phone` varchar(40) DEFAULT NULL,
+  `requester_ip` varchar(64) DEFAULT NULL,
+  `status` enum('pending','approved','denied','ongoing','visited','no_show') DEFAULT 'pending',
+  `qr_code` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `pending_at` timestamp NULL DEFAULT NULL,
+  `approved_at` timestamp NULL DEFAULT NULL,
+  `denied_at` timestamp NULL DEFAULT NULL,
+  `ongoing_at` timestamp NULL DEFAULT NULL,
+  `visited_at` timestamp NULL DEFAULT NULL,
+  `no_show_at` timestamp NULL DEFAULT NULL,
+  `denial_reason` text DEFAULT NULL,
+  `admin_remarks` text DEFAULT NULL,
+  `deleted_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
@@ -54,7 +70,9 @@ CREATE TABLE `chemical_stock_batch` (
   `date_received` datetime DEFAULT current_timestamp(),
   `expiration_date` date DEFAULT NULL,
   `location` varchar(255) DEFAULT NULL,
-  `qr_code` text DEFAULT NULL
+  `lot_number` varchar(100) DEFAULT NULL,
+  `qr_code` text DEFAULT NULL,
+  `deleted_at` datetime DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -129,6 +147,8 @@ CREATE TABLE `reagents_chemicals` (
   `quantity` int(11) DEFAULT NULL,
   `unit` varchar(50) DEFAULT NULL,
   `threshold` int(11) DEFAULT NULL,
+  `lead_time_days` int(11) NOT NULL DEFAULT 7,
+  `safety_stock` decimal(12,2) NOT NULL DEFAULT 0.00,
   `last_updated` datetime DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -149,12 +169,38 @@ INSERT INTO `reagents_chemicals` (`chemical_id`, `name`, `type`, `quantity`, `un
 CREATE TABLE `user` (
   `user_id` int(11) NOT NULL,
   `name` varchar(255) DEFAULT NULL,
+  `first_name` varchar(100) DEFAULT NULL,
+  `last_name` varchar(100) DEFAULT NULL,
+  `profile_photo` text DEFAULT NULL,
+  `department` varchar(100) DEFAULT NULL,
+  `course` varchar(100) DEFAULT NULL,
+  `is_setup_complete` tinyint(1) DEFAULT 0,
   `email` varchar(255) DEFAULT NULL,
   `password` varchar(255) DEFAULT NULL,
   `role` enum('student','staff','faculty','admin') NOT NULL,
   `failed_login_attempts` int(11) DEFAULT 0,
   `lockout_until` datetime DEFAULT NULL,
-  `reset_token` varchar(255) DEFAULT NULL
+  `reset_token` varchar(255) DEFAULT NULL,
+  `reset_token_expires` datetime DEFAULT NULL,
+  `deleted_at` datetime DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `appointment_unavailable_dates`
+--
+
+CREATE TABLE `appointment_unavailable_dates` (
+  `unavailable_id` int(11) NOT NULL,
+  `unavailable_date` date NOT NULL,
+  `reason` varchar(255) NOT NULL,
+  `created_by_role` varchar(50) DEFAULT NULL,
+  `created_by_user_id` int(11) DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `deleted_at` datetime DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -188,14 +234,31 @@ DELIMITER ;
 --
 ALTER TABLE `appointment`
   ADD PRIMARY KEY (`appointment_id`),
-  ADD KEY `user_id` (`user_id`);
+  ADD KEY `user_id` (`user_id`),
+  ADD KEY `idx_deleted_at` (`deleted_at`,`status`,`date`),
+  ADD KEY `idx_deleted_appointments` (`deleted_at`,`appointment_id`),
+  ADD KEY `idx_time_range` (`date`,`end_time`,`status`,`deleted_at`),
+  ADD KEY `idx_appointment_no_show` (`status`,`no_show_at`,`deleted_at`),
+  ADD KEY `idx_appointment_source_status_date` (`appointment_source`,`status`,`date`),
+  ADD KEY `idx_outsider_requester_email` (`requester_email`,`appointment_source`,`created_at`),
+  ADD KEY `idx_outsider_requester_ip` (`requester_ip`,`appointment_source`,`created_at`);
+
+--
+-- Indexes for table `appointment_unavailable_dates`
+--
+ALTER TABLE `appointment_unavailable_dates`
+  ADD PRIMARY KEY (`unavailable_id`),
+  ADD UNIQUE KEY `uniq_unavailable_date` (`unavailable_date`),
+  ADD KEY `idx_unavailable_deleted_date` (`deleted_at`,`unavailable_date`);
 
 --
 -- Indexes for table `chemical_stock_batch`
 --
 ALTER TABLE `chemical_stock_batch`
   ADD PRIMARY KEY (`batch_id`),
-  ADD KEY `chemical_id` (`chemical_id`);
+  ADD KEY `chemical_id` (`chemical_id`),
+  ADD KEY `idx_batch_chemical_lot` (`chemical_id`,`lot_number`),
+  ADD KEY `idx_batch_deleted_at` (`deleted_at`);
 
 --
 -- Indexes for table `chemical_usage_log`
@@ -230,7 +293,8 @@ ALTER TABLE `reagents_chemicals`
 --
 ALTER TABLE `user`
   ADD PRIMARY KEY (`user_id`),
-  ADD UNIQUE KEY `email` (`email`);
+  ADD UNIQUE KEY `email` (`email`),
+  ADD KEY `idx_user_deleted_at` (`deleted_at`);
 
 --
 -- AUTO_INCREMENT for dumped tables
@@ -241,6 +305,12 @@ ALTER TABLE `user`
 --
 ALTER TABLE `appointment`
   MODIFY `appointment_id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `appointment_unavailable_dates`
+--
+ALTER TABLE `appointment_unavailable_dates`
+  MODIFY `unavailable_id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `chemical_stock_batch`

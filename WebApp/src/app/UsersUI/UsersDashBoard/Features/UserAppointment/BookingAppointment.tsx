@@ -106,7 +106,7 @@ export default function Booking() {
 
     setTime("");
     setPurpose("");
-    setSuccess(result.message || "Appointment request submitted.");
+    setSuccess(result.message || "Appointment request successfully sent.");
     setError("");
   };
 
@@ -192,7 +192,7 @@ export default function Booking() {
       <button onClick={handleBook}
         disabled={submitting}
         className="cursor-pointer w-full py-3 bg-[#113F67] text-white rounded flex items-center justify-center gap-2">
-        <Check /> {submitting ? "Submitting..." : "Confirm Request"}
+        <Check /> {submitting ? "Submitting..." : "Send Request"}
       </button>
     </div>
   );

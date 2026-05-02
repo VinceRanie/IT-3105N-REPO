@@ -125,22 +125,26 @@ exports.isDateUnavailable = async (date) => {
   return rows[0] || null;
 };
 
+const appointmentSelectBase =
+  "SELECT a.*, u.email AS user_email, u.first_name AS user_first_name, u.last_name AS user_last_name, u.role AS user_role, u.department AS user_department " +
+  "FROM appointment a LEFT JOIN user u ON a.user_id = u.user_id";
+
 // READ ALL (optionally scoped to a user/student)
 exports.getAllAppointments = async ({ user_id = null, student_id = null } = {}) => {
-  let query = "SELECT * FROM appointment WHERE (deleted_at IS NULL OR status = 'no_show')";
+  let query = `${appointmentSelectBase} WHERE (a.deleted_at IS NULL OR a.status = 'no_show')`;
   const params = [];
 
   if (user_id) {
-    query += " AND user_id = ?";
+    query += " AND a.user_id = ?";
     params.push(user_id);
   }
 
   if (student_id) {
-    query += " AND student_id = ?";
+    query += " AND a.student_id = ?";
     params.push(student_id);
   }
 
-  query += " ORDER BY date DESC";
+  query += " ORDER BY a.date DESC";
 
   const [rows] = await db.execute(query, params);
   return rows;
@@ -150,13 +154,13 @@ exports.getAllAppointments = async ({ user_id = null, student_id = null } = {}) 
 exports.getAppointmentsByStatus = async (status) => {
   if (status === 'no_show') {
     const [rows] = await db.execute(
-      "SELECT * FROM appointment WHERE status = 'no_show' ORDER BY date DESC"
+      `${appointmentSelectBase} WHERE a.status = 'no_show' ORDER BY a.date DESC`
     );
     return rows;
   }
 
   const [rows] = await db.execute(
-    "SELECT * FROM appointment WHERE status = ? AND deleted_at IS NULL ORDER BY date DESC",
+    `${appointmentSelectBase} WHERE a.status = ? AND a.deleted_at IS NULL ORDER BY a.date DESC`,
     [status]
   );
   return rows;
@@ -192,7 +196,7 @@ exports.checkScheduleConflict = async (date, end_time = null, excludeId = null, 
 // READ ONE By ID
 exports.getAppointmentById = async (id) => {
   const [rows] = await db.execute(
-    "SELECT * FROM appointment WHERE appointment_id = ? AND deleted_at IS NULL",
+    `${appointmentSelectBase} WHERE a.appointment_id = ? AND a.deleted_at IS NULL`,
     [id]
   );
   return rows[0];
@@ -201,10 +205,7 @@ exports.getAppointmentById = async (id) => {
 // READ ONE WITH USER EMAIL
 exports.getAppointmentWithUserEmail = async (id) => {
   const [rows] = await db.execute(
-    `SELECT a.*, u.email as user_email 
-     FROM appointment a 
-     LEFT JOIN user u ON a.user_id = u.user_id 
-     WHERE a.appointment_id = ? AND a.deleted_at IS NULL`,
+    `${appointmentSelectBase} WHERE a.appointment_id = ? AND a.deleted_at IS NULL`,
     [id]
   );
   return rows[0];
