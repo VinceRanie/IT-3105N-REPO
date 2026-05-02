@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname } from "next/navigation"
 import { Menu, X, LogOut } from "lucide-react"
 import Image from "next/image"
 import { clearAuthData } from "@/app/utils/authUtil"
@@ -17,10 +17,22 @@ export default function RAStaffNavbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const pathname = usePathname()
-  const router = useRouter()
 
-  const isActive = (href: string) => pathname === href
-
+  const isActive = (href: string) => {
+    const pathParts = pathname.split("/")
+    const hrefParts = href.split("/")
+  
+    // Dashboard (no /Features/)
+    if (!href.includes("/Features/")) {
+      return pathname === href
+    }
+  
+    // Get module name (e.g., AdminCollection)
+    const currentModule = pathParts[4]
+    const targetModule = hrefParts[4]
+  
+    return currentModule === targetModule
+  }
   const handleLogout = async () => {
     try {
       await fetch('/API/auth/logout', {
