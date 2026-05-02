@@ -39,7 +39,7 @@ if (!APP_BASE_URL) {
 }
 
 const RESET_LINK_TTL_MS = 60 * 60 * 1000; // 1 hour
-const RESET_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const RESET_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 hours
 const PASSWORD_STRENGTH_ERROR_MESSAGE = "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, and one number.";
 const ACCOUNT_REGISTERED_MESSAGE = "An account with this email is already registered.";
 const ACCOUNT_NOT_REGISTERED_MESSAGE = "No account is registered with this email.";
