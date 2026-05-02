@@ -69,24 +69,37 @@ type ForecastResponse = {
 
 type AppointmentItem = {
   appointment_id?: number | string | null;
+  user_id?: number | string | null;
   status?: string | null;
   appointment_source?: string | null;
   date?: string | Date | null;
   no_show_at?: string | Date | null;
+  requester_name?: string | null;
+  requester_email?: string | null;
+  purpose?: string | null;
 };
 
 type UsageItem = {
   log_id?: number | string | null;
   date_used?: string | Date | null;
+  chemical_id?: number | string | null;
+  user_id?: number | string | null;
+  amount_used?: number | string | null;
+  purpose?: string | null;
 };
 
 type MicrobialItem = {
   _id?: string;
   created_at?: string | Date | null;
+  code_name?: string | null;
+  classification?: string | null;
+  publish_status?: string | null;
 };
 
 type ChemicalItem = {
   chemical_id?: number | string | null;
+  name?: string | null;
+  unit?: string | null;
   type?: string | null;
 };
 
@@ -99,10 +112,25 @@ type BatchItem = {
 type UserItem = {
   user_id?: number | string | null;
   created_at?: string | Date | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  email?: string | null;
+  role?: string | null;
 };
 
 type UsersResponse = {
   users?: UserItem[];
+};
+
+type CollectionActivityItem = {
+  _id?: string | null;
+  specimen_id?: string | null;
+  project_id?: string | null;
+  user_id?: number | string | null;
+  action?: string | null;
+  status?: string | null;
+  description?: string | null;
+  created_at?: string | Date | null;
 };
 
 type StatusBreakdown = {
@@ -137,9 +165,23 @@ type ReportSnapshot = {
   statusBreakdown: StatusBreakdown[];
   appointmentSourceBreakdown?: StatusBreakdown[];
   activityByDay: ActivityByDay[];
+  ledger?: ReportLedger;
 };
 
+type LedgerModuleKey = "collections" | "inventory" | "users" | "appointments";
+
+type ReportLedgerEntry = {
+  date: string;
+  description: string;
+  userDisplay: string;
+  action: string;
+  status: string;
+};
+
+type ReportLedger = Record<LedgerModuleKey, ReportLedgerEntry[]>;
+
 const PIE_COLORS = ["#113F67", "#10B981", "#F59E0B", "#EF4444", "#6B7280", "#3B82F6"];
+const LEDGER_MODULE_KEYS: LedgerModuleKey[] = ["collections", "inventory", "users", "appointments"];
 
 const toNumber = (value: number | string | null | undefined) => {
   const parsed = Number(value);
@@ -197,6 +239,43 @@ const getStatusLabel = (status: string) => {
   const normalized = String(status || "unknown").toLowerCase();
   if (normalized === "no_show") return "No-Show";
   return normalized.replace(/_/g, " ");
+};
+
+const toTitleCase = (value: string) => {
+  return value
+    .split(" ")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+};
+
+const formatUserDisplay = (user?: UserItem | null, fallbackName?: string | null, fallbackEmail?: string | null) => {
+  const name = `${user?.first_name || ""} ${user?.last_name || ""}`.trim();
+  const email = user?.email || "";
+
+  const resolvedName = name || String(fallbackName || "").trim();
+  const resolvedEmail = email || String(fallbackEmail || "").trim();
+
+  if (resolvedName && resolvedEmail) return `${resolvedName} (${resolvedEmail})`;
+  if (resolvedName) return resolvedName;
+  if (resolvedEmail) return resolvedEmail;
+  return "System";
+};
+
+const formatLedgerDate = (value: string | Date | null | undefined) => {
+  const parsed = parseDate(value);
+  if (!parsed) return "-";
+  return parsed.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+};
+
+const compareLedgerDates = (a: ReportLedgerEntry, b: ReportLedgerEntry) => {
+  const left = parseDate(a.date)?.getTime() ?? 0;
+  const right = parseDate(b.date)?.getTime() ?? 0;
+  return left - right;
 };
 
 const getAppointmentReportDate = (appointment: AppointmentItem) => {
@@ -272,7 +351,7 @@ const toImageDataUrl = async (path: string) => {
   });
 };
 
-const exportReportPdf = async (report: ReportSnapshot) => {
+const exportReportPdf = async (report: ReportSnapshot, selectedModules: LedgerModuleKey[]) => {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -293,11 +372,6 @@ const exportReportPdf = async (report: ReportSnapshot) => {
     doc.addPage();
     return margin;
   };
-
-  const noShowCount = report.statusBreakdown.reduce((count, item) => {
-    const normalized = item.name.toLowerCase().replace(/\s+/g, "-");
-    return normalized === "no-show" ? count + item.value : count;
-  }, 0);
 
   let y = margin;
   const logoWidth = 16;
@@ -329,49 +403,43 @@ const exportReportPdf = async (report: ReportSnapshot) => {
   addDivider(y);
   y += 7;
 
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(17, 63, 103);
-  doc.setFontSize(12);
-  doc.text("Summary", margin, y);
-  y += 6;
+  const moduleLabels: Record<LedgerModuleKey, string> = {
+    collections: "Collections",
+    inventory: "Inventory",
+    users: "Users",
+    appointments: "Appointments",
+  };
+
+  const ledger = report.ledger || {
+    collections: [],
+    inventory: [],
+    users: [],
+    appointments: [],
+  };
+
+  const selected = selectedModules.length > 0
+    ? selectedModules
+    : (Object.keys(moduleLabels) as LedgerModuleKey[]);
 
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(24, 39, 51);
-  doc.setFontSize(10.5);
-  doc.text(`New Users: ${report.summary.newUsers}`, margin, y);
-  y += 5.5;
-  doc.text(`Appointments: ${report.summary.appointments}`, margin, y);
-  y += 5.5;
-  doc.text(`No-Shows: ${noShowCount}`, margin, y);
+  doc.setFontSize(10);
+  doc.setTextColor(67, 84, 99);
+  doc.text(`Included Modules: ${selected.map((key) => moduleLabels[key]).join(", ")}`, margin, y);
   y += 8;
 
-  addDivider(y);
-  y += 7;
+  const columns = [
+    { key: "date", label: "Date", width: 24 },
+    { key: "description", label: "Description", width: 70 },
+    { key: "userDisplay", label: "User", width: 45 },
+    { key: "action", label: "Action", width: 25 },
+    { key: "status", label: "Status", width: 18 },
+  ] as const;
 
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(17, 63, 103);
-  doc.setFontSize(12);
-  doc.text("Charts", margin, y);
-  y += 6;
-
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(24, 39, 51);
-  doc.setFontSize(10.5);
-  doc.text("- Appointments per Day (Line Chart)", margin, y);
-  y += 5.5;
-  doc.text("- User Activity (Bar Chart)", margin, y);
-  y += 5.5;
-  doc.text("- No-show Rate (Pie Chart)", margin, y);
-  y += 8;
-
-  addDivider(y);
-  y += 7;
-
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(17, 63, 103);
-  doc.setFontSize(12);
-  doc.text("Detailed Table", margin, y);
-  y += 6;
+  const columnStarts = columns.reduce<number[]>((acc, column, index) => {
+    const previous = index === 0 ? margin : acc[index - 1] + columns[index - 1].width;
+    acc.push(previous);
+    return acc;
+  }, []);
 
   const drawTableHeader = (tableY: number) => {
     doc.setFillColor(235, 242, 247);
@@ -379,31 +447,35 @@ const exportReportPdf = async (report: ReportSnapshot) => {
     doc.setFont("helvetica", "bold");
     doc.setTextColor(17, 63, 103);
     doc.setFontSize(9.5);
-    doc.text("Date", margin + 2, tableY + 4.8);
-    doc.text("User", margin + 42, tableY + 4.8);
-    doc.text("Action", margin + 84, tableY + 4.8);
-    doc.text("Status", margin + 148, tableY + 4.8);
+    columns.forEach((column, index) => {
+      doc.text(column.label, columnStarts[index] + 2, tableY + 4.8);
+    });
   };
 
-  const detailedRows = report.activityByDay.flatMap((item) => {
-    return [
-      [item.day, "System", "Appointments", String(item.appointments)],
-      [item.day, "System", "Usage Logs", String(item.usageLogs)],
-      [item.day, "System", "New Specimens", String(item.specimens)],
-      [item.day, "System", "New Users", String(item.users)],
-    ];
-  });
+  const drawRow = (entry: ReportLedgerEntry, index: number) => {
+    const cells = {
+      date: formatLedgerDate(entry.date),
+      description: entry.description || "-",
+      userDisplay: entry.userDisplay || "System",
+      action: entry.action || "-",
+      status: entry.status || "-",
+    };
 
-  y = ensureRoom(y, 20);
-  drawTableHeader(y);
-  y += 7;
+    const lineHeight = 4.1;
+    const descriptionLines = doc.splitTextToSize(cells.description, columns[1].width - 3);
+    const userLines = doc.splitTextToSize(cells.userDisplay, columns[2].width - 3);
+    const actionLines = doc.splitTextToSize(cells.action, columns[3].width - 3);
+    const statusLines = doc.splitTextToSize(cells.status, columns[4].width - 3);
+    const maxLines = Math.max(
+      descriptionLines.length,
+      userLines.length,
+      actionLines.length,
+      statusLines.length,
+      1
+    );
 
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(24, 39, 51);
-  doc.setFontSize(9.2);
-
-  detailedRows.forEach((row, index) => {
-    y = ensureRoom(y, 6.5);
+    const rowHeight = Math.max(6, maxLines * lineHeight + 2);
+    y = ensureRoom(y, rowHeight + 1);
     if (y === margin) {
       drawTableHeader(y);
       y += 7;
@@ -411,14 +483,52 @@ const exportReportPdf = async (report: ReportSnapshot) => {
 
     if (index % 2 === 0) {
       doc.setFillColor(248, 251, 253);
-      doc.rect(margin, y, contentWidth, 6, "F");
+      doc.rect(margin, y, contentWidth, rowHeight, "F");
     }
 
-    const [date, user, action, status] = row;
-    doc.text(String(date), margin + 2, y + 4.2);
-    doc.text(String(user), margin + 42, y + 4.2);
-    doc.text(String(action), margin + 84, y + 4.2);
-    doc.text(String(status), margin + 148, y + 4.2);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(24, 39, 51);
+    doc.setFontSize(9.2);
+    doc.text(cells.date, columnStarts[0] + 2, y + lineHeight);
+    doc.text(descriptionLines, columnStarts[1] + 2, y + lineHeight);
+    doc.text(userLines, columnStarts[2] + 2, y + lineHeight);
+    doc.text(actionLines, columnStarts[3] + 2, y + lineHeight);
+    doc.text(statusLines, columnStarts[4] + 2, y + lineHeight);
+
+    y += rowHeight;
+  };
+
+  selected.forEach((moduleKey) => {
+    y = ensureRoom(y, 14);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(17, 63, 103);
+    doc.setFontSize(12);
+    doc.text(moduleLabels[moduleKey], margin, y);
+    y += 6;
+
+    drawTableHeader(y);
+    y += 7;
+
+    const entries = ledger[moduleKey] || [];
+    if (entries.length === 0) {
+      drawRow(
+        {
+          date: "",
+          description: "No activity recorded for this module.",
+          userDisplay: "System",
+          action: "-",
+          status: "-",
+        },
+        0
+      );
+      y += 4;
+      return;
+    }
+
+    entries.forEach((entry, index) => {
+      drawRow(entry, index);
+    });
+
     y += 6;
   });
 
@@ -452,6 +562,38 @@ export default function AdminReportsPage() {
   const [currentReport, setCurrentReport] = useState<ReportSnapshot | null>(null);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [moduleSelection, setModuleSelection] = useState<Record<LedgerModuleKey | "all", boolean>>({
+    all: true,
+    collections: true,
+    inventory: true,
+    users: true,
+    appointments: true,
+  });
+
+  const selectedModules = useMemo(
+    () => LEDGER_MODULE_KEYS.filter((key) => moduleSelection[key]),
+    [moduleSelection]
+  );
+
+  const toggleAllModules = (checked: boolean) => {
+    setModuleSelection({
+      all: checked,
+      collections: checked,
+      inventory: checked,
+      users: checked,
+      appointments: checked,
+    });
+  };
+
+  const toggleModule = (key: LedgerModuleKey, checked: boolean) => {
+    setModuleSelection((prev) => {
+      const next = { ...prev, [key]: checked } as Record<LedgerModuleKey | "all", boolean>;
+      const allSelected = LEDGER_MODULE_KEYS.every((moduleKey) => next[moduleKey]);
+      next.all = allSelected;
+      return next;
+    });
+  };
 
   const fetchSavedReports = async (userId: number) => {
     const response = await fetch(`/API/reports?user_id=${userId}`);
@@ -569,13 +711,27 @@ export default function AdminReportsPage() {
         ...getAuthHeader(),
       };
 
-      const [appointmentsRes, usageRes, microbialsRes, usersRes, chemicalsRes, batchesRes] = await Promise.all([
+      const activityQuery = new URLSearchParams({
+        start_date: dayKey(start),
+        end_date: dayKey(end),
+      }).toString();
+
+      const [
+        appointmentsRes,
+        usageRes,
+        microbialsRes,
+        usersRes,
+        chemicalsRes,
+        batchesRes,
+        collectionActivityRes,
+      ] = await Promise.all([
         fetch(`${API_URL}/appointments`, { headers }),
         fetch(`${API_URL}/usage`, { headers }),
         fetch(`${API_URL}/microbials?role=staff`, { headers }),
         fetch(`${API_URL}/auth/users`, { headers }),
         fetch(`${API_URL}/chemicals`, { headers }),
         fetch(`${API_URL}/batches`, { headers }),
+        fetch(`${API_URL}/collection-activity?${activityQuery}`, { headers }),
       ]);
 
       const appointments = (appointmentsRes.ok ? await appointmentsRes.json() : []) as AppointmentItem[];
@@ -584,12 +740,28 @@ export default function AdminReportsPage() {
       const usersData = (usersRes.ok ? await usersRes.json() : { users: [] }) as UsersResponse;
       const chemicals = (chemicalsRes.ok ? await chemicalsRes.json() : []) as ChemicalItem[];
       const batches = (batchesRes.ok ? await batchesRes.json() : []) as BatchItem[];
+      const collectionActivity = (collectionActivityRes.ok
+        ? await collectionActivityRes.json()
+        : []) as CollectionActivityItem[];
       const users = Array.isArray(usersData.users) ? usersData.users : [];
 
       const appointmentsInRange = appointments.filter((a) => inRange(getAppointmentReportDate(a), start, end));
       const usageInRange = usageLogs.filter((u) => inRange(u.date_used, start, end));
       const specimensInRange = microbials.filter((m) => inRange(m.created_at, start, end));
       const usersInRange = users.filter((u) => inRange(u.created_at, start, end));
+      const activityInRange = collectionActivity.filter((item) => inRange(item.created_at, start, end));
+
+      const userById = new Map<number, UserItem>();
+      users.forEach((user) => {
+        const id = toNumber(user.user_id);
+        if (id > 0) userById.set(id, user);
+      });
+
+      const chemicalById = new Map<number, ChemicalItem>();
+      chemicals.forEach((chemical) => {
+        const id = toNumber(chemical.chemical_id);
+        if (id > 0) chemicalById.set(id, chemical);
+      });
 
       const activeChemicalIds = new Set(
         batches.map((batch) => toNumber(batch.chemical_id)).filter((id) => id > 0)
@@ -664,6 +836,76 @@ export default function AdminReportsPage() {
         if (record) record.users += 1;
       });
 
+      const ledger: ReportLedger = {
+        collections: activityInRange
+          .map((activity) => {
+            const createdAt = parseDate(activity.created_at);
+            const action = activity.action
+              ? toTitleCase(String(activity.action).replace(/_/g, " "))
+              : "Update";
+            const status = activity.status
+              ? toTitleCase(String(activity.status).replace(/_/g, " "))
+              : "Recorded";
+            const user = userById.get(toNumber(activity.user_id));
+            return {
+              date: createdAt ? createdAt.toISOString() : "",
+              description: String(activity.description || "Specimen activity"),
+              userDisplay: formatUserDisplay(user),
+              action,
+              status,
+            };
+          })
+          .sort(compareLedgerDates),
+        inventory: usageInRange
+          .map((log) => {
+            const usedAt = parseDate(log.date_used);
+            const chemical = chemicalById.get(toNumber(log.chemical_id));
+            const amount = toNumber(log.amount_used);
+            const unit = chemical?.unit ? String(chemical.unit) : undefined;
+            const baseLabel = chemical?.name ? String(chemical.name) : "Chemical";
+            const usageLabel = amount > 0 ? formatQuantity(amount, unit) : "Usage logged";
+            const purpose = String(log.purpose || "").trim();
+            const description = [baseLabel, usageLabel, purpose ? `(${purpose})` : ""].filter(Boolean).join(" ");
+            const user = userById.get(toNumber(log.user_id));
+
+            return {
+              date: usedAt ? usedAt.toISOString() : "",
+              description,
+              userDisplay: formatUserDisplay(user),
+              action: "Usage Log",
+              status: "Logged",
+            };
+          })
+          .sort(compareLedgerDates),
+        users: usersInRange
+          .map((user) => {
+            const createdAt = parseDate(user.created_at);
+            const role = user.role ? toTitleCase(String(user.role)) : "User";
+            return {
+              date: createdAt ? createdAt.toISOString() : "",
+              description: "New user registered",
+              userDisplay: formatUserDisplay(user),
+              action: "Create User",
+              status: role,
+            };
+          })
+          .sort(compareLedgerDates),
+        appointments: appointmentsInRange
+          .map((appointment) => {
+            const recordDate = parseDate(getAppointmentReportDate(appointment));
+            const user = userById.get(toNumber(appointment.user_id));
+            const description = String(appointment.purpose || "Appointment request").trim() || "Appointment request";
+            return {
+              date: recordDate ? recordDate.toISOString() : "",
+              description,
+              userDisplay: formatUserDisplay(user, appointment.requester_name, appointment.requester_email),
+              action: "Create Appointment",
+              status: toTitleCase(getStatusLabel(String(appointment.status || "unknown"))),
+            };
+          })
+          .sort(compareLedgerDates),
+      };
+
       const report: ReportSnapshot = {
         id: crypto.randomUUID(),
         createdAt: new Date().toISOString(),
@@ -681,6 +923,7 @@ export default function AdminReportsPage() {
         statusBreakdown,
         appointmentSourceBreakdown,
         activityByDay: Array.from(dayMap.values()),
+        ledger,
       };
 
       const saveResponse = await fetch("/API/reports", {
@@ -748,6 +991,99 @@ export default function AdminReportsPage() {
         </div>
       )}
 
+      {exportModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setExportModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 className="text-lg font-semibold text-[#113F67]">Export PDF</h2>
+            <p className="mt-1 text-sm text-gray-600">
+              Choose which modules to include in the ledger report.
+            </p>
+
+            <div className="mt-4 space-y-3">
+              <label className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={moduleSelection.all}
+                  onChange={(event) => toggleAllModules(event.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-[#113F67]"
+                />
+                <span className="text-sm font-semibold text-gray-900">All Modules</span>
+              </label>
+
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <label className="flex items-center gap-3 rounded-lg border border-gray-200 px-3 py-2">
+                  <input
+                    type="checkbox"
+                    checked={moduleSelection.collections}
+                    onChange={(event) => toggleModule("collections", event.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 text-[#113F67]"
+                  />
+                  <span className="text-sm text-gray-700">Collections</span>
+                </label>
+
+                <label className="flex items-center gap-3 rounded-lg border border-gray-200 px-3 py-2">
+                  <input
+                    type="checkbox"
+                    checked={moduleSelection.inventory}
+                    onChange={(event) => toggleModule("inventory", event.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 text-[#113F67]"
+                  />
+                  <span className="text-sm text-gray-700">Inventory</span>
+                </label>
+
+                <label className="flex items-center gap-3 rounded-lg border border-gray-200 px-3 py-2">
+                  <input
+                    type="checkbox"
+                    checked={moduleSelection.users}
+                    onChange={(event) => toggleModule("users", event.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 text-[#113F67]"
+                  />
+                  <span className="text-sm text-gray-700">Users</span>
+                </label>
+
+                <label className="flex items-center gap-3 rounded-lg border border-gray-200 px-3 py-2">
+                  <input
+                    type="checkbox"
+                    checked={moduleSelection.appointments}
+                    onChange={(event) => toggleModule("appointments", event.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 text-[#113F67]"
+                  />
+                  <span className="text-sm text-gray-700">Appointments</span>
+                </label>
+              </div>
+            </div>
+
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setExportModalOpen(false)}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!currentReport || selectedModules.length === 0}
+                onClick={() => {
+                  if (!currentReport || selectedModules.length === 0) return;
+                  exportReportPdf(currentReport, selectedModules);
+                  setExportModalOpen(false);
+                }}
+                className="rounded-lg bg-[#113F67] px-4 py-2 text-sm text-white hover:bg-[#0d3253] disabled:opacity-60"
+              >
+                Export PDF
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-[#113F67]">Reporting and Analytics</h1>
         <p className="text-sm text-gray-600 mt-1">
@@ -776,7 +1112,10 @@ export default function AdminReportsPage() {
           </button>
 
           <button
-            onClick={() => currentReport && exportReportPdf(currentReport)}
+            onClick={() => {
+              toggleAllModules(true);
+              setExportModalOpen(true);
+            }}
             disabled={!canExport}
             className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
           >
@@ -1050,7 +1389,11 @@ export default function AdminReportsPage() {
                     Open
                   </button>
                   <button
-                    onClick={() => exportReportPdf(report)}
+                    onClick={() => {
+                      setCurrentReport(report);
+                      toggleAllModules(true);
+                      setExportModalOpen(true);
+                    }}
                     className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
                   >
                     PDF

@@ -123,7 +123,7 @@ exports.create = async (req, res) => {
       payload.requester_email = requesterEmail;
       payload.requester_phone = requesterPhone || null;
       payload.requester_ip = clientIp;
-      payload.department = payload.department || 'External Visitor';
+      payload.department = payload.department || 'N/A';
     }
 
     // Reject booking on dates explicitly blocked by admin/RA

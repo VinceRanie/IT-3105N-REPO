@@ -8,6 +8,7 @@ import ProjectModal from "./ProjectModal";
 import SpecimenModal from "./SpecimenModal";
 import { useRouter } from "next/navigation";
 import AlertModal from "./AlertModal";
+import { getUserData } from "@/app/utils/authUtil";
 
 interface Project {
   _id: string;
@@ -115,6 +116,11 @@ export default function AdminCollectionPage() {
     }
   };
 
+  const getCurrentUserId = () => {
+    const user = getUserData();
+    return user?.userId ?? null;
+  };
+
   // Fetch projects
   const fetchProjects = async () => {
     try {
@@ -215,6 +221,11 @@ export default function AdminCollectionPage() {
         }
       }
 
+      const userId = getCurrentUserId();
+      if (userId) {
+        specimenData.set("user_id", String(userId));
+      }
+
       const response = await fetch(url, {
         method,
         // Don't set Content-Type header - let browser set it with boundary for multipart/form-data
@@ -245,6 +256,14 @@ export default function AdminCollectionPage() {
     try {
       const response = await fetch(`${API_URL}/microbials/${id}`, {
         method: "DELETE",
+        headers: (() => {
+          const userId = getCurrentUserId();
+          const headers = new Headers();
+          if (userId) {
+            headers.set("x-user-id", String(userId));
+          }
+          return headers;
+        })(),
       });
 
       if (response.ok) {
@@ -264,6 +283,10 @@ export default function AdminCollectionPage() {
       const nextStatus = specimen.publish_status === 'published' ? 'unpublished' : 'published';
       const payload = new FormData();
       payload.append('publish_status', nextStatus);
+      const userId = getCurrentUserId();
+      if (userId) {
+        payload.append('user_id', String(userId));
+      }
 
       const response = await fetch(`${API_URL}/microbials/${specimen._id}`, {
         method: 'PUT',

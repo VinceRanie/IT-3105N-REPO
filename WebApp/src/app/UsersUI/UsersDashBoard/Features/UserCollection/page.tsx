@@ -7,6 +7,7 @@ import AdminControls from "./AdminControls";
 import ProjectModal from "./ProjectModal";
 import SpecimenModal from "./SpecimenModal";
 import { useRouter } from "next/navigation";
+import { getUserData } from "@/app/utils/authUtil";
 
 interface Project {
   _id: string;
@@ -87,6 +88,10 @@ export default function AdminCollectionPage() {
   const [selectedSpecimen, setSelectedSpecimen] = useState<Specimen | null>(null);
   
   const router = useRouter();
+  const getCurrentUserId = () => {
+    const user = getUserData();
+    return user?.userId ?? null;
+  };
 
   // Fetch projects
   const fetchProjects = async () => {
@@ -161,6 +166,11 @@ export default function AdminCollectionPage() {
       const url = selectedSpecimen
         ? `${API_URL}/microbials/${selectedSpecimen._id}`
         : `${API_URL}/microbials`;
+
+      const userId = getCurrentUserId();
+      if (userId) {
+        specimenData.set("user_id", String(userId));
+      }
 
       const response = await fetch(url, {
         method,
