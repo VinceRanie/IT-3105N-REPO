@@ -7,6 +7,7 @@ import { API_URL } from "@/config/api";
 import { getAuthHeader } from "@/app/utils/authUtil";
 import SearchableSelect from "@/app/components/SearchableSelect";
 import { departments, getProgramsForDepartment } from "@/app/components/departmentPrograms";
+import Modal from "@/app/components/Modal";
 
 interface UserProfile {
   user_id: number;
@@ -62,6 +63,7 @@ export default function ProfilePage() {
   const [profileImageSrc, setProfileImageSrc] = useState(DEFAULT_PROFILE_IMAGE);
   const [passwordResetStatus, setPasswordResetStatus] = useState<PasswordResetStatus | null>(null);
   const [clockNow, setClockNow] = useState(() => Date.now());
+  const [modalConfig, setModalConfig] = useState<{ type: "success" | "error" | "info"; title: string; message: string } | null>(null);
 
   const syncPasswordResetStatus = (status: PasswordResetStatus | null) => {
     setPasswordResetStatus(status);
@@ -175,7 +177,11 @@ export default function ProfilePage() {
       const updatedPhoto = (data.user as UserProfile).profile_photo || "";
       setProfileImageInput(updatedPhoto);
       setProfileImageSrc(resolveProfilePhotoSrc(updatedPhoto));
-      alert("Profile Updated: Your profile has been successfully updated.");
+      setModalConfig({
+        type: "success",
+        title: "Profile Updated",
+        message: "Your profile has been successfully updated.",
+      });
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "Failed to update profile.");
     } finally {
@@ -250,7 +256,11 @@ export default function ProfilePage() {
         syncPasswordResetStatus(data.passwordResetStatus as PasswordResetStatus);
       }
 
-      alert("A password reset email has been sent to your account email.");
+      setModalConfig({
+        type: "success",
+        title: "Password Reset Email Sent",
+        message: "A password reset email has been sent to your account email.",
+      });
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "Failed to request password reset.");
     } finally {
@@ -440,6 +450,18 @@ export default function ProfilePage() {
           </button>
         </div>
       </div>
+
+      {/* Modal */}
+      {modalConfig && (
+        <Modal
+          isOpen={true}
+          type={modalConfig.type}
+          title={modalConfig.title}
+          message={modalConfig.message}
+          onClose={() => setModalConfig(null)}
+          autoCloseMs={3000}
+        />
+      )}
     </div>
   );
 }
