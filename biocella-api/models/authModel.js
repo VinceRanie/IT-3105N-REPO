@@ -203,13 +203,13 @@ exports.finalizeUserSetup = async (userId, firstName, lastName, profilePhoto, de
 };
 
 // UPDATE - Authenticated user profile (department/course/photo, and optional password)
-exports.updateUserProfile = async ({ userId, department, course, profilePhoto = null, hashedPassword = null }) => {
+exports.updateUserProfile = async ({ userId, department, course, profilePhoto = null, hashedPassword = null, nextResetAllowedAt = null }) => {
   if (hashedPassword) {
     await db.execute(
       `UPDATE user
-       SET department = ?, course = ?, profile_photo = ?, password = ?
+       SET department = ?, course = ?, profile_photo = ?, password = ?, reset_token_expires = ?
        WHERE user_id = ?`,
-      [department, course, profilePhoto, hashedPassword, userId]
+      [department, course, profilePhoto, hashedPassword, nextResetAllowedAt, userId]
     );
     return;
   }
