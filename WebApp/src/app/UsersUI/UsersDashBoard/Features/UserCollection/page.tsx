@@ -195,24 +195,6 @@ export default function AdminCollectionPage() {
     }
   };
 
-  const handleDeleteSpecimen = async (id: string) => {
-    try {
-      const response = await fetch(`${API_URL}/microbials/${id}`, {
-        method: "DELETE",
-      });
-
-      if (response.ok) {
-        await fetchSpecimens();
-        setModalConfig({ type: 'success', title: 'Specimen Deleted', message: 'Specimen deleted successfully!' });
-      } else {
-        setModalConfig({ type: 'error', title: 'Error', message: 'Failed to delete specimen' });
-      }
-    } catch (error) {
-      console.error("Error deleting specimen:", error);
-      setModalConfig({ type: 'error', title: 'Error', message: 'Error deleting specimen' });
-    }
-  };
-
   const handleViewSpecimen = (specimen: Specimen) => {
     console.log("View specimen:", specimen);
     if (!specimen._id) {
@@ -221,16 +203,6 @@ export default function AdminCollectionPage() {
     }
     // Route students to the user-specific specimen page
     router.push(`/UsersUI/UsersDashBoard/Features/UserCollection/specimen/${specimen._id}`);
-  };
-
-  const handleEditSpecimen = (specimen: Specimen) => {
-    console.log("Edit specimen:", specimen);
-    if (!specimen._id) {
-      setModalConfig({ type: 'error', title: 'Error', message: 'Error: Specimen ID is missing' });
-      return;
-    }
-    setSelectedSpecimen(specimen);
-    setIsSpecimenModalOpen(true);
   };
 
   // Filter specimens based on search query
