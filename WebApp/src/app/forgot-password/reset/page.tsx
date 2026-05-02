@@ -113,14 +113,14 @@ function ForgotResetContent() {
   return (
     <div className="min-h-screen grid grid-cols-1 md:grid-cols-2 bg-white">
       <div className="relative hidden md:block">
-        <Image src="/UI/img/Laboratory.jpg" alt="Laboratory Background" fill className="object-cover" />
+        <Image src="/UI/img/BioOffice.webp" alt="Laboratory Background" fill className="object-cover" />
         <div className="absolute inset-0 bg-gradient-to-r from-transparent to-white/70" />
       </div>
 
       <div className="flex items-center justify-center p-6">
         <div className="w-full max-w-2xl bg-white rounded-lg shadow-lg p-8">
           <div className="pb-6 text-left">
-            <Image src="/UI/img/BioOffice.webp" alt="USC Biology Department Office" width={120} height={40} />
+            <Image src="/UI/img/logo-biocella.png" alt="USC Biology Department Office" width={120} height={40} />
             <h2 className="text-2xl font-bold text-[#113F67] mt-4">Reset Password</h2>
             <p className="text-sm text-gray-600">Account details are loaded from your registration record.</p>
           </div>
@@ -131,11 +131,14 @@ function ForgotResetContent() {
             <>
               {details?.profile_photo && (
                 <div className="flex items-center gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
-                  <img
+                  <Image
                     src={details.profile_photo}
                     alt="Profile"
-                    className="w-16 h-16 rounded-full border-2 border-[#113F67]"
+                    width={64}
+                    height={64}
+                    className="rounded-full border-2 border-[#113F67]"
                     referrerPolicy="no-referrer"
+                    unoptimized
                   />
                   <div>
                     <p className="font-semibold text-[#113F67]">{details.first_name} {details.last_name}</p>
