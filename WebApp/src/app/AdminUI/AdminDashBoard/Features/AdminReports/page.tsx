@@ -101,6 +101,8 @@ type ChemicalItem = {
   name?: string | null;
   unit?: string | null;
   type?: string | null;
+  quantity?: number | string | null;
+  threshold?: number | string | null;
 };
 
 type BatchItem = {
@@ -116,6 +118,7 @@ type UserItem = {
   last_name?: string | null;
   email?: string | null;
   role?: string | null;
+  deleted_at?: string | null;
 };
 
 type UsersResponse = {
@@ -166,6 +169,7 @@ type ReportSnapshot = {
   appointmentSourceBreakdown?: StatusBreakdown[];
   activityByDay: ActivityByDay[];
   ledger?: ReportLedger;
+  moduleStats?: Record<LedgerModuleKey, any>;
 };
 
 type LedgerModuleKey = "collections" | "inventory" | "users" | "appointments";
@@ -181,7 +185,7 @@ type ReportLedgerEntry = {
 type ReportLedger = Record<LedgerModuleKey, ReportLedgerEntry[]>;
 
 const PIE_COLORS = ["#113F67", "#10B981", "#F59E0B", "#EF4444", "#6B7280", "#3B82F6"];
-const LEDGER_MODULE_KEYS: LedgerModuleKey[] = ["collections", "inventory", "users", "appointments"];
+const LEDGER_MODULE_KEYS: LedgerModuleKey[] = ["appointments", "collections", "inventory", "users"];
 
 const toNumber = (value: number | string | null | undefined) => {
   const parsed = Number(value);
@@ -506,8 +510,59 @@ const exportReportPdf = async (report: ReportSnapshot, selectedModules: LedgerMo
     doc.text(moduleLabels[moduleKey], margin, y);
     y += 6;
 
-    drawTableHeader(y);
-    y += 7;
+    // Module summary card (if present)
+    const moduleStats = (report as any).moduleStats || {};
+    const stats = moduleStats[moduleKey] || null;
+    if (stats) {
+      const statLines: string[] = [];
+      if (moduleKey === "collections") {
+        statLines.push(`Specimen published: ${formatCount(stats.publishedInPeriod || 0)}`);
+        statLines.push(`Total unpublished specimen: ${formatCount(stats.totalUnpublished || 0)}`);
+        statLines.push(`Updated specimen: ${formatCount(stats.updated || 0)}`);
+        statLines.push(`Deleted specimen: ${formatCount(stats.deleted || 0)}`);
+        statLines.push(`New specimen: ${formatCount(stats.new || 0)}`);
+      } else if (moduleKey === "inventory") {
+        statLines.push(`Low stock: ${formatCount(stats.lowStock || 0)}`);
+        statLines.push(`Usage logs: ${formatCount(stats.usageLogs || 0)}`);
+        statLines.push(`New batches/logs: ${formatCount(stats.new || 0)}`);
+        statLines.push(`Updated inventory: ${formatCount(stats.updated || 0)}`);
+        statLines.push(`Deleted inventory: ${formatCount(stats.deleted || 0)}`);
+      } else if (moduleKey === "users") {
+        statLines.push(`Total users: ${formatCount(stats.totalUsers || 0)}`);
+        statLines.push(`New users: ${formatCount(stats.new || 0)}`);
+        statLines.push(`Updated users: ${formatCount(stats.updated || 0)}`);
+        statLines.push(`Deactivated users: ${formatCount(stats.deactivated || 0)}`);
+      } else if (moduleKey === "appointments") {
+        statLines.push(`Missed appointments: ${formatCount(stats.missed || 0)}`);
+        statLines.push(`Pending appointments: ${formatCount(stats.pending || 0)}`);
+        statLines.push(`Ongoing appointments: ${formatCount(stats.ongoing || 0)}`);
+        statLines.push(`Denied appointments: ${formatCount(stats.denied || 0)}`);
+        statLines.push(`External appointments: ${formatCount(stats.external || 0)}`);
+        statLines.push(`Internal appointments: ${formatCount(stats.internal || 0)}`);
+      }
+
+      const cardHeight = Math.max(22, 12 + statLines.length * 5 + 4);
+      y = ensureRoom(y, cardHeight + 2);
+      doc.setFillColor(250, 251, 252);
+      doc.rect(margin, y, contentWidth, cardHeight, "F");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.setTextColor(24, 39, 51);
+      doc.text("Summary:", margin + 4, y + 7);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+
+      statLines.forEach((line, idx) => {
+        doc.text(line, margin + 8, y + 12 + idx * 5);
+      });
+      y += cardHeight + 4;
+      // Draw table header after the stats card
+      drawTableHeader(y);
+      y += 7;
+    } else {
+      drawTableHeader(y);
+      y += 7;
+    }
 
     const entries = ledger[moduleKey] || [];
     if (entries.length === 0) {
@@ -906,6 +961,47 @@ export default function AdminReportsPage() {
           .sort(compareLedgerDates),
       };
 
+      // Build module-level statistics to include in the report payload
+      const collectionsLedger = ledger.collections || [];
+      const lc = (s: string | undefined | null) => String(s || "").toLowerCase();
+
+      const collectionsStats = {
+        publishedInPeriod: specimensInRange.filter((m) => lc(m.publish_status) === "published").length,
+        totalUnpublished: microbials.filter((m) => lc(m.publish_status) !== "published").length,
+        updated: collectionsLedger.filter((e) => lc(e.action).includes("update") || lc(e.action).includes("edit") || lc(e.action).includes("modify")).length,
+        deleted: collectionsLedger.filter((e) => lc(e.action).includes("delete") || lc(e.action).includes("remove")).length,
+        new: specimensInRange.length,
+      };
+
+      const inventoryStats = {
+        lowStock: chemicals.filter((chemical) => {
+          const quantity = toNumber(chemical.quantity);
+          const threshold = toNumber(chemical.threshold);
+          return threshold > 0 && quantity <= threshold;
+        }).length,
+        usageLogs: usageInRange.length,
+        new: usageInRange.length,
+        updated: 0,
+        deleted: 0,
+      };
+
+      const usersStats = {
+        totalUsers: users.length,
+        new: usersInRange.length,
+        updated: 0,
+        deactivated: users.filter((u) => Boolean(u.deleted_at)).length,
+      };
+
+      const appointmentsStats = {
+        missed: appointmentsInRange.filter((a) => String(a.status || "").toLowerCase() === "no_show").length,
+        pending: appointmentsInRange.filter((a) => String(a.status || "").toLowerCase() === "pending").length,
+        ongoing: appointmentsInRange.filter((a) => String(a.status || "").toLowerCase() === "ongoing").length,
+        denied: appointmentsInRange.filter((a) => String(a.status || "").toLowerCase() === "denied").length,
+        external: appointmentsInRange.filter((a) => String(a.appointment_source || "internal").toLowerCase() === "outsider").length,
+        internal: appointmentsInRange.filter((a) => String(a.appointment_source || "internal").toLowerCase() !== "outsider").length,
+      };
+
+
       const report: ReportSnapshot = {
         id: crypto.randomUUID(),
         createdAt: new Date().toISOString(),
@@ -924,6 +1020,12 @@ export default function AdminReportsPage() {
         appointmentSourceBreakdown,
         activityByDay: Array.from(dayMap.values()),
         ledger,
+        moduleStats: {
+          collections: collectionsStats,
+          inventory: inventoryStats,
+          users: usersStats,
+          appointments: appointmentsStats,
+        },
       };
 
       const saveResponse = await fetch("/API/reports", {
@@ -1020,6 +1122,16 @@ export default function AdminReportsPage() {
                 <label className="flex items-center gap-3 rounded-lg border border-gray-200 px-3 py-2">
                   <input
                     type="checkbox"
+                    checked={moduleSelection.appointments}
+                    onChange={(event) => toggleModule("appointments", event.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 text-[#113F67]"
+                  />
+                  <span className="text-sm text-gray-700">Appointments</span>
+                </label>
+
+                <label className="flex items-center gap-3 rounded-lg border border-gray-200 px-3 py-2">
+                  <input
+                    type="checkbox"
                     checked={moduleSelection.collections}
                     onChange={(event) => toggleModule("collections", event.target.checked)}
                     className="h-4 w-4 rounded border-gray-300 text-[#113F67]"
@@ -1045,16 +1157,6 @@ export default function AdminReportsPage() {
                     className="h-4 w-4 rounded border-gray-300 text-[#113F67]"
                   />
                   <span className="text-sm text-gray-700">Users</span>
-                </label>
-
-                <label className="flex items-center gap-3 rounded-lg border border-gray-200 px-3 py-2">
-                  <input
-                    type="checkbox"
-                    checked={moduleSelection.appointments}
-                    onChange={(event) => toggleModule("appointments", event.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300 text-[#113F67]"
-                  />
-                  <span className="text-sm text-gray-700">Appointments</span>
                 </label>
               </div>
             </div>
