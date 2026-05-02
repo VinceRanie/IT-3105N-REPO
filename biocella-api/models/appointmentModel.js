@@ -126,7 +126,7 @@ exports.isDateUnavailable = async (date) => {
 };
 
 const appointmentSelectBase =
-  "SELECT a.*, u.email AS user_email, u.first_name AS user_first_name, u.last_name AS user_last_name, u.role AS user_role " +
+  "SELECT a.*, u.email AS user_email, u.first_name AS user_first_name, u.last_name AS user_last_name, u.role AS user_role, u.department AS user_department " +
   "FROM appointment a LEFT JOIN user u ON a.user_id = u.user_id";
 
 // READ ALL (optionally scoped to a user/student)

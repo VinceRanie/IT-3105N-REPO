@@ -18,6 +18,7 @@ interface Appointment {
   user_first_name?: string | null;
   user_last_name?: string | null;
   user_role?: string | null;
+  user_department?: string | null;
   status: 'pending' | 'approved' | 'denied' | 'ongoing' | 'visited' | 'no_show';
   qr_code: string | null;
   created_at: string;
@@ -166,6 +167,25 @@ export default function AdminAppointmentDashboard() {
       secondaryLabel: 'Name',
       secondaryValue: userName || 'N/A',
     };
+  };
+
+  const getAppointmentName = (appointment: Appointment) => {
+    const userName = `${appointment.user_first_name || ''} ${appointment.user_last_name || ''}`.trim();
+    if (userName) {
+      return userName;
+    }
+
+    const requesterName = String(appointment.requester_name || '').trim();
+    if (requesterName) {
+      return requesterName;
+    }
+
+    const requesterEmail = String(appointment.requester_email || '').trim();
+    return requesterEmail || 'N/A';
+  };
+
+  const getAppointmentDepartment = (appointment: Appointment) => {
+    return appointment.department || appointment.user_department || 'N/A';
   };
 
   const fetchUnavailableDates = async () => {
@@ -948,7 +968,7 @@ export default function AdminAppointmentDashboard() {
                       );
                     })()}
                     <div>
-                      <span className="font-medium">Department:</span> {appointment.department}
+                      <span className="font-medium">Department:</span> {getAppointmentDepartment(appointment)}
                     </div>
                     <div>
                       <span className="font-medium">Date:</span>{' '}
@@ -1143,8 +1163,10 @@ export default function AdminAppointmentDashboard() {
               <div>
                 {selectedAppointment && (
                   <div className="mb-4 p-4 bg-gray-50 rounded-md text-sm">
-                    <p><strong>Student:</strong> {selectedAppointment.student_id}</p>
-                    <p><strong>Date:</strong> {format(new Date(selectedAppointment.date), 'MMM dd, yyyy hh:mm a')}</p>
+                    <p><strong>Student ID:</strong> {selectedAppointment.student_id || 'N/A'}</p>
+                    <p><strong>Name:</strong> {getAppointmentName(selectedAppointment)}</p>
+                    <p><strong>Scheduled Date:</strong> {format(new Date(selectedAppointment.date), 'MMM dd, yyyy hh:mm a')}</p>
+                    <p><strong>Purpose:</strong> {selectedAppointment.purpose || 'N/A'}</p>
                   </div>
                 )}
                 
