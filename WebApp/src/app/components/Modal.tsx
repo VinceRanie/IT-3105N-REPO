@@ -31,7 +31,7 @@ export default function Modal({
   if (!isOpen) return null;
 
   const bgColor = {
-    success: "bg-green-50",
+    success: "bg-white-50",
     error: "bg-red-50",
     info: "bg-blue-50",
   }[type];
@@ -43,13 +43,13 @@ export default function Modal({
   }[type];
 
   const titleColor = {
-    success: "text-green-900",
+    success: "text-[#113F67-900]",
     error: "text-red-900",
     info: "text-[#113F67]",
   }[type];
 
   const messageColor = {
-    success: "text-green-800",
+    success: "text-[#113F67-800]",
     error: "text-red-800",
     info: "text-gray-700",
   }[type];
