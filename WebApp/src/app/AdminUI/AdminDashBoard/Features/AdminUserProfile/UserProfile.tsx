@@ -5,32 +5,8 @@ import { User, GraduationCap, Shield, Lock, Save, Upload } from "lucide-react";
 import Image from "next/image";
 import { API_URL } from "@/config/api";
 import { getAuthHeader } from "@/app/utils/authUtil";
-
-const departments = [
-  "Engineering",
-  "Psychology", 
-  "Computer Science",
-  "Business Administration",
-  "Medicine",
-  "Law",
-  "Arts & Humanities",
-  "Natural Sciences",
-  "Mathematics",
-  "Education"
-];
-
-const courses = {
-  "Engineering": ["Mechanical Engineering", "Electrical Engineering", "Civil Engineering", "Chemical Engineering"],
-  "Psychology": ["Clinical Psychology", "Cognitive Psychology", "Social Psychology", "Developmental Psychology"],
-  "Computer Science": ["Software Engineering", "Data Science", "Cybersecurity", "AI & Machine Learning"],
-  "Business Administration": ["Marketing", "Finance", "Operations Management", "Human Resources"],
-  "Medicine": ["General Medicine", "Surgery", "Pediatrics", "Cardiology"],
-  "Law": ["Corporate Law", "Criminal Law", "Constitutional Law", "International Law"],
-  "Arts & Humanities": ["Literature", "History", "Philosophy", "Fine Arts"],
-  "Natural Sciences": ["Biology", "Chemistry", "Physics", "Environmental Science"],
-  "Mathematics": ["Pure Mathematics", "Applied Mathematics", "Statistics", "Actuarial Science"],
-  "Education": ["Elementary Education", "Secondary Education", "Special Education", "Educational Psychology"]
-};
+import SearchableSelect from "@/app/components/SearchableSelect";
+import { departments, getProgramsForDepartment } from "@/app/components/departmentPrograms";
 
 interface UserProfile {
   user_id: number;
@@ -284,7 +260,7 @@ export default function ProfilePage() {
     return roleLabelMap[role] || role || "-";
   }, [userData?.role]);
 
-  const availableCourses = selectedDepartment ? courses[selectedDepartment as keyof typeof courses] || [] : [];
+  const availableCourses = getProgramsForDepartment(selectedDepartment);
   const passwordResetRemainingMs = passwordResetStatus?.expiresAt
     ? Math.max(0, new Date(passwordResetStatus.expiresAt).getTime() - clockNow)
     : 0;
@@ -393,34 +369,26 @@ export default function ProfilePage() {
           </h2>
           <p className="text-sm text-gray-500">Select your university department and course</p>
           <div>
-            <label className="block text-sm font-medium text-[#113F67]">Department</label>
-            <select
-              className="w-full border rounded p-2 text-[#113F67]"
+            <SearchableSelect
+              label="Department"
               value={selectedDepartment}
-              onChange={(e) => {
-                setSelectedDepartment(e.target.value);
+              options={departments}
+              placeholder="Search department"
+              onChange={(value) => {
+                setSelectedDepartment(value);
                 setSelectedCourse("");
               }}
-            >
-              <option value="">Select department</option>
-              {departments.map((dept) => (
-                <option key={dept} value={dept}>{dept}</option>
-              ))}
-            </select>
+            />
           </div>
           <div>
-            <label className="block text-sm font-medium text-[#113F67]">Course</label>
-            <select
-              className="w-full border rounded p-2 text-[#113F67]"
+            <SearchableSelect
+              label="Program"
               value={selectedCourse}
-              onChange={(e) => setSelectedCourse(e.target.value)}
+              options={availableCourses}
+              placeholder={selectedDepartment ? "Search program" : "Select department first"}
               disabled={!selectedDepartment}
-            >
-              <option value="">{selectedDepartment ? "Select course" : "Select department first"}</option>
-              {availableCourses.map((course) => (
-                <option key={course} value={course}>{course}</option>
-              ))}
-            </select>
+              onChange={setSelectedCourse}
+            />
           </div>
         </div>
 
