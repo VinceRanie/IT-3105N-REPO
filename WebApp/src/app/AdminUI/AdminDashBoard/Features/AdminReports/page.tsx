@@ -166,6 +166,7 @@ type ReportSnapshot = {
   appointmentSourceBreakdown?: StatusBreakdown[];
   activityByDay: ActivityByDay[];
   ledger?: ReportLedger;
+  moduleStats?: Record<LedgerModuleKey, any>;
 };
 
 type LedgerModuleKey = "collections" | "inventory" | "users" | "appointments";
@@ -506,8 +507,54 @@ const exportReportPdf = async (report: ReportSnapshot, selectedModules: LedgerMo
     doc.text(moduleLabels[moduleKey], margin, y);
     y += 6;
 
-    drawTableHeader(y);
-    y += 7;
+    // Module summary card (if present)
+    const moduleStats = (report as any).moduleStats || {};
+    const stats = moduleStats[moduleKey] || null;
+    if (stats) {
+      y = ensureRoom(y, 28);
+      doc.setFillColor(250, 251, 252);
+      doc.rect(margin, y, contentWidth, 26, "F");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.setTextColor(24, 39, 51);
+      doc.text("Summary:", margin + 4, y + 7);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      const statLines: string[] = [];
+      if (moduleKey === "collections") {
+        statLines.push(`Total Specimen published: ${formatCount(stats.totalPublished || 0)}`);
+        statLines.push(`Total unpublished specimen: ${formatCount(stats.totalUnpublished || 0)}`);
+        statLines.push(`Updated specimen: ${formatCount(stats.updated || 0)}`);
+        statLines.push(`Deleted specimen: ${formatCount(stats.deleted || 0)}`);
+        statLines.push(`New specimen: ${formatCount(stats.new || 0)}`);
+      } else if (moduleKey === "inventory") {
+        statLines.push(`Usage logs: ${formatCount(stats.usageLogs || 0)}`);
+        statLines.push(`New batches/logs: ${formatCount(stats.new || 0)}`);
+        statLines.push(`Updated inventory: ${formatCount(stats.updated || 0)}`);
+        statLines.push(`Deleted inventory: ${formatCount(stats.deleted || 0)}`);
+      } else if (moduleKey === "users") {
+        statLines.push(`Total users: ${formatCount(stats.totalUsers || 0)}`);
+        statLines.push(`New users: ${formatCount(stats.new || 0)}`);
+        statLines.push(`Updated users: ${formatCount(stats.updated || 0)}`);
+        statLines.push(`Deleted users: ${formatCount(stats.deleted || 0)}`);
+      } else if (moduleKey === "appointments") {
+        statLines.push(`Total appointments: ${formatCount(stats.totalAppointments || 0)}`);
+        statLines.push(`New appointments: ${formatCount(stats.new || 0)}`);
+        statLines.push(`Updated appointments: ${formatCount(stats.updated || 0)}`);
+        statLines.push(`Deleted appointments: ${formatCount(stats.deleted || 0)}`);
+      }
+
+      statLines.forEach((line, idx) => {
+        doc.text(line, margin + 8, y + 12 + idx * 5);
+      });
+      y += 30;
+      // Draw table header after the stats card
+      drawTableHeader(y);
+      y += 7;
+    } else {
+      drawTableHeader(y);
+      y += 7;
+    }
 
     const entries = ledger[moduleKey] || [];
     if (entries.length === 0) {
@@ -906,6 +953,40 @@ export default function AdminReportsPage() {
           .sort(compareLedgerDates),
       };
 
+      // Build module-level statistics to include in the report payload
+      const collectionsLedger = ledger.collections || [];
+      const lc = (s: string | undefined | null) => String(s || "").toLowerCase();
+
+      const collectionsStats = {
+        totalPublished: microbials.filter((m) => lc(m.publish_status) === "published").length,
+        totalUnpublished: microbials.filter((m) => lc(m.publish_status) !== "published").length,
+        updated: collectionsLedger.filter((e) => lc(e.action).includes("update") || lc(e.action).includes("edit") || lc(e.action).includes("modify")).length,
+        deleted: collectionsLedger.filter((e) => lc(e.action).includes("delete") || lc(e.action).includes("remove")).length,
+        new: specimensInRange.length,
+      };
+
+      const inventoryStats = {
+        usageLogs: usageInRange.length,
+        new: usageInRange.length,
+        updated: 0,
+        deleted: 0,
+      };
+
+      const usersStats = {
+        totalUsers: users.length,
+        new: usersInRange.length,
+        updated: 0,
+        deleted: 0,
+      };
+
+      const appointmentsStats = {
+        totalAppointments: appointments.length,
+        new: appointmentsInRange.length,
+        updated: 0,
+        deleted: 0,
+      };
+
+
       const report: ReportSnapshot = {
         id: crypto.randomUUID(),
         createdAt: new Date().toISOString(),
@@ -924,6 +1005,12 @@ export default function AdminReportsPage() {
         appointmentSourceBreakdown,
         activityByDay: Array.from(dayMap.values()),
         ledger,
+        moduleStats: {
+          collections: collectionsStats,
+          inventory: inventoryStats,
+          users: usersStats,
+          appointments: appointmentsStats,
+        },
       };
 
       const saveResponse = await fetch("/API/reports", {
