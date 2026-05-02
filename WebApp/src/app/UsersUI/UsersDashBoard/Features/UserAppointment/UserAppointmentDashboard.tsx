@@ -349,19 +349,17 @@ export default function UserAppointmentDashboard() {
           </div>
         </div>
       )}
+      {/* Modal */}
+      {modalConfig && (
+        <Modal
+          isOpen={true}
+          type={modalConfig.type}
+          title={modalConfig.title}
+          message={modalConfig.message}
+          onClose={() => setModalConfig(null)}
+          autoCloseMs={modalConfig.type === 'success' ? 3000 : 0}
+        />
+      )}
     </div>
-
-    {/* Modal */}
-    {modalConfig && (
-      <Modal
-        isOpen={true}
-        type={modalConfig.type}
-        title={modalConfig.title}
-        message={modalConfig.message}
-        onClose={() => setModalConfig(null)}
-        autoCloseMs={modalConfig.type === 'success' ? 3000 : 0}
-      />
-    )}
-  </div>
   );
 }
