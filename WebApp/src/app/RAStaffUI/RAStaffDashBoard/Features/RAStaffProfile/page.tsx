@@ -1,36 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { User, GraduationCap, Shield, Lock, Save, Upload } from "lucide-react";
 import Image from "next/image";
 import { API_URL } from "@/config/api";
 import { getAuthHeader } from "@/app/utils/authUtil";
-
-const departments = [
-  "Engineering",
-  "Psychology", 
-  "Computer Science",
-  "Business Administration",
-  "Medicine",
-  "Law",
-  "Arts & Humanities",
-  "Natural Sciences",
-  "Mathematics",
-  "Education"
-];
-
-const courses = {
-  "Engineering": ["Mechanical Engineering", "Electrical Engineering", "Civil Engineering", "Chemical Engineering"],
-  "Psychology": ["Clinical Psychology", "Cognitive Psychology", "Social Psychology", "Developmental Psychology"],
-  "Computer Science": ["Software Engineering", "Data Science", "Cybersecurity", "AI & Machine Learning"],
-  "Business Administration": ["Marketing", "Finance", "Operations Management", "Human Resources"],
-  "Medicine": ["General Medicine", "Surgery", "Pediatrics", "Cardiology"],
-  "Law": ["Corporate Law", "Criminal Law", "Constitutional Law", "International Law"],
-  "Arts & Humanities": ["Literature", "History", "Philosophy", "Fine Arts"],
-  "Natural Sciences": ["Biology", "Chemistry", "Physics", "Environmental Science"],
-  "Mathematics": ["Pure Mathematics", "Applied Mathematics", "Statistics", "Actuarial Science"],
-  "Education": ["Elementary Education", "Secondary Education", "Special Education", "Educational Psychology"]
-};
+import SearchableSelect from "@/app/components/SearchableSelect";
+import { departments, getProgramsForDepartment } from "@/app/components/departmentPrograms";
 
 interface UserProfile {
   user_id: number;
@@ -114,7 +90,7 @@ export default function ProfilePage() {
     return `${seconds}s`;
   };
 
-  const fetchProfile = async () => {
+  const fetchProfile = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -138,12 +114,12 @@ export default function ProfilePage() {
       setProfileImageInput(profile.profile_photo || "");
       setProfileImageSrc(resolveProfilePhotoSrc(profile.profile_photo));
       syncPasswordResetStatus((data.passwordResetStatus as PasswordResetStatus) || null);
-    } catch (err: any) {
-      setError(err.message || "Failed to load profile.");
+    } catch (error: unknown) {
+      setError(error instanceof Error ? error.message : "Failed to load profile.");
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (!passwordResetStatus?.isLocked || !passwordResetStatus?.expiresAt) {
@@ -159,7 +135,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     fetchProfile();
-  }, []);
+  }, [fetchProfile]);
 
   const handleSave = async () => {
     if (!userData) {
@@ -197,8 +173,8 @@ export default function ProfilePage() {
         setProfileImageInput(updatedPhoto);
         setProfileImageSrc(resolveProfilePhotoSrc(updatedPhoto));
       alert("Profile Updated: Your profile has been successfully updated.");
-    } catch (err: any) {
-      setError(err.message || "Failed to update profile.");
+    } catch (error: unknown) {
+      setError(error instanceof Error ? error.message : "Failed to update profile.");
     } finally {
       setSaving(false);
     }
@@ -234,8 +210,8 @@ export default function ProfilePage() {
       setUserData(updatedUser);
       setProfileImageInput(updatedUser.profile_photo || "");
       setProfileImageSrc(resolveProfilePhotoSrc(updatedUser.profile_photo));
-    } catch (err: any) {
-      setError(err.message || "Failed to upload profile photo.");
+    } catch (error: unknown) {
+      setError(error instanceof Error ? error.message : "Failed to upload profile photo.");
     } finally {
       setUploadingPhoto(false);
       event.target.value = "";
@@ -272,8 +248,8 @@ export default function ProfilePage() {
       }
 
       alert("A password reset email has been sent to your account email.");
-    } catch (err: any) {
-      setError(err.message || "Failed to request password reset.");
+    } catch (error: unknown) {
+      setError(error instanceof Error ? error.message : "Failed to request password reset.");
     } finally {
       setSendingReset(false);
     }
@@ -284,7 +260,7 @@ export default function ProfilePage() {
     return roleLabelMap[role] || role || "-";
   }, [userData?.role]);
 
-  const availableCourses = selectedDepartment ? courses[selectedDepartment as keyof typeof courses] || [] : [];
+  const availableCourses = getProgramsForDepartment(selectedDepartment);
   const passwordResetRemainingMs = passwordResetStatus?.expiresAt
     ? Math.max(0, new Date(passwordResetStatus.expiresAt).getTime() - clockNow)
     : 0;
@@ -393,34 +369,26 @@ export default function ProfilePage() {
           </h2>
           <p className="text-sm text-gray-500">Select your university department and course</p>
           <div>
-            <label className="block text-sm font-medium text-[#113F67]">Department</label>
-            <select
-              className="w-full border rounded p-2 text-[#113F67]"
+            <SearchableSelect
+              label="Department"
               value={selectedDepartment}
-              onChange={(e) => {
-                setSelectedDepartment(e.target.value);
+              options={departments}
+              placeholder="Search department"
+              onChange={(value) => {
+                setSelectedDepartment(value);
                 setSelectedCourse("");
               }}
-            >
-              <option value="">Select department</option>
-              {departments.map((dept) => (
-                <option key={dept} value={dept}>{dept}</option>
-              ))}
-            </select>
+            />
           </div>
           <div>
-            <label className="block text-sm font-medium text-[#113F67]">Course</label>
-            <select
-              className="w-full border rounded p-2 text-[#113F67]"
+            <SearchableSelect
+              label="Program"
               value={selectedCourse}
-              onChange={(e) => setSelectedCourse(e.target.value)}
+              options={availableCourses}
+              placeholder={selectedDepartment ? "Search program" : "Select department first"}
               disabled={!selectedDepartment}
-            >
-              <option value="">{selectedDepartment ? "Select course" : "Select department first"}</option>
-              {availableCourses.map((course) => (
-                <option key={course} value={course}>{course}</option>
-              ))}
-            </select>
+              onChange={setSelectedCourse}
+            />
           </div>
         </div>
 

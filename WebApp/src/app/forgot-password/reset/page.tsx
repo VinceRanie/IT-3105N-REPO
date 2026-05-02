@@ -169,7 +169,7 @@ function ForgotResetContent() {
                     <input type="text" value={details.department} readOnly className="w-full border rounded-md px-3 py-2 bg-gray-100 text-gray-500" />
                   </div>
                   <div>
-                    <label className="text-sm text-gray-500">Course</label>
+                    <label className="text-sm text-gray-500">Program</label>
                     <input type="text" value={details.course} readOnly className="w-full border rounded-md px-3 py-2 bg-gray-100 text-gray-500" />
                   </div>
                   <div className="col-span-full rounded-md border border-[#113F67]/20 bg-[#113F67]/5 px-3 py-2 text-sm">
