@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { X, Upload, ChevronDown, ChevronRight, Dna, Plus, Trash2 } from "lucide-react";
 import Image from "next/image";
 import { API_URL } from "@/config/api";
+import Modal from "@/app/components/Modal";
 
 interface SpecimenModalProps {
   isOpen: boolean;
@@ -68,6 +69,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
   const [fastaFile, setFastaFile] = useState<File | null>(null);
   const [blastStatus, setBlastStatus] = useState<string>("");
   const [blastResults, setBlastResults] = useState<any>(null);
+  const [modalConfig, setModalConfig] = useState<{ type: "success" | "error" | "info"; title: string; message: string } | null>(null);
 
   useEffect(() => {
     if (specimen) {
@@ -230,7 +232,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
 
   const handleBlastSubmit = async () => {
     if (!specimen || !specimen._id) {
-      alert("Please save the specimen first before running BLAST");
+      setModalConfig({ type: 'error', title: 'Error', message: 'Please save the specimen first before running BLAST' });
       return;
     }
 
@@ -243,17 +245,17 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
       
       if (response.ok) {
         setBlastStatus("pending");
-        alert(`BLAST submitted! RID: ${data.rid}. Results will be ready in 30-60 seconds.`);
+        setModalConfig({ type: 'success', title: 'BLAST Submitted', message: `BLAST submitted! RID: ${data.rid}. Results will be ready in 30-60 seconds.` });
         
         // Poll for results after 30 seconds
         setTimeout(() => checkBlastResults(), 30000);
       } else {
         setBlastStatus("error");
-        alert(`BLAST submission failed: ${data.error}`);
+        setModalConfig({ type: 'error', title: 'Error', message: `BLAST submission failed: ${data.error}` });
       }
     } catch (error) {
       setBlastStatus("error");
-      alert("Failed to submit BLAST request");
+      setModalConfig({ type: 'error', title: 'Error', message: 'Failed to submit BLAST request' });
     }
   };
 
@@ -267,10 +269,10 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
       if (data.status === 'completed') {
         setBlastStatus("completed");
         setBlastResults(data.results);
-        alert("BLAST results ready!");
+        setModalConfig({ type: 'success', title: 'BLAST Complete', message: 'BLAST results ready!' });
       } else if (data.status === 'pending') {
         setBlastStatus("pending");
-        alert("BLAST is still running. Check again in a few seconds.");
+        setModalConfig({ type: 'info', title: 'BLAST Running', message: 'BLAST is still running. Check again in a few seconds.' });
       } else {
         setBlastStatus(data.status);
       }
@@ -797,6 +799,18 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
           </div>
         </form>
       </div>
+
+      {/* Modal */}
+      {modalConfig && (
+        <Modal
+          isOpen={true}
+          type={modalConfig.type}
+          title={modalConfig.title}
+          message={modalConfig.message}
+          onClose={() => setModalConfig(null)}
+          autoCloseMs={modalConfig.type === 'success' ? 3000 : 0}
+        />
+      )}
     </div>
   );
 }

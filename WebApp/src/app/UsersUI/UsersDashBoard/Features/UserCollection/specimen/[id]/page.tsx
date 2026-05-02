@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, QrCode, Download, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
 import Image from "next/image";
 import jsPDF from "jspdf";
+import Modal from "@/app/components/Modal";
 
 interface SpecimenDetailProps {
   params: Promise<{
@@ -56,6 +57,7 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
   const [generatingPDF, setGeneratingPDF] = useState(false);
   const [activeTab, setActiveTab] = useState("info");
   const [expandedBlastResults, setExpandedBlastResults] = useState<Set<number>>(new Set());
+  const [modalConfig, setModalConfig] = useState<{ type: "success" | "error" | "info"; title: string; message: string } | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -449,7 +451,7 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
       doc.save(`Specimen_${specimen.code_name}_${new Date().toISOString().split('T')[0]}.pdf`);
     } catch (error) {
       console.error("Error generating PDF:", error);
-      alert("Error generating PDF. Please try again.");
+      setModalConfig({ type: 'error', title: 'Error', message: 'Error generating PDF. Please try again.' });
     } finally {
       setGeneratingPDF(false);
     }
@@ -937,6 +939,18 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
           </div>
         </div>
       </div>
+
+      {/* Modal */}
+      {modalConfig && (
+        <Modal
+          isOpen={true}
+          type={modalConfig.type}
+          title={modalConfig.title}
+          message={modalConfig.message}
+          onClose={() => setModalConfig(null)}
+          autoCloseMs={modalConfig.type === 'success' ? 3000 : 0}
+        />
+      )}
     </div>
   );
 }

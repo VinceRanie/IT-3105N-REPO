@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Save, ArrowLeft } from "lucide-react";
 import { API_URL } from "@/config/api";
 import { getUserData } from "@/app/utils/authUtil";
+import Modal from "@/app/components/Modal";
 
 interface Batch {
   batch_id: number;
@@ -33,6 +34,7 @@ export default function BatchEditPage() {
   const [purpose, setPurpose] = useState("");
   const [userId, setUserId] = useState<number | null>(null);
   const [isMounted, setIsMounted] = useState(false);
+  const [modalConfig, setModalConfig] = useState<{ type: "success" | "error" | "info"; title: string; message: string } | null>(null);
 
   useEffect(() => {
     setIsMounted(true);
@@ -125,7 +127,7 @@ export default function BatchEditPage() {
       await fetchBatch();
       setAmountUsed(0);
       setPurpose("");
-      alert("Usage logged successfully!");
+      setModalConfig({ type: 'success', title: 'Usage Logged', message: 'Usage logged successfully!' });
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
@@ -296,6 +298,18 @@ export default function BatchEditPage() {
           </form>
         </div>
       </div>
+
+      {/* Modal */}
+      {modalConfig && (
+        <Modal
+          isOpen={true}
+          type={modalConfig.type}
+          title={modalConfig.title}
+          message={modalConfig.message}
+          onClose={() => setModalConfig(null)}
+          autoCloseMs={modalConfig.type === 'success' ? 3000 : 0}
+        />
+      )}
     </div>
   );
 }
