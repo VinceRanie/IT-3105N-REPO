@@ -678,8 +678,8 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
                 
                 const imageData = await getImageBase64(absoluteImageUrl);
                 if (imageData) {
-                  const imgWidth = contentWidth - 55;
-                  const imgHeight = 50; // Fixed height for consistency
+                  const imgWidth = 60;
+                  const imgHeight = 60;
                   doc.addImage(imageData, 'JPEG', margin + 55, yPos, imgWidth, imgHeight);
                   yPos += imgHeight + 3;
                   checkPageBreak(5);

@@ -623,8 +623,8 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
                 
                 const imageData = await getImageBase64(absoluteImageUrl);
                 if (imageData) {
-                  const imgWidth = contentWidth - 55;
-                  const imgHeight = 50;
+                  const imgWidth = 60;
+                  const imgHeight = 60;
                   doc.addImage(imageData, 'JPEG', margin + 55, yPos, imgWidth, imgHeight);
                   yPos += imgHeight + 3;
                   checkPageBreak(5);
