@@ -654,36 +654,64 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
       const groupedCustomFields = groupCustomFieldsBySection(specimen.custom_fields);
       doc.setFontSize(10);
 
-      groupedCustomFields.forEach((group) => {
+      for (const group of groupedCustomFields) {
         checkPageBreak(10);
         doc.setFont("helvetica", "bold");
         doc.text(CUSTOM_SECTION_LABELS[group.section] || group.section, margin, yPos);
         yPos += lineHeight;
 
-        group.fields.forEach((field) => {
+        for (const field of group.fields) {
           checkPageBreak(10);
           doc.setFont("helvetica", "bold");
           doc.text(`${field.label}:`, margin, yPos);
           doc.setFont("helvetica", "normal");
-          const printableValue = field.type === "image_description"
-            ? (() => {
-                const normalized = normalizeCustomImageDescriptionValue(field.rawValue);
-                if (!normalized.image_url && !normalized.description) {
-                  return "N/A";
+          
+          if (field.type === "image_description") {
+            const normalized = normalizeCustomImageDescriptionValue(field.rawValue);
+            
+            // Try to render the image if URL exists
+            if (normalized.image_url) {
+              try {
+                const absoluteImageUrl = normalized.image_url.startsWith('http')
+                  ? normalized.image_url
+                  : `${API_URL}${normalized.image_url}`;
+                
+                const imageData = await getImageBase64(absoluteImageUrl);
+                if (imageData) {
+                  const imgWidth = contentWidth - 55;
+                  const imgHeight = 50; // Fixed height for consistency
+                  doc.addImage(imageData, 'JPEG', margin + 55, yPos, imgWidth, imgHeight);
+                  yPos += imgHeight + 3;
+                  checkPageBreak(5);
                 }
-                return [
-                  normalized.description ? `Description: ${normalized.description}` : null,
-                  normalized.image_url ? `Image: ${normalized.image_url}` : null,
-                ].filter(Boolean).join(" | ");
-              })()
-            : (field.value || "N/A");
-          const valueText = doc.splitTextToSize(printableValue, contentWidth - 55);
-          doc.text(valueText, margin + 55, yPos);
-          yPos += Math.max(lineHeight, valueText.length * 5);
-        });
+              } catch (error) {
+                console.error(`Error adding image for field ${field.label}:`, error);
+                // Fall back to text rendering if image fails
+                if (normalized.description) {
+                  const descText = doc.splitTextToSize(`Description: ${normalized.description}`, contentWidth - 55);
+                  doc.text(descText, margin + 55, yPos);
+                  yPos += lineHeight * Math.max(1, descText.length);
+                }
+              }
+            } else if (normalized.description) {
+              // Just show description if no image
+              const descText = doc.splitTextToSize(`Description: ${normalized.description}`, contentWidth - 55);
+              doc.text(descText, margin + 55, yPos);
+              yPos += lineHeight * Math.max(1, descText.length);
+            } else {
+              doc.text("N/A", margin + 55, yPos);
+              yPos += lineHeight;
+            }
+          } else {
+            // Regular fields (non-image)
+            const valueText = doc.splitTextToSize(field.value || "N/A", contentWidth - 55);
+            doc.text(valueText, margin + 55, yPos);
+            yPos += Math.max(lineHeight, valueText.length * 5);
+          }
+        }
 
         yPos += 2;
-      });
+      }
     }
 
     // Footer branding

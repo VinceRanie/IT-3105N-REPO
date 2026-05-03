@@ -32,11 +32,14 @@ const formatCustomFieldValue = (value: any): string => {
       return formatCustomFieldValue(value.value);
     }
 
-    if ("description" in value || "image_url" in value) {
-      const description = String(value.description || "").trim();
-      const imageUrl = String(value.image_url || "").trim();
-      if (!description && !imageUrl) return "N/A";
-      return [description, imageUrl].filter(Boolean).join(" | ");
+    // For image_description objects, return just the image URL if present
+    // so it can be detected and rendered in PDF
+    if ("image_url" in value && value.image_url) {
+      return String(value.image_url).trim();
+    }
+
+    if ("description" in value) {
+      return String(value.description || "").trim() || "N/A";
     }
 
     try {
@@ -410,17 +413,42 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
       doc.setFontSize(10);
       doc.setFont("helvetica", "normal");
       
-      Object.entries(specimen.custom_fields).forEach(([key, value]) => {
+      for (const [key, value] of Object.entries(specimen.custom_fields)) {
         checkPageBreak();
         const label = getCustomFieldLabel(key, value);
         const displayValue = formatCustomFieldValue(value);
         doc.setFont("helvetica", "bold");
         doc.text(`${label}:`, margin, yPos);
         doc.setFont("helvetica", "normal");
+        
+        // Check if the value is an image URL
+        const isImageUrl = displayValue && (displayValue.includes('/uploads/specimens/') || displayValue.match(/\.(jpg|jpeg|png|gif|webp)$/i));
+        
+        if (isImageUrl) {
+          try {
+            const absoluteImageUrl = displayValue.startsWith('http')
+              ? displayValue
+              : `${API_URL}${displayValue}`;
+            
+            const imageData = await getImageBase64(absoluteImageUrl);
+            if (imageData) {
+              const imgWidth = contentWidth - 52;
+              const imgHeight = 50;
+              doc.addImage(imageData, 'JPEG', margin + 52, yPos, imgWidth, imgHeight);
+              yPos += imgHeight + 3;
+              checkPageBreak(5);
+              continue;
+            }
+          } catch (error) {
+            console.error(`Error adding image for field ${label}:`, error);
+          }
+        }
+        
+        // Default text rendering
         const wrappedValue = doc.splitTextToSize(displayValue, contentWidth - 52);
         doc.text(wrappedValue, margin + 52, yPos);
         yPos += lineHeight * Math.max(1, wrappedValue.length);
-      });
+      }
     }
 
     // Footer branding

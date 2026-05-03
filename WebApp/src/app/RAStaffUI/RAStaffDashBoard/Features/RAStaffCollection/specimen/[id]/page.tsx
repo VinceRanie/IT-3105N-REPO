@@ -600,24 +600,49 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
         const groupedCustomFields = groupCustomFieldsBySection(specimen.custom_fields);
         doc.setFontSize(10);
 
-        groupedCustomFields.forEach((group) => {
+        for (const group of groupedCustomFields) {
           checkPageBreak(10);
           doc.setFont("helvetica", "bold");
           doc.text(CUSTOM_SECTION_LABELS[group.section] || group.section, margin, yPos);
           yPos += lineHeight;
 
-          group.fields.forEach((field) => {
+          for (const field of group.fields) {
             checkPageBreak(10);
             doc.setFont("helvetica", "bold");
             doc.text(`${field.label}:`, margin, yPos);
             doc.setFont("helvetica", "normal");
+            
+            // Check if the value is an image URL
+            const isImageUrl = field.value && (field.value.includes('/uploads/specimens/') || field.value.match(/\.(jpg|jpeg|png|gif|webp)$/i));
+            
+            if (isImageUrl && field.type === "image_description") {
+              try {
+                const absoluteImageUrl = field.value.startsWith('http')
+                  ? field.value
+                  : `${API_URL}${field.value}`;
+                
+                const imageData = await getImageBase64(absoluteImageUrl);
+                if (imageData) {
+                  const imgWidth = contentWidth - 55;
+                  const imgHeight = 50;
+                  doc.addImage(imageData, 'JPEG', margin + 55, yPos, imgWidth, imgHeight);
+                  yPos += imgHeight + 3;
+                  checkPageBreak(5);
+                  continue;
+                }
+              } catch (error) {
+                console.error(`Error adding image for field ${field.label}:`, error);
+              }
+            }
+            
+            // Default text rendering
             const valueText = doc.splitTextToSize(field.value || "N/A", contentWidth - 55);
             doc.text(valueText, margin + 55, yPos);
             yPos += Math.max(lineHeight, valueText.length * 5);
-          });
+          }
 
           yPos += 2;
-        });
+        }
       }
 
       // Footer branding
