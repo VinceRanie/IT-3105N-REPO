@@ -54,6 +54,11 @@ const formatCustomFieldValue = (value: any): string => {
 
 const normalizeCustomImageDescriptionValue = (value: any) => {
   try {
+    // If wrapped in { value: ... } unwrap it first
+    if (value && typeof value === "object" && !Array.isArray(value) && "value" in value) {
+      return normalizeCustomImageDescriptionValue((value as any).value);
+    }
+
     if (typeof value === "string") {
       const trimmed = value.trim();
       if ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
