@@ -21,6 +21,49 @@ type NormalizedCustomField = {
   section: string;
   type: string;
   value: string;
+  rawValue?: any;
+};
+
+const normalizeCustomImageDescriptionValue = (value: any) => {
+  try {
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+
+      // Try parsing JSON string values
+      if ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            return {
+              image_url: String(parsed.image_url || parsed.imageUrl || parsed.image || ""),
+              description: String(parsed.description || parsed.Description || ""),
+            };
+          }
+        } catch {
+          // fall through
+        }
+      }
+
+      // If string looks like an image URL/path, treat as image_url
+      if (trimmed.includes('/uploads/specimens/') || trimmed.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+        return { image_url: trimmed, description: "" };
+      }
+
+      // Otherwise treat the string as a description
+      return { image_url: "", description: trimmed };
+    }
+
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      return {
+        image_url: String(value.image_url || value.imageUrl || value.image || ""),
+        description: String(value.description || value.Description || ""),
+      };
+    }
+
+    return { image_url: "", description: String(value || "") };
+  } catch (e) {
+    return { image_url: "", description: String(value || "") };
+  }
 };
 
 const CUSTOM_SECTION_LABELS: Record<string, string> = {
@@ -45,6 +88,7 @@ const normalizeCustomFields = (customFields: any): NormalizedCustomField[] => {
         section: String(raw.section || "basic").trim().toLowerCase(),
         type: String(raw.type || "text").trim().toLowerCase(),
         value: String(raw.value || ""),
+        rawValue: raw.value,
       };
     }
 
@@ -54,6 +98,7 @@ const normalizeCustomFields = (customFields: any): NormalizedCustomField[] => {
       section: "basic",
       type: "text",
       value: String(value || ""),
+      rawValue: value,
     };
   });
 };
@@ -600,24 +645,58 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
         const groupedCustomFields = groupCustomFieldsBySection(specimen.custom_fields);
         doc.setFontSize(10);
 
-        groupedCustomFields.forEach((group) => {
+        for (const group of groupedCustomFields) {
           checkPageBreak(10);
           doc.setFont("helvetica", "bold");
           doc.text(CUSTOM_SECTION_LABELS[group.section] || group.section, margin, yPos);
           yPos += lineHeight;
 
-          group.fields.forEach((field) => {
+          for (const field of group.fields) {
             checkPageBreak(10);
             doc.setFont("helvetica", "bold");
             doc.text(`${field.label}:`, margin, yPos);
             doc.setFont("helvetica", "normal");
-            const valueText = doc.splitTextToSize(field.value || "N/A", contentWidth - 55);
-            doc.text(valueText, margin + 55, yPos);
-            yPos += Math.max(lineHeight, valueText.length * 5);
-          });
+            
+            // Handle image_description-like fields specially (support string/JSON/object)
+            if (field.type === "image_description") {
+              const normalized = normalizeCustomImageDescriptionValue(field.rawValue ?? field.value);
+              const imageUrl = normalized.image_url;
+              const description = normalized.description;
+
+              if (imageUrl) {
+                try {
+                  const absoluteImageUrl = imageUrl.startsWith('http') ? imageUrl : `${API_URL}${imageUrl}`;
+                  const imageData = await getImageBase64(absoluteImageUrl);
+                  if (imageData) {
+                    const imgWidth = 60;
+                    const imgHeight = 60;
+                    doc.addImage(imageData, 'JPEG', margin + 55, yPos, imgWidth, imgHeight);
+                    yPos += imgHeight + 3;
+                  }
+                } catch (error) {
+                  console.error(`Error adding image for field ${field.label}:`, error);
+                }
+              }
+
+              if (description) {
+                checkPageBreak(5);
+                const descText = doc.splitTextToSize(`Description: ${description}`, contentWidth - 55);
+                doc.text(descText, margin + 55, yPos);
+                yPos += lineHeight * Math.max(1, descText.length);
+              } else if (!imageUrl) {
+                doc.text("N/A", margin + 55, yPos);
+                yPos += lineHeight;
+              }
+            } else {
+              // Regular fields - render as text
+              const valueText = doc.splitTextToSize(field.value || "N/A", contentWidth - 55);
+              doc.text(valueText, margin + 55, yPos);
+              yPos += Math.max(lineHeight, valueText.length * 5);
+            }
+          }
 
           yPos += 2;
-        });
+        }
       }
 
       // Footer branding
@@ -840,7 +919,37 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
                           </h3>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {group.fields.map((field) => (
-                              <InfoItem key={field.id} label={field.label} value={field.value || "N/A"} />
+                              field.type === "image_description" ? (
+                                <div key={field.id} className="md:col-span-2 rounded-lg border border-gray-200 p-4">
+                                  <h4 className="text-sm font-semibold text-gray-700">{field.label}</h4>
+                                  <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                                    <div>
+                                      {normalizeCustomImageDescriptionValue(field.rawValue).image_url ? (
+                                        <div className="relative h-48 w-full overflow-hidden rounded-lg border border-gray-200">
+                                          <Image
+                                            src={`${API_URL}${normalizeCustomImageDescriptionValue(field.rawValue).image_url}`}
+                                            alt={field.label}
+                                            fill
+                                            className="object-cover"
+                                          />
+                                        </div>
+                                      ) : (
+                                        <div className="flex h-48 items-center justify-center rounded-lg border border-dashed border-gray-300 text-sm text-gray-400">
+                                          No image uploaded
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div>
+                                      <p className="text-xs font-medium uppercase text-gray-500">Description</p>
+                                      <p className="mt-1 text-sm text-gray-800 whitespace-pre-wrap">
+                                        {normalizeCustomImageDescriptionValue(field.rawValue).description || "N/A"}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : (
+                                <InfoItem key={field.id} label={field.label} value={field.value || "N/A"} />
+                              )
                             ))}
                           </div>
                         </div>

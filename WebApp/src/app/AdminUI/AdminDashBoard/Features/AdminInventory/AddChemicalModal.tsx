@@ -312,7 +312,7 @@ export default function AddChemicalModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black bg-opacity-50 p-3 sm:p-4 overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black/70 backdrop-blur-[1px] p-3 sm:p-4 overflow-y-auto">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md sm:max-w-lg p-4 sm:p-6 max-h-[92vh] overflow-y-auto">
         {/* Header */}
         <div className="flex justify-between items-center mb-4">

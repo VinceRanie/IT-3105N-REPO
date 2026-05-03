@@ -1305,7 +1305,7 @@ export default function AdminHome() {
               <h2 className="text-lg font-semibold text-gray-900">Set Date Unavailable</h2>
               <button
                 onClick={() => setShowUnavailableModal(false)}
-                className="rounded-md px-2 py-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                className="cursor-pointer rounded-md px-2 py-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
               >
                 Close
               </button>
@@ -1336,7 +1336,7 @@ export default function AdminHome() {
                 <button
                   onClick={handleSetUnavailableDate}
                   disabled={savingUnavailable}
-                  className="rounded-md bg-orange-600 px-4 py-2 text-white hover:bg-orange-700 disabled:opacity-60"
+                  className="cursor-pointer rounded-md bg-[#113F67] px-4 py-2 text-white hover:bg-orange-700 disabled:opacity-60 "
                 >
                   {savingUnavailable ? "Saving..." : "Mark Unavailable"}
                 </button>

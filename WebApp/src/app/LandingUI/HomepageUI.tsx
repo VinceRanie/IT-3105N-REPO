@@ -12,6 +12,7 @@ import Footer from "../UI Components/Footer";
 type SpecimenTypeStat = {
     type: string;
     count: number;
+    imageUrl?: string | null;
 };
 
 type HomepageStats = {
