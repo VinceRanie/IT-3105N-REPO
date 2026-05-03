@@ -682,23 +682,20 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
                   const imgHeight = 60;
                   doc.addImage(imageData, 'JPEG', margin + 55, yPos, imgWidth, imgHeight);
                   yPos += imgHeight + 3;
-                  checkPageBreak(5);
                 }
               } catch (error) {
                 console.error(`Error adding image for field ${field.label}:`, error);
-                // Fall back to text rendering if image fails
-                if (normalized.description) {
-                  const descText = doc.splitTextToSize(`Description: ${normalized.description}`, contentWidth - 55);
-                  doc.text(descText, margin + 55, yPos);
-                  yPos += lineHeight * Math.max(1, descText.length);
-                }
               }
-            } else if (normalized.description) {
-              // Just show description if no image
+            }
+            
+            // Always show description if it exists
+            if (normalized.description) {
+              checkPageBreak(5);
               const descText = doc.splitTextToSize(`Description: ${normalized.description}`, contentWidth - 55);
               doc.text(descText, margin + 55, yPos);
               yPos += lineHeight * Math.max(1, descText.length);
-            } else {
+            } else if (!normalized.image_url) {
+              // Only show N/A if there's no image and no description
               doc.text("N/A", margin + 55, yPos);
               yPos += lineHeight;
             }

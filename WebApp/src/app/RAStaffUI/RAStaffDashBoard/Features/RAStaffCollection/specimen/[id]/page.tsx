@@ -612,33 +612,59 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
             doc.text(`${field.label}:`, margin, yPos);
             doc.setFont("helvetica", "normal");
             
-            // Check if the value is an image URL
-            const isImageUrl = field.value && (field.value.includes('/uploads/specimens/') || field.value.match(/\.(jpg|jpeg|png|gif|webp)$/i));
-            
-            if (isImageUrl && field.type === "image_description") {
+            // Handle image_description fields specially
+            if (field.type === "image_description") {
+              let imageUrl = null;
+              let description = "";
+              
+              // Try to parse if field.value is a JSON string
               try {
-                const absoluteImageUrl = field.value.startsWith('http')
-                  ? field.value
-                  : `${API_URL}${field.value}`;
-                
-                const imageData = await getImageBase64(absoluteImageUrl);
-                if (imageData) {
-                  const imgWidth = 60;
-                  const imgHeight = 60;
-                  doc.addImage(imageData, 'JPEG', margin + 55, yPos, imgWidth, imgHeight);
-                  yPos += imgHeight + 3;
-                  checkPageBreak(5);
-                  continue;
+                const parsed = typeof field.value === 'string' ? JSON.parse(field.value) : field.value;
+                if (typeof parsed === 'object') {
+                  imageUrl = parsed.image_url || parsed.imageUrl;
+                  description = parsed.description || "";
                 }
-              } catch (error) {
-                console.error(`Error adding image for field ${field.label}:`, error);
+              } catch {
+                // If not JSON, check if it's an image URL string
+                const isImageUrl = field.value && (field.value.includes('/uploads/specimens/') || field.value.match(/\.(jpg|jpeg|png|gif|webp)$/i));
+                if (isImageUrl) {
+                  imageUrl = field.value;
+                }
               }
+              
+              // Render image if URL exists
+              if (imageUrl) {
+                try {
+                  const absoluteImageUrl = imageUrl.startsWith('http') ? imageUrl : `${API_URL}${imageUrl}`;
+                  const imageData = await getImageBase64(absoluteImageUrl);
+                  if (imageData) {
+                    const imgWidth = 60;
+                    const imgHeight = 60;
+                    doc.addImage(imageData, 'JPEG', margin + 55, yPos, imgWidth, imgHeight);
+                    yPos += imgHeight + 3;
+                  }
+                } catch (error) {
+                  console.error(`Error adding image for field ${field.label}:`, error);
+                }
+              }
+              
+              // Render description if it exists
+              if (description) {
+                checkPageBreak(5);
+                const descText = doc.splitTextToSize(`Description: ${description}`, contentWidth - 55);
+                doc.text(descText, margin + 55, yPos);
+                yPos += lineHeight * Math.max(1, descText.length);
+              } else if (!imageUrl) {
+                // Only show N/A if there's no image and no description
+                doc.text("N/A", margin + 55, yPos);
+                yPos += lineHeight;
+              }
+            } else {
+              // Regular fields - render as text
+              const valueText = doc.splitTextToSize(field.value || "N/A", contentWidth - 55);
+              doc.text(valueText, margin + 55, yPos);
+              yPos += Math.max(lineHeight, valueText.length * 5);
             }
-            
-            // Default text rendering
-            const valueText = doc.splitTextToSize(field.value || "N/A", contentWidth - 55);
-            doc.text(valueText, margin + 55, yPos);
-            yPos += Math.max(lineHeight, valueText.length * 5);
           }
 
           yPos += 2;

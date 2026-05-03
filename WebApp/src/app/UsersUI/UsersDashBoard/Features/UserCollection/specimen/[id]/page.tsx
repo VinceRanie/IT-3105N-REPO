@@ -421,7 +421,7 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
         doc.text(`${label}:`, margin, yPos);
         doc.setFont("helvetica", "normal");
         
-        // Check if the value is an image URL
+        // Check if the value is an image URL or image_description object
         const isImageUrl = displayValue && (displayValue.includes('/uploads/specimens/') || displayValue.match(/\.(jpg|jpeg|png|gif|webp)$/i));
         
         if (isImageUrl) {
@@ -436,18 +436,27 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
               const imgHeight = 60;
               doc.addImage(imageData, 'JPEG', margin + 52, yPos, imgWidth, imgHeight);
               yPos += imgHeight + 3;
-              checkPageBreak(5);
-              continue;
             }
           } catch (error) {
             console.error(`Error adding image for field ${label}:`, error);
           }
+          
+          // Try to show description from raw value if available
+          if (value && typeof value === 'object' && !Array.isArray(value)) {
+            const description = value.description || value.Description;
+            if (description) {
+              checkPageBreak(5);
+              const descText = doc.splitTextToSize(`Description: ${description}`, contentWidth - 52);
+              doc.text(descText, margin + 52, yPos);
+              yPos += lineHeight * Math.max(1, descText.length);
+            }
+          }
+        } else {
+          // Regular text field or no image URL
+          const wrappedValue = doc.splitTextToSize(displayValue, contentWidth - 52);
+          doc.text(wrappedValue, margin + 52, yPos);
+          yPos += lineHeight * Math.max(1, wrappedValue.length);
         }
-        
-        // Default text rendering
-        const wrappedValue = doc.splitTextToSize(displayValue, contentWidth - 52);
-        doc.text(wrappedValue, margin + 52, yPos);
-        yPos += lineHeight * Math.max(1, wrappedValue.length);
       }
     }
 
