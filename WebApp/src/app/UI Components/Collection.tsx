@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 type SpecimenTypeStat = {
   type: string;
   count: number;
+  imageUrl?: string | null;
 };
 
 type CollectionsProps = {
@@ -23,7 +24,7 @@ export default function Collections({ specimenTypes = [], totalSpecimens = 0, co
       description: `Catalogued ${item.type.toLowerCase()} specimens available for laboratory research and study.`,
       specimens: item.count,
       category: item.type,
-      image: "/UI/img/Laboratory.jpg",
+      image: item.imageUrl || "/UI/img/Laboratory.jpg",
       color: colors[index % colors.length],
     }));
   

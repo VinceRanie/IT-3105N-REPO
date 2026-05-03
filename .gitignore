@@ -4,4 +4,9 @@ WebApp/node_modules/
 .env
 *.zip
 merge-test/
-test-email.js
+test-email.js.env.production
+.env.local
+.env*.local
+.env.production
+.env.local
+.env*.local
