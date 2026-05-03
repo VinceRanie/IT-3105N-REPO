@@ -21,6 +21,7 @@ type NormalizedCustomField = {
   section: string;
   type: string;
   value: string;
+  rawValue?: any;
 };
 
 const normalizeCustomImageDescriptionValue = (value: any) => {
@@ -59,6 +60,7 @@ const normalizeCustomFields = (customFields: any): NormalizedCustomField[] => {
         section: String(raw.section || "basic").trim().toLowerCase(),
         type: String(raw.type || "text").trim().toLowerCase(),
         value: String(raw.value || ""),
+        rawValue: raw.value,
       };
     }
 
@@ -68,6 +70,7 @@ const normalizeCustomFields = (customFields: any): NormalizedCustomField[] => {
       section: "basic",
       type: "text",
       value: String(value || ""),
+      rawValue: value,
     };
   });
 };
