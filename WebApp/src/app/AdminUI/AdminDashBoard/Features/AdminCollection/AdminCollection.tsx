@@ -354,6 +354,7 @@
 
 import React, { useState } from "react";
 import { Eye, Edit, Trash2, ChevronUp, ChevronDown } from "lucide-react";
+import ConfirmModal from "./ConfirmModal";
 
 interface Collection {
   _id: string;
@@ -396,6 +397,7 @@ export default function CollectionTable({
   onTogglePublish: (specimen: Collection) => void;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name?: string } | null>(null);
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
@@ -593,7 +595,7 @@ export default function CollectionTable({
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              onDelete(specimen._id);
+                              setPendingDelete({ id: specimen._id, name: specimen.code_name });
                             }}
                             className="p-1.5 rounded-md text-red-600 hover:bg-red-50 transition"
                           >
@@ -602,6 +604,24 @@ export default function CollectionTable({
                         </div>
                       </td>
                     </tr>
+
+                    {/* Confirm delete modal local to table */}
+                    <ConfirmModal
+                      isOpen={!!pendingDelete}
+                      title="Delete Specimen"
+                      message={
+                        pendingDelete
+                          ? `Are you sure you want to delete "${pendingDelete.name || 'this specimen'}"? This action cannot be undone.`
+                          : "Are you sure?"
+                      }
+                      confirmLabel="Delete"
+                      cancelLabel="Cancel"
+                      onCancel={() => setPendingDelete(null)}
+                      onConfirm={() => {
+                        if (pendingDelete) onDelete(pendingDelete.id);
+                        setPendingDelete(null);
+                      }}
+                    />
 
                     {selectedId === specimen._id && (
                       <tr className="bg-gray-50">

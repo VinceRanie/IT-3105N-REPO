@@ -6,11 +6,13 @@ const ENV_API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_BASE_UR
 type MicrobialItem = {
   classification?: string | null;
   publish_status?: string | null;
+  image_url?: string | null;
 };
 
 type SpecimenTypeStat = {
   type: string;
   count: number;
+  imageUrl?: string | null;
 };
 
 type HomepageStats = {
@@ -38,6 +40,25 @@ const toSpecimenTypeStats = (items: MicrobialItem[]): SpecimenTypeStat[] => {
   return Array.from(counts.entries())
     .map(([type, count]) => ({ type, count }))
     .sort((a, b) => b.count - a.count || a.type.localeCompare(b.type));
+};
+
+const toAbsoluteImageUrl = (apiBaseUrl: string, rawPath: string) => {
+  const normalized = String(rawPath || "").trim();
+  if (!normalized) return null;
+  if (/^https?:\/\//i.test(normalized)) {
+    return normalized;
+  }
+
+  const base = apiBaseUrl.replace(/\/$/, "");
+  if (normalized.startsWith("/")) {
+    return `${base}${normalized}`;
+  }
+  return `${base}/${normalized}`;
+};
+
+const pickRandom = <T,>(items: T[]): T | null => {
+  if (!items.length) return null;
+  return items[Math.floor(Math.random() * items.length)] ?? null;
 };
 
 const getApiBaseCandidates = (): string[] => {
@@ -103,16 +124,40 @@ const fetchHomepageStats = async (apiBaseUrl: string): Promise<HomepageStats | n
     return String(user?.role || "").trim().toLowerCase() === "student";
   });
 
-  const allSpecimenTypes = toSpecimenTypeStats(
-    allMicrobials.map((item) => ({ ...item, classification: getClassification(item) }))
-  );
+  const normalizedAllMicrobials = allMicrobials.map((item) => ({ ...item, classification: getClassification(item) }));
+  const allSpecimenTypes = toSpecimenTypeStats(normalizedAllMicrobials);
+
+  const publishedWithImages = publishedMicrobials
+    .filter(isPublished)
+    .map((item) => ({
+      classification: getClassification(item),
+      imageUrl: toAbsoluteImageUrl(apiBaseUrl, String(item.image_url || "")),
+    }))
+    .filter((item) => Boolean(item.imageUrl));
+
+  const imagePoolByType = new Map<string, string[]>();
+  publishedWithImages.forEach((item) => {
+    if (!item.imageUrl) return;
+    const bucket = imagePoolByType.get(item.classification) || [];
+    bucket.push(item.imageUrl);
+    imagePoolByType.set(item.classification, bucket);
+  });
+
+  const specimenTypesWithRandomImage = allSpecimenTypes.map((item) => {
+    const imageCandidates = imagePoolByType.get(item.type) || [];
+    const imageUrl = pickRandom(imageCandidates);
+    return {
+      ...item,
+      imageUrl,
+    };
+  });
 
   return {
     publishedSpecimens: publishedMicrobials.filter(isPublished).length,
     carolinianCount: studentUsers.length,
     totalSpecimens: allMicrobials.length,
     collectionCategories: allSpecimenTypes.length,
-    specimenTypes: allSpecimenTypes,
+    specimenTypes: specimenTypesWithRandomImage,
   };
 };
 

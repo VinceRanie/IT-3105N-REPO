@@ -32,11 +32,12 @@ const specimenStorage = multer.diskStorage({
   }
 });
 
-// File filter - accept images and FASTA files
+// File filter - accept images and FASTA files (strict)
 const fileFilter = (req, file, cb) => {
   const imageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-  const textTypes = ['text/plain', 'application/octet-stream']; // FASTA files
-  
+  const textTypes = ['text/plain', 'application/octet-stream']; // common types for FASTA uploads
+  const allowedFastaExts = new Set(['.fasta', '.fa', '.fna', '.ffn', '.faa']);
+
   if (file.fieldname === 'image' || file.fieldname === 'custom_images') {
     if (imageTypes.includes(file.mimetype)) {
       cb(null, true);
@@ -45,10 +46,10 @@ const fileFilter = (req, file, cb) => {
     }
   } else if (file.fieldname === 'fasta_file') {
     const ext = path.extname(file.originalname).toLowerCase();
-    if (textTypes.includes(file.mimetype) || ext === '.fasta' || ext === '.fa' || ext === '.txt') {
+    if ((textTypes.includes(file.mimetype) && allowedFastaExts.has(ext)) || allowedFastaExts.has(ext)) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid FASTA file type. Only .fasta, .fa, or .txt files are allowed.'), false);
+      cb(new Error('Invalid FASTA file type. Only FASTA files (.fasta, .fa, .fna, .ffn, .faa) are allowed.'), false);
     }
   } else {
     cb(new Error('Unexpected field name'), false);

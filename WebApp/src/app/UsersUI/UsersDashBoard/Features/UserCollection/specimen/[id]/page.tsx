@@ -33,11 +33,14 @@ const formatCustomFieldValue = (value: any): string => {
       return formatCustomFieldValue(value.value);
     }
 
-    if ("description" in value || "image_url" in value) {
-      const description = String(value.description || "").trim();
-      const imageUrl = String(value.image_url || "").trim();
-      if (!description && !imageUrl) return "N/A";
-      return [description, imageUrl].filter(Boolean).join(" | ");
+    // For image_description objects, return just the image URL if present
+    // so it can be detected and rendered in PDF
+    if ("image_url" in value && value.image_url) {
+      return String(value.image_url).trim();
+    }
+
+    if ("description" in value) {
+      return String(value.description || "").trim() || "N/A";
     }
 
     try {
@@ -48,6 +51,49 @@ const formatCustomFieldValue = (value: any): string => {
   }
 
   return String(value);
+};
+
+const normalizeCustomImageDescriptionValue = (value: any) => {
+  try {
+    // If wrapped in { value: ... } unwrap it first
+    if (value && typeof value === "object" && !Array.isArray(value) && "value" in value) {
+      return normalizeCustomImageDescriptionValue((value as any).value);
+    }
+
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            return {
+              image_url: String(parsed.image_url || parsed.imageUrl || parsed.image || ""),
+              description: String(parsed.description || parsed.Description || ""),
+            };
+          }
+        } catch {
+          // fall through
+        }
+      }
+
+      if (trimmed.includes('/uploads/specimens/') || trimmed.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+        return { image_url: trimmed, description: "" };
+      }
+
+      return { image_url: "", description: trimmed };
+    }
+
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      return {
+        image_url: String(value.image_url || value.imageUrl || value.image || ""),
+        description: String(value.description || value.Description || ""),
+      };
+    }
+
+    return { image_url: "", description: String(value || "") };
+  } catch (e) {
+    return { image_url: "", description: String(value || "") };
+  }
 };
 
 export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
@@ -412,17 +458,50 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
       doc.setFontSize(10);
       doc.setFont("helvetica", "normal");
       
-      Object.entries(specimen.custom_fields).forEach(([key, value]) => {
+      for (const [key, value] of Object.entries(specimen.custom_fields)) {
         checkPageBreak();
         const label = getCustomFieldLabel(key, value);
         const displayValue = formatCustomFieldValue(value);
         doc.setFont("helvetica", "bold");
         doc.text(`${label}:`, margin, yPos);
         doc.setFont("helvetica", "normal");
-        const wrappedValue = doc.splitTextToSize(displayValue, contentWidth - 52);
-        doc.text(wrappedValue, margin + 52, yPos);
-        yPos += lineHeight * Math.max(1, wrappedValue.length);
-      });
+        
+        // Check if the value is an image URL or image_description object
+        const isImageUrl = displayValue && (displayValue.includes('/uploads/specimens/') || displayValue.match(/\.(jpg|jpeg|png|gif|webp)$/i));
+        
+        if (isImageUrl) {
+          try {
+            const absoluteImageUrl = displayValue.startsWith('http')
+              ? displayValue
+              : `${API_URL}${displayValue}`;
+            
+            const imageData = await getImageBase64(absoluteImageUrl);
+            if (imageData) {
+              const imgWidth = 60;
+              const imgHeight = 60;
+              doc.addImage(imageData, 'JPEG', margin + 52, yPos, imgWidth, imgHeight);
+              yPos += imgHeight + 3;
+            }
+          } catch (error) {
+            console.error(`Error adding image for field ${label}:`, error);
+          }
+          
+          // Try to show description using normalized value (handles stringified JSON too)
+          const normalized = normalizeCustomImageDescriptionValue(value);
+          const description = normalized.description;
+          if (description) {
+            checkPageBreak(5);
+            const descText = doc.splitTextToSize(`Description: ${description}`, contentWidth - 52);
+            doc.text(descText, margin + 52, yPos);
+            yPos += lineHeight * Math.max(1, descText.length);
+          }
+        } else {
+          // Regular text field or no image URL
+          const wrappedValue = doc.splitTextToSize(displayValue, contentWidth - 52);
+          doc.text(wrappedValue, margin + 52, yPos);
+          yPos += lineHeight * Math.max(1, wrappedValue.length);
+        }
+      }
     }
 
     // Footer branding
@@ -632,13 +711,46 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
                   <div className="bg-white shadow rounded-xl p-6">
                     <h2 className="text-lg font-semibold mb-4">Additional Information</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {Object.entries(specimen.custom_fields).map(([key, value]: [string, any]) => (
-                        <InfoItem
-                          key={key}
-                          label={getCustomFieldLabel(key, value)}
-                          value={formatCustomFieldValue(value)}
-                        />
-                      ))}
+                      {Object.entries(specimen.custom_fields).map(([key, value]: [string, any]) => {
+                        const label = getCustomFieldLabel(key, value);
+
+                        const normalized = normalizeCustomImageDescriptionValue(value);
+                        if (normalized.image_url) {
+                          const imageUrl = String(normalized.image_url || '');
+                          const description = String(normalized.description || '');
+                          const absolute = imageUrl.startsWith('http') ? imageUrl : `${API_URL}${imageUrl}`;
+                          return (
+                            <div key={key}>
+                              <span className="text-xs font-medium text-gray-500 uppercase">{label}</span>
+                              <div className="mt-1">
+                                <img src={absolute} alt={label} className="max-w-full h-36 object-contain rounded" />
+                                {description ? (
+                                  <p className="text-sm text-gray-800 mt-2">{description}</p>
+                                ) : null}
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        // If value is a string that looks like an uploads path or an image URL, render image (fallback)
+                        const displayValue = formatCustomFieldValue(value);
+                        if (displayValue && (displayValue.includes('/uploads/specimens/') || displayValue.match(/\.(jpg|jpeg|png|gif|webp)$/i))) {
+                          const absolute = displayValue.startsWith('http') ? displayValue : `${API_URL}${displayValue}`;
+                          return (
+                            <div key={key}>
+                              <span className="text-xs font-medium text-gray-500 uppercase">{label}</span>
+                              <div className="mt-1">
+                                <img src={absolute} alt={label} className="max-w-full h-36 object-contain rounded" />
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        // Fallback to regular InfoItem
+                        return (
+                          <InfoItem key={key} label={label} value={String(formatCustomFieldValue(value))} />
+                        );
+                      })}
                     </div>
                   </div>
                 )}

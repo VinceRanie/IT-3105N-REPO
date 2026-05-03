@@ -1010,7 +1010,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
                   <div className="flex items-center gap-4">
                     <input
                       type="file"
-                      accept=".fasta,.fa,.fna,.ffn,.faa,.frn,.fas,.fsa,.seq,.txt,text/plain,application/octet-stream"
+                      accept=".fasta,.fa,.fna,.ffn,.faa,text/plain,application/octet-stream"
                       onChange={handleFastaChange}
                       className="rounded-lg cursor-pointer flex-1 border border-[#113F67] text-sm text-[#113F67] file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-[#113F67] file:text-white hover:file:bg-[#113F67]"
                     />
