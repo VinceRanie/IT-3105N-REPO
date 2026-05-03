@@ -49,7 +49,7 @@ export default function DeleteConfirmModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-[1px]">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
         {/* Header with Warning Icon */}
         <div className="flex items-center gap-3 mb-4">
