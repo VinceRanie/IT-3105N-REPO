@@ -891,7 +891,37 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
                           </h3>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {group.fields.map((field) => (
-                              <InfoItem key={field.id} label={field.label} value={field.value || "N/A"} />
+                              field.type === "image_description" ? (
+                                <div key={field.id} className="md:col-span-2 rounded-lg border border-gray-200 p-4">
+                                  <h4 className="text-sm font-semibold text-gray-700">{field.label}</h4>
+                                  <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                                    <div>
+                                      {normalizeCustomImageDescriptionValue(field.rawValue).image_url ? (
+                                        <div className="relative h-48 w-full overflow-hidden rounded-lg border border-gray-200">
+                                          <Image
+                                            src={`${API_URL}${normalizeCustomImageDescriptionValue(field.rawValue).image_url}`}
+                                            alt={field.label}
+                                            fill
+                                            className="object-cover"
+                                          />
+                                        </div>
+                                      ) : (
+                                        <div className="flex h-48 items-center justify-center rounded-lg border border-dashed border-gray-300 text-sm text-gray-400">
+                                          No image uploaded
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div>
+                                      <p className="text-xs font-medium uppercase text-gray-500">Description</p>
+                                      <p className="mt-1 text-sm text-gray-800 whitespace-pre-wrap">
+                                        {normalizeCustomImageDescriptionValue(field.rawValue).description || "N/A"}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : (
+                                <InfoItem key={field.id} label={field.label} value={field.value || "N/A"} />
+                              )
                             ))}
                           </div>
                         </div>

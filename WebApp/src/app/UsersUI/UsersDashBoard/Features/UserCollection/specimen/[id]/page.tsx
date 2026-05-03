@@ -667,13 +667,46 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
                   <div className="bg-white shadow rounded-xl p-6">
                     <h2 className="text-lg font-semibold mb-4">Additional Information</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {Object.entries(specimen.custom_fields).map(([key, value]: [string, any]) => (
-                        <InfoItem
-                          key={key}
-                          label={getCustomFieldLabel(key, value)}
-                          value={formatCustomFieldValue(value)}
-                        />
-                      ))}
+                      {Object.entries(specimen.custom_fields).map(([key, value]: [string, any]) => {
+                        const label = getCustomFieldLabel(key, value);
+
+                        // If value is image object with image_url/description
+                        if (value && typeof value === 'object' && !Array.isArray(value) && (value.image_url || value.imageUrl || value.image)) {
+                          const imageUrl = String(value.image_url || value.imageUrl || value.image || '');
+                          const description = String(value.description || value.Description || '');
+                          const absolute = imageUrl.startsWith('http') ? imageUrl : `${API_URL}${imageUrl}`;
+                          return (
+                            <div key={key}>
+                              <span className="text-xs font-medium text-gray-500 uppercase">{label}</span>
+                              <div className="mt-1">
+                                <img src={absolute} alt={label} className="max-w-full h-36 object-contain rounded" />
+                                {description ? (
+                                  <p className="text-sm text-gray-800 mt-2">{description}</p>
+                                ) : null}
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        // If value is a string that looks like an uploads path or an image URL, render image
+                        const displayValue = formatCustomFieldValue(value);
+                        if (displayValue && (displayValue.includes('/uploads/specimens/') || displayValue.match(/\.(jpg|jpeg|png|gif|webp)$/i))) {
+                          const absolute = displayValue.startsWith('http') ? displayValue : `${API_URL}${displayValue}`;
+                          return (
+                            <div key={key}>
+                              <span className="text-xs font-medium text-gray-500 uppercase">{label}</span>
+                              <div className="mt-1">
+                                <img src={absolute} alt={label} className="max-w-full h-36 object-contain rounded" />
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        // Fallback to regular InfoItem
+                        return (
+                          <InfoItem key={key} label={label} value={String(formatCustomFieldValue(value))} />
+                        );
+                      })}
                     </div>
                   </div>
                 )}
