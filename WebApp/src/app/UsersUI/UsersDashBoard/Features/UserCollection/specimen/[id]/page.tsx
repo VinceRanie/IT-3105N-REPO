@@ -443,7 +443,7 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
           
           // Try to show description from raw value if available
           if (value && typeof value === 'object' && !Array.isArray(value)) {
-            const description = value.description || value.Description;
+            const description = (value as any).description || (value as any).Description;
             if (description) {
               checkPageBreak(5);
               const descText = doc.splitTextToSize(`Description: ${description}`, contentWidth - 52);
