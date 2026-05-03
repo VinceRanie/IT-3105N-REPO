@@ -23,6 +23,20 @@ type NormalizedCustomField = {
   value: string;
 };
 
+const normalizeCustomImageDescriptionValue = (value: any) => {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return {
+      image_url: String(value.image_url || ""),
+      description: String(value.description || ""),
+    };
+  }
+
+  return {
+    image_url: "",
+    description: String(value || ""),
+  };
+};
+
 const CUSTOM_SECTION_LABELS: Record<string, string> = {
   basic: "Required Information",
   molecular: "Molecular & Genetic Data",
