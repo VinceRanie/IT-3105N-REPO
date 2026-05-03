@@ -155,8 +155,6 @@ const sendAuthMessageResponse = (res, message, statusCode = HttpStatus.OK) =>
     statusCode: statusCode,
   });
 
-const isAccountFullyRegistered = (user) => Number(user?.is_setup_complete) === 1;
-
 
 const sendFinalizeSetupEmail = async (email, resetToken) => {
   let emailResult;
@@ -287,14 +285,6 @@ const sendReactivationEmail = async (email, resetToken) => {
 };
 
 const issuePasswordResetForUser = async (user) => {
-  if (!isAccountFullyRegistered(user)) {
-    return {
-      ok: false,
-      statusCode: HttpStatus.CONFLICT,
-      message: "Account setup is not complete.",
-    };
-  }
-
   const passwordResetStatus = buildPasswordResetStatus(user);
   if (passwordResetStatus.isLocked) {
     return {
@@ -545,7 +535,12 @@ exports.forgotPassword = async (req, res) => {
 
     const user = await authModel.getUserByEmail(email);
 
-    if (!user || !isAccountFullyRegistered(user)) {
+    if (!user) {
+      return sendAuthMessageResponse(res, ACCOUNT_NOT_REGISTERED_MESSAGE);
+    }
+
+    // Only send reset email if account setup is complete
+    if (Number(user.is_setup_complete) !== 1) {
       return sendAuthMessageResponse(res, ACCOUNT_NOT_REGISTERED_MESSAGE);
     }
 
