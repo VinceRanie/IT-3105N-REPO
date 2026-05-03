@@ -82,7 +82,8 @@ export default function SearchableSelect({
                 key={option}
                 type="button"
                 className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-[#113F67] hover:text-white"
-                onClick={() => {
+                onMouseDown={(event) => {
+                  event.preventDefault();
                   onChange(option);
                   setQuery(option);
                   setOpen(false);
