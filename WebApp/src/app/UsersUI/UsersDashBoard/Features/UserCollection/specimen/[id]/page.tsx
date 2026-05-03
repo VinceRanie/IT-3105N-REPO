@@ -52,6 +52,44 @@ const formatCustomFieldValue = (value: any): string => {
   return String(value);
 };
 
+const normalizeCustomImageDescriptionValue = (value: any) => {
+  try {
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            return {
+              image_url: String(parsed.image_url || parsed.imageUrl || parsed.image || ""),
+              description: String(parsed.description || parsed.Description || ""),
+            };
+          }
+        } catch {
+          // fall through
+        }
+      }
+
+      if (trimmed.includes('/uploads/specimens/') || trimmed.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+        return { image_url: trimmed, description: "" };
+      }
+
+      return { image_url: "", description: trimmed };
+    }
+
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      return {
+        image_url: String(value.image_url || value.imageUrl || value.image || ""),
+        description: String(value.description || value.Description || ""),
+      };
+    }
+
+    return { image_url: "", description: String(value || "") };
+  } catch (e) {
+    return { image_url: "", description: String(value || "") };
+  }
+};
+
 export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
   const resolvedParams = use(params);
   const [specimen, setSpecimen] = useState<any>(null);
@@ -441,15 +479,14 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
             console.error(`Error adding image for field ${label}:`, error);
           }
           
-          // Try to show description from raw value if available
-          if (value && typeof value === 'object' && !Array.isArray(value)) {
-            const description = (value as any).description || (value as any).Description;
-            if (description) {
-              checkPageBreak(5);
-              const descText = doc.splitTextToSize(`Description: ${description}`, contentWidth - 52);
-              doc.text(descText, margin + 52, yPos);
-              yPos += lineHeight * Math.max(1, descText.length);
-            }
+          // Try to show description using normalized value (handles stringified JSON too)
+          const normalized = normalizeCustomImageDescriptionValue(value);
+          const description = normalized.description;
+          if (description) {
+            checkPageBreak(5);
+            const descText = doc.splitTextToSize(`Description: ${description}`, contentWidth - 52);
+            doc.text(descText, margin + 52, yPos);
+            yPos += lineHeight * Math.max(1, descText.length);
           }
         } else {
           // Regular text field or no image URL
@@ -670,10 +707,10 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
                       {Object.entries(specimen.custom_fields).map(([key, value]: [string, any]) => {
                         const label = getCustomFieldLabel(key, value);
 
-                        // If value is image object with image_url/description
-                        if (value && typeof value === 'object' && !Array.isArray(value) && (value.image_url || value.imageUrl || value.image)) {
-                          const imageUrl = String(value.image_url || value.imageUrl || value.image || '');
-                          const description = String(value.description || value.Description || '');
+                        const normalized = normalizeCustomImageDescriptionValue(value);
+                        if (normalized.image_url) {
+                          const imageUrl = String(normalized.image_url || '');
+                          const description = String(normalized.description || '');
                           const absolute = imageUrl.startsWith('http') ? imageUrl : `${API_URL}${imageUrl}`;
                           return (
                             <div key={key}>
@@ -688,7 +725,7 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
                           );
                         }
 
-                        // If value is a string that looks like an uploads path or an image URL, render image
+                        // If value is a string that looks like an uploads path or an image URL, render image (fallback)
                         const displayValue = formatCustomFieldValue(value);
                         if (displayValue && (displayValue.includes('/uploads/specimens/') || displayValue.match(/\.(jpg|jpeg|png|gif|webp)$/i))) {
                           const absolute = displayValue.startsWith('http') ? displayValue : `${API_URL}${displayValue}`;

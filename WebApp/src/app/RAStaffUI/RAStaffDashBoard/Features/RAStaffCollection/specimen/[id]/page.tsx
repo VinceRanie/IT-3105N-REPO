@@ -25,17 +25,45 @@ type NormalizedCustomField = {
 };
 
 const normalizeCustomImageDescriptionValue = (value: any) => {
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    return {
-      image_url: String(value.image_url || ""),
-      description: String(value.description || ""),
-    };
-  }
+  try {
+    if (typeof value === "string") {
+      const trimmed = value.trim();
 
-  return {
-    image_url: "",
-    description: String(value || ""),
-  };
+      // Try parsing JSON string values
+      if ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            return {
+              image_url: String(parsed.image_url || parsed.imageUrl || parsed.image || ""),
+              description: String(parsed.description || parsed.Description || ""),
+            };
+          }
+        } catch {
+          // fall through
+        }
+      }
+
+      // If string looks like an image URL/path, treat as image_url
+      if (trimmed.includes('/uploads/specimens/') || trimmed.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+        return { image_url: trimmed, description: "" };
+      }
+
+      // Otherwise treat the string as a description
+      return { image_url: "", description: trimmed };
+    }
+
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      return {
+        image_url: String(value.image_url || value.imageUrl || value.image || ""),
+        description: String(value.description || value.Description || ""),
+      };
+    }
+
+    return { image_url: "", description: String(value || "") };
+  } catch (e) {
+    return { image_url: "", description: String(value || "") };
+  }
 };
 
 const CUSTOM_SECTION_LABELS: Record<string, string> = {
@@ -629,27 +657,12 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
             doc.text(`${field.label}:`, margin, yPos);
             doc.setFont("helvetica", "normal");
             
-            // Handle image_description fields specially
+            // Handle image_description-like fields specially (support string/JSON/object)
             if (field.type === "image_description") {
-              let imageUrl = null;
-              let description = "";
-              
-              // Try to parse if field.value is a JSON string
-              try {
-                const parsed = typeof field.value === 'string' ? JSON.parse(field.value) : field.value;
-                if (typeof parsed === 'object') {
-                  imageUrl = parsed.image_url || parsed.imageUrl;
-                  description = parsed.description || "";
-                }
-              } catch {
-                // If not JSON, check if it's an image URL string
-                const isImageUrl = field.value && (field.value.includes('/uploads/specimens/') || field.value.match(/\.(jpg|jpeg|png|gif|webp)$/i));
-                if (isImageUrl) {
-                  imageUrl = field.value;
-                }
-              }
-              
-              // Render image if URL exists
+              const normalized = normalizeCustomImageDescriptionValue(field.rawValue ?? field.value);
+              const imageUrl = normalized.image_url;
+              const description = normalized.description;
+
               if (imageUrl) {
                 try {
                   const absoluteImageUrl = imageUrl.startsWith('http') ? imageUrl : `${API_URL}${imageUrl}`;
@@ -664,15 +677,13 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
                   console.error(`Error adding image for field ${field.label}:`, error);
                 }
               }
-              
-              // Render description if it exists
+
               if (description) {
                 checkPageBreak(5);
                 const descText = doc.splitTextToSize(`Description: ${description}`, contentWidth - 55);
                 doc.text(descText, margin + 55, yPos);
                 yPos += lineHeight * Math.max(1, descText.length);
               } else if (!imageUrl) {
-                // Only show N/A if there's no image and no description
                 doc.text("N/A", margin + 55, yPos);
                 yPos += lineHeight;
               }
