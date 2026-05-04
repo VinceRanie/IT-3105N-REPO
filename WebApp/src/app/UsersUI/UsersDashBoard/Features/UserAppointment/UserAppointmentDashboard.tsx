@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { format, addDays, parse } from 'date-fns';
 import { API_URL } from '@/config/api';
 import { getUserData } from '@/app/utils/authUtil';
+import Modal from '@/app/components/Modal';
 
 interface Appointment {
   appointment_id: number;
@@ -39,6 +40,7 @@ export default function UserAppointmentDashboard() {
   const [userId, setUserId] = useState<number | null>(null);
   const [isMounted, setIsMounted] = useState(false);
   const [userEmail, setUserEmail] = useState<string>('');
+  const [modalConfig, setModalConfig] = useState<{ type: "success" | "error" | "info"; title: string; message: string } | null>(null);
 
   // Define availability rules
   const blockedWeekdays = [0]; // 0 = Sunday
@@ -154,22 +156,22 @@ export default function UserAppointmentDashboard() {
 
   const handleBook = async () => {
     if (!userId) {
-      alert('User not authenticated');
+      setModalConfig({ type: 'error', title: 'Authentication Error', message: 'User not authenticated' });
       return;
     }
 
     if (!form.date || !form.time) {
-      alert('Please select a date and time.');
+      setModalConfig({ type: 'error', title: 'Missing Information', message: 'Please select a date and time.' });
       return;
     }
 
     if (isDateBlocked(form.date)) {
-      alert('Selected date is unavailable. Please pick another day.');
+      setModalConfig({ type: 'error', title: 'Date Unavailable', message: 'Selected date is unavailable. Please pick another day.' });
       return;
     }
 
     if (hasTimeConflict(form.date, form.time)) {
-      alert('That time slot is already taken. Please choose another time.');
+      setModalConfig({ type: 'error', title: 'Time Conflict', message: 'That time slot is already taken. Please choose another time.' });
       return;
     }
 
@@ -194,7 +196,7 @@ export default function UserAppointmentDashboard() {
         setTimeConflict(false);
         fetchAppointments();
       } else {
-        alert('Failed to create appointment');
+        setModalConfig({ type: 'error', title: 'Booking Failed', message: 'Failed to create appointment' });
       }
     } catch (e) {
       console.error(e);
@@ -346,6 +348,17 @@ export default function UserAppointmentDashboard() {
             </div>
           </div>
         </div>
+      )}
+      {/* Modal */}
+      {modalConfig && (
+        <Modal
+          isOpen={true}
+          type={modalConfig.type}
+          title={modalConfig.title}
+          message={modalConfig.message}
+          onClose={() => setModalConfig(null)}
+          autoCloseMs={modalConfig.type === 'success' ? 3000 : 0}
+        />
       )}
     </div>
   );

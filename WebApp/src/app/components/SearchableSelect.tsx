@@ -10,6 +10,7 @@ interface SearchableSelectProps {
   placeholder?: string;
   emptyMessage?: string;
   disabled?: boolean;
+  autoFocus?: boolean;
   onChange: (value: string) => void;
 }
 
@@ -20,11 +21,19 @@ export default function SearchableSelect({
   placeholder = "Search or select",
   emptyMessage = "No matches found.",
   disabled = false,
+  autoFocus = false,
   onChange,
 }: SearchableSelectProps) {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const [query, setQuery] = useState(value);
   const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (autoFocus && inputRef.current && !disabled) {
+      inputRef.current.focus();
+    }
+  }, [autoFocus, disabled]);
 
   useEffect(() => {
     setQuery(value);
@@ -59,11 +68,13 @@ export default function SearchableSelect({
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
         <input
+          ref={inputRef}
           type="text"
           value={query}
           placeholder={placeholder}
           disabled={disabled}
           onFocus={() => setOpen(true)}
+          onMouseDown={() => setOpen(true)}
           onBlur={handleBlur}
           onChange={(event) => {
             setQuery(event.target.value);
@@ -82,7 +93,8 @@ export default function SearchableSelect({
                 key={option}
                 type="button"
                 className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-[#113F67] hover:text-white"
-                onClick={() => {
+                onMouseDown={(event) => {
+                  event.preventDefault();
                   onChange(option);
                   setQuery(option);
                   setOpen(false);

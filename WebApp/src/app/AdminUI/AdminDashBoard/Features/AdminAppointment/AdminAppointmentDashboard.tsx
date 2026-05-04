@@ -1042,7 +1042,11 @@ export default function AdminAppointmentDashboard() {
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-3 sm:p-4">
+        <div
+          className={`fixed inset-0 flex items-center justify-center z-50 p-3 sm:p-4 ${
+            modalType === 'scan' ? 'bg-black/70 backdrop-blur-[1px]' : 'bg-black bg-opacity-50'
+          }`}
+        >
           <div className="bg-white rounded-lg p-4 sm:p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
             <h2 className="text-lg sm:text-xl font-bold mb-4">
               {modalType === 'scan' && 'Scan QR Code'}
@@ -1095,7 +1099,7 @@ export default function AdminAppointmentDashboard() {
                       />
 
                       <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                        <div className="relative w-[72%] h-[58%] border-2 border-white/70 rounded-2xl shadow-[0_0_0_200vmax_rgba(0,0,0,0.2)]">
+                        <div className="relative w-[72%] h-[58%] border-2 border-white/70 rounded-2xl shadow-[0_0_0_200vmax_rgba(0,0,0,0.45)]">
                           <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-cyan-300 rounded-tl-xl" />
                           <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-cyan-300 rounded-tr-xl" />
                           <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-cyan-300 rounded-bl-xl" />

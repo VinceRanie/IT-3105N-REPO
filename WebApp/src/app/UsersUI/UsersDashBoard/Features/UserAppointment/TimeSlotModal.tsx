@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import styles from './TimeSlotModal.module.css';
+import Modal from '@/app/components/Modal';
 
 interface TimeSlot {
   time: string;
@@ -38,6 +39,7 @@ export default function TimeSlotModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [userInfo, setUserInfo] = useState<any>(null);
+  const [modalConfig, setModalConfig] = useState<{ type: "success" | "error" | "info"; title: string; message: string; appointmentId?: string } | null>(null);
 
   const parseMinutes = (time: string) => {
     const [hours, minutes] = time.split(':').map(Number);
@@ -239,8 +241,14 @@ export default function TimeSlotModal({
       const data = await response.json();
 
       if (response.ok) {
-        alert('✅ Appointment booked successfully! Your appointment ID: ' + data.appointment_id);
-        onSuccess();
+        setModalConfig({
+          type: 'success',
+          title: 'Appointment Confirmed',
+          message: `✅ Appointment booked successfully! Your appointment ID: ${data.appointment_id}`,
+          appointmentId: data.appointment_id
+        });
+        // Call onSuccess after showing modal
+        setTimeout(() => onSuccess(), 3500);
       } else {
         setError(data.message || 'Failed to book appointment');
       }
@@ -427,6 +435,18 @@ export default function TimeSlotModal({
           </>
         )}
       </div>
+
+      {/* Modal */}
+      {modalConfig && (
+        <Modal
+          isOpen={true}
+          type={modalConfig.type}
+          title={modalConfig.title}
+          message={modalConfig.message}
+          onClose={() => setModalConfig(null)}
+          autoCloseMs={3000}
+        />
+      )}
     </div>
   );
 }

@@ -8,6 +8,7 @@ import ProjectModal from "./ProjectModal";
 import SpecimenModal from "./SpecimenModal";
 import { useRouter } from "next/navigation";
 import { getUserData } from "@/app/utils/authUtil";
+import Modal from "@/app/components/Modal";
 
 interface Project {
   _id: string;
@@ -36,7 +37,7 @@ interface Specimen {
   fasta_file?: string;
   fasta_sequence?: string;
   blast_rid?: string;
-  blast_results?: any;
+  blast_results?: Record<string, unknown>;
   biochemical_tests?: {
     onpg?: string;
     glu?: string;
@@ -86,6 +87,7 @@ export default function AdminCollectionPage() {
   const [isSpecimenModalOpen, setIsSpecimenModalOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [selectedSpecimen, setSelectedSpecimen] = useState<Specimen | null>(null);
+  const [modalConfig, setModalConfig] = useState<{ type: "success" | "error" | "info"; title: string; message: string } | null>(null);
   
   const router = useRouter();
   const getCurrentUserId = () => {
@@ -131,7 +133,7 @@ export default function AdminCollectionPage() {
   }, []);
 
   // Project handlers
-  const handleSaveProject = async (projectData: any) => {
+  const handleSaveProject = async (projectData: Record<string, unknown>) => {
     try {
       const method = selectedProject ? "PUT" : "POST";
       const url = selectedProject
@@ -148,14 +150,14 @@ export default function AdminCollectionPage() {
         await fetchProjects();
         setIsProjectModalOpen(false);
         setSelectedProject(null);
-        alert(selectedProject ? "Project updated successfully!" : "Project created successfully!");
+        setModalConfig({ type: 'success', title: 'Project Saved', message: selectedProject ? 'Project updated successfully!' : 'Project created successfully!' });
       } else {
         const error = await response.json();
-        alert(`Error: ${error.message || "Failed to save project"}`);
+        setModalConfig({ type: 'error', title: 'Error', message: `Error: ${error.message || 'Failed to save project'}` });
       }
     } catch (error) {
       console.error("Error saving project:", error);
-      alert("Error saving project");
+      setModalConfig({ type: 'error', title: 'Error', message: 'Error saving project' });
     }
   };
 
@@ -182,60 +184,35 @@ export default function AdminCollectionPage() {
         await fetchSpecimens();
         setIsSpecimenModalOpen(false);
         setSelectedSpecimen(null);
-        alert(selectedSpecimen ? "Specimen updated successfully! QR code has been generated." : "Specimen added successfully! QR code has been generated.");
+        setModalConfig({ type: 'success', title: 'Specimen Saved', message: selectedSpecimen ? 'Specimen updated successfully! QR code has been generated.' : 'Specimen added successfully! QR code has been generated.' });
       } else {
         const error = await response.json();
-        alert(`Error: ${error.error || "Failed to save specimen"}`);
+        setModalConfig({ type: 'error', title: 'Error', message: `Error: ${error.error || 'Failed to save specimen'}` });
       }
     } catch (error) {
       console.error("Error saving specimen:", error);
-      alert("Error saving specimen");
+      setModalConfig({ type: 'error', title: 'Error', message: 'Error saving specimen' });
     }
   };
 
-  const handleDeleteSpecimen = async (id: string) => {
-    try {
-      const response = await fetch(`${API_URL}/microbials/${id}`, {
-        method: "DELETE",
-      });
-
-      if (response.ok) {
-        await fetchSpecimens();
-        alert("Specimen deleted successfully!");
-      } else {
-        alert("Failed to delete specimen");
-      }
-    } catch (error) {
-      console.error("Error deleting specimen:", error);
-      alert("Error deleting specimen");
-    }
-  };
-
-  const handleViewSpecimen = (specimen: any) => {
+  const handleViewSpecimen = (specimen: Specimen) => {
     console.log("View specimen:", specimen);
     if (!specimen._id) {
-      alert("Error: Specimen ID is missing");
+      setModalConfig({ type: 'error', title: 'Error', message: 'Error: Specimen ID is missing' });
       return;
     }
     // Route students to the user-specific specimen page
     router.push(`/UsersUI/UsersDashBoard/Features/UserCollection/specimen/${specimen._id}`);
   };
 
-  const handleEditSpecimen = (specimen: any) => {
-    console.log("Edit specimen:", specimen);
-    if (!specimen._id) {
-      alert("Error: Specimen ID is missing");
-      return;
-    }
-    setSelectedSpecimen(specimen);
-    setIsSpecimenModalOpen(true);
-  };
-
   // Filter specimens based on search query
-  const filteredSpecimens = specimens.filter((specimen: any) => {
+  const filteredSpecimens = specimens.filter((specimen: Specimen) => {
     if (!searchQuery) return true;
     
     const query = searchQuery.toLowerCase();
+    const projectTitle = typeof specimen.project_id === 'object' && specimen.project_id?.title 
+      ? specimen.project_id.title.toLowerCase() 
+      : '';
     return (
       specimen.code_name?.toLowerCase().includes(query) ||
       specimen.accession_number?.toLowerCase().includes(query) ||
@@ -243,7 +220,7 @@ export default function AdminCollectionPage() {
       specimen.classification?.toLowerCase().includes(query) ||
       specimen.source?.toLowerCase().includes(query) ||
       specimen.locale?.toLowerCase().includes(query) ||
-      specimen.project_id?.title?.toLowerCase().includes(query)
+      projectTitle.includes(query)
     );
   });
 
@@ -267,7 +244,7 @@ export default function AdminCollectionPage() {
       
       <AdminCollection
         specimens={filteredSpecimens}
-        onView={handleViewSpecimen}
+        onView={(spec) => handleViewSpecimen(spec as Specimen)}
       />
 
       <ProjectModal
@@ -290,6 +267,18 @@ export default function AdminCollectionPage() {
         specimen={selectedSpecimen}
         projects={projects}
       />
+
+      {/* Modal */}
+      {modalConfig && (
+        <Modal
+          isOpen={true}
+          type={modalConfig.type}
+          title={modalConfig.title}
+          message={modalConfig.message}
+          onClose={() => setModalConfig(null)}
+          autoCloseMs={modalConfig.type === 'success' ? 3000 : 0}
+        />
+      )}
     </>
   );
 }
