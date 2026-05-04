@@ -412,6 +412,7 @@ export default function ProfilePage() {
               options={availableCourses}
               placeholder={selectedDepartment ? "Search program" : "Select department first"}
               disabled={!selectedDepartment}
+              autoFocus={!!selectedDepartment}
               onChange={setSelectedCourse}
             />
           </div>
