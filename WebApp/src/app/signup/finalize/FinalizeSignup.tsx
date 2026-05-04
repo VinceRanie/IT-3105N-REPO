@@ -212,6 +212,7 @@ export default function FinalizeSignup({
                 options={availablePrograms}
                 placeholder={formData.department ? "Search program" : "Select department first"}
                 disabled={!formData.department}
+                autoFocus={!!formData.department}
                 onChange={(value) => handleChange("course", value)}
               />
             </div>
