@@ -10,3 +10,4 @@ test-email.js
 .env.production
 .env.local
 .env*.local
+WebApp/.env.production
