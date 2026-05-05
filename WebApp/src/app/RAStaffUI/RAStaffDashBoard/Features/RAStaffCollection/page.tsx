@@ -80,6 +80,7 @@ export default function RAStaffCollectionPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "unpublished" | "published">("all");
+  const [pendingEditSpecimenId, setPendingEditSpecimenId] = useState<string | null>(null);
   
   // Modal states
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
@@ -155,6 +156,38 @@ export default function RAStaffCollectionPage() {
     fetchProjects();
     fetchSpecimens();
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const params = new URLSearchParams(window.location.search);
+    const editId = params.get("edit");
+    if (editId) {
+      setPendingEditSpecimenId(editId);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!pendingEditSpecimenId || loading) return;
+
+    const specimenToEdit = specimens.find((specimen) => specimen._id === pendingEditSpecimenId);
+    if (!specimenToEdit) {
+      alert("Error: Specimen not found");
+      setPendingEditSpecimenId(null);
+      const url = new URL(window.location.href);
+      url.searchParams.delete("edit");
+      window.history.replaceState({}, "", url.pathname + url.search);
+      return;
+    }
+
+    setSelectedSpecimen(specimenToEdit);
+    setIsSpecimenModalOpen(true);
+    setPendingEditSpecimenId(null);
+
+    const url = new URL(window.location.href);
+    url.searchParams.delete("edit");
+    window.history.replaceState({}, "", url.pathname + url.search);
+  }, [pendingEditSpecimenId, loading, specimens]);
 
   // Project handlers
   const handleSaveProject = async (projectData: any) => {
