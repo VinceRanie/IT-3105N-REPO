@@ -1154,7 +1154,7 @@ export default function AdminAppointmentDashboard() {
             ) : modalType === 'notice' ? (
               <div className="space-y-4">
                 <div className="rounded-lg border border-[#113F67]/20 bg-[#113F67]/5 p-4 text-sm text-[#113F67]">
-                  Date marked unavailable. Notification payload queued for future system integration.
+                  Date marked unavailable.
                 </div>
                 <button
                   onClick={closeModal}

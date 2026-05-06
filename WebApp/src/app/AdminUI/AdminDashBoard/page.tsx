@@ -699,7 +699,7 @@ export default function AdminHome() {
         throw new Error(data.message || data.error || "Failed to mark date unavailable");
       }
 
-      alert("Date marked unavailable. Notification payload queued for future system integration.");
+      alert("Date marked unavailable.");
       setUnavailableDate("");
       setUnavailableReason("");
       fetchUnavailableDates();
