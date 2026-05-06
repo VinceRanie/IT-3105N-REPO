@@ -25,6 +25,60 @@ const autoExpireOngoingAppointments = async () => {
   }
 };
 
+const autoDenyPastPendingAppointments = async () => {
+  try {
+    const deniedAppointments = await Appointment.autoDenyPastPendingAppointments();
+    if (!deniedAppointments || deniedAppointments.length === 0) return 0;
+
+    console.log(`📋 Auto-denied ${deniedAppointments.length} past pending appointment(s)`);
+
+    // Notify each affected user if we have an email
+    for (const appt of deniedAppointments) {
+      try {
+        const appointmentDate = new Date(appt.date);
+        const formattedDate = appointmentDate.toLocaleString('en-US', {
+          year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila'
+        });
+
+        const identityLabel = appt.student_id
+          ? `<p><strong>Student ID:</strong> ${appt.student_id}</p>`
+          : appt.requester_name
+          ? `<p><strong>Visitor Name:</strong> ${appt.requester_name}</p>`
+          : '';
+
+        const recipientEmail = appt.user_email || appt.requester_email;
+        if (!recipientEmail) continue;
+
+        await sendEmail({
+          to: recipientEmail,
+          subject: 'Appointment Request Denied - Biocella',
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #f44336;">Your appointment request has been denied</h2>
+              <p><strong>Requested Date:</strong> ${formattedDate}</p>
+              <p><strong>Department:</strong> ${getAppointmentDepartment(appt)}</p>
+              <p><strong>Purpose:</strong> ${appt.purpose}</p>
+              ${identityLabel}
+              <hr>
+              <p><strong>Reason:</strong> ${appt.denial_reason}</p>
+              <p>Please contact us if you have any questions or would like to reschedule.</p>
+            </div>
+          `
+        }).catch(emailErr => {
+          console.error('📧 Auto-deny email failed for', recipientEmail, emailErr.message || emailErr);
+        });
+      } catch (err) {
+        console.error('⚠️ Error notifying about auto-deny for appointment:', appt.appointment_id, err.message || err);
+      }
+    }
+
+    return deniedAppointments.length;
+  } catch (error) {
+    console.error('⚠️ Failed to auto-deny past pending appointments:', error.message);
+    return 0;
+  }
+};
+
 const hasAppointmentElapsed = (appointment) => {
   const endCandidate = appointment.end_time
     ? new Date(appointment.end_time)
@@ -48,6 +102,10 @@ const getClientIp = (req) => {
 
 const isValidEmail = (value = '') => {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value).trim());
+};
+
+const getAppointmentDepartment = (appointment) => {
+  return appointment.department || appointment.user_department || 'N/A';
 };
 
 // CREATE
@@ -160,6 +218,7 @@ exports.getAll = async (req, res) => {
   try {
     console.log('📋 Fetching all appointments');
     await autoExpireOngoingAppointments();
+    await autoDenyPastPendingAppointments();
     const isSelfScoped = String(req.query?.scope || '').toLowerCase() === 'self';
     const userId = isSelfScoped && req.query?.user_id ? Number(req.query.user_id) : null;
     const studentId = isSelfScoped && req.query?.student_id ? String(req.query.student_id).trim() : null;
@@ -185,6 +244,7 @@ exports.getByStatus = async (req, res) => {
   try {
     const { status } = req.params;
     await autoExpireOngoingAppointments();
+    await autoDenyPastPendingAppointments();
     
     // Validate status parameter to prevent SQL injection and invalid queries
     const validStatuses = ['pending', 'approved', 'denied', 'ongoing', 'visited', 'no_show'];
@@ -283,14 +343,14 @@ exports.approve = async (req, res) => {
       // Remove data URL prefix to get just the base64 data
       const base64Data = qrCodeDataUrl.replace(/^data:image\/png;base64,/, '');
       
-      sendEmail({
+      await sendEmail({
         to: recipientEmail,
         subject: 'Appointment Approved - Biocella',
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #4CAF50;">Your appointment has been approved!</h2>
             <p><strong>Date:</strong> ${formattedDate}</p>
-            <p><strong>Department:</strong> ${appointment.department}</p>
+            <p><strong>Department:</strong> ${getAppointmentDepartment(appointment)}</p>
             <p><strong>Purpose:</strong> ${appointment.purpose}</p>
             ${identityLabel}
             ${req.body.remarks ? `<p><strong>Admin Remarks:</strong> ${req.body.remarks}</p>` : ''}
@@ -353,14 +413,14 @@ exports.deny = async (req, res) => {
 
     // Send email to user if email exists (but don't crash if it fails)
     if (recipientEmail) {
-      sendEmail({
+      await sendEmail({
         to: recipientEmail,
         subject: 'Appointment Request Denied - Biocella',
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #f44336;">Your appointment request has been denied</h2>
             <p><strong>Requested Date:</strong> ${formattedDate}</p>
-            <p><strong>Department:</strong> ${appointment.department}</p>
+            <p><strong>Department:</strong> ${getAppointmentDepartment(appointment)}</p>
             <p><strong>Purpose:</strong> ${appointment.purpose}</p>
             ${identityLabel}
             <hr>
@@ -496,7 +556,7 @@ exports.getAvailability = async (req, res) => {
       '13:00', '14:00', '15:00', '16:00'
     ];
 
-    // If date is blocked, all slots are unavailable and include the reason
+    // If date is blocked, all slots are unavailable
     if (blockedDate) {
       const unavailableSlots = timeSlots.map(time => ({
         time,
@@ -507,7 +567,7 @@ exports.getAvailability = async (req, res) => {
       return res.json({
         date,
         unavailable: true,
-        unavailableReason: blockedDate.reason || null,
+        unavailableReason: null,
         totalSlots: timeSlots.length,
         bookedCount: timeSlots.length,
         availableCount: 0,
@@ -658,21 +718,113 @@ exports.markDateUnavailable = async (req, res) => {
     }
 
     const creatorId = Number(created_by_user_id);
+    const trimmedReason = String(reason).trim();
 
+    // Get all appointments on this date (pending, approved, ongoing)
+    const appointmentsOnDate = await Appointment.getAppointmentsByDateAllStatuses(date);
+
+    // Track affected appointments for response
+    const deniedAppointments = [];
+    const cancelledAppointments = [];
+    const emailErrors = [];
+
+    // Process each appointment
+    for (const appointment of appointmentsOnDate) {
+      const appointmentDate = new Date(appointment.date);
+      const formattedDate = appointmentDate.toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'Asia/Manila'
+      });
+
+      const recipientEmail = appointment.user_email || appointment.requester_email;
+      const identityLabel = appointment.student_id
+        ? `<p><strong>Student ID:</strong> ${appointment.student_id}</p>`
+        : appointment.requester_name
+        ? `<p><strong>Visitor Name:</strong> ${appointment.requester_name}</p>`
+        : '';
+
+      if (appointment.status === 'pending') {
+        // Auto-deny pending appointments
+        await Appointment.updateAppointmentStatus(appointment.appointment_id, 'denied', trimmedReason);
+        deniedAppointments.push(appointment.appointment_id);
+
+        // Send denial email
+        if (recipientEmail) {
+          await sendEmail({
+            to: recipientEmail,
+            subject: 'Appointment Request Denied - Date Unavailable - Biocella',
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #f44336;">Your appointment request has been denied</h2>
+                <p><strong>Requested Date:</strong> ${formattedDate}</p>
+                <p><strong>Department:</strong> ${getAppointmentDepartment(appointment)}</p>
+                <p><strong>Purpose:</strong> ${appointment.purpose}</p>
+                ${identityLabel}
+                <hr>
+                <p><strong>Reason:</strong> The requested date has been marked as unavailable. ${trimmedReason}</p>
+                <p>Please contact us if you would like to reschedule for another date.</p>
+              </div>
+            `
+          }).catch((emailErr) => {
+            console.error('📧 Email send failed for pending appointment:', emailErr.message);
+            emailErrors.push({ appointmentId: appointment.appointment_id, error: emailErr.message });
+          });
+        }
+      } else if (appointment.status === 'approved' || appointment.status === 'ongoing') {
+        // Cancel approved/ongoing appointments
+        await Appointment.updateAppointmentStatus(appointment.appointment_id, 'cancelled', trimmedReason);
+        cancelledAppointments.push(appointment.appointment_id);
+
+        // Send cancellation email
+        if (recipientEmail) {
+          await sendEmail({
+            to: recipientEmail,
+            subject: 'Appointment Cancelled - Date Unavailable - Biocella',
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #f44336;">Your appointment has been cancelled</h2>
+                <p><strong>Appointment Date:</strong> ${formattedDate}</p>
+                <p><strong>Department:</strong> ${getAppointmentDepartment(appointment)}</p>
+                <p><strong>Purpose:</strong> ${appointment.purpose}</p>
+                ${identityLabel}
+                <hr>
+                <p><strong>Reason for Cancellation:</strong> The scheduled date has been marked as unavailable. ${trimmedReason}</p>
+                <p>We apologize for the inconvenience. Please contact us if you would like to reschedule your appointment for another available date.</p>
+              </div>
+            `
+          }).catch((emailErr) => {
+            console.error('📧 Email send failed for appointment:', emailErr.message);
+            emailErrors.push({ appointmentId: appointment.appointment_id, error: emailErr.message });
+          });
+        }
+      }
+    }
+
+    // Mark date as unavailable
     await Appointment.upsertUnavailableDate({
       date,
-      reason: String(reason).trim(),
+      reason: trimmedReason,
       created_by_role: created_by_role || null,
       created_by_user_id: Number.isFinite(creatorId) ? creatorId : null
     });
 
-    // Notification payload is intentionally returned for future integration.
     res.status(201).json({
       message: "Date marked as unavailable",
       unavailable: true,
       date,
-      reason: String(reason).trim(),
-      notificationPending: true
+      reason: trimmedReason,
+      affectedAppointments: {
+        denied: deniedAppointments.length,
+        cancelled: cancelledAppointments.length,
+        deniedIds: deniedAppointments,
+        cancelledIds: cancelledAppointments
+      },
+      emailErrors: emailErrors.length > 0 ? emailErrors : null,
+      notificationComplete: true
     });
   } catch (err) {
     console.error('❌ Error marking date unavailable:', err);

@@ -8,6 +8,7 @@ const app = express();
 const connectMongo = require('./config/mongo');
 const mainRoutes = require('./routes/routes');
 const { testRefreshToken } = require('./config/email.js'); // ✅ import the helper
+const Appointment = require('./models/appointmentModel');
 
 // Global error handlers - prevent process crashes
 process.on('unhandledRejection', (reason, promise) => {
@@ -60,6 +61,19 @@ const startServer = async () => {
     } catch (error) {
       console.warn('⚠️ Gmail refresh token check failed at startup:', error.message);
       console.warn('   Email sending may still work when retried.');
+    }
+
+    // Auto-deny past pending appointments on startup (and notify users)
+    try {
+      const deniedCount = await (async () => {
+        const result = await Appointment.autoDenyPastPendingAppointments();
+        return Array.isArray(result) ? result.length : Number(result) || 0;
+      })();
+      if (deniedCount > 0) {
+        console.log(`📋 Auto-denied ${deniedCount} past pending appointment(s) on startup`);
+      }
+    } catch (error) {
+      console.warn('⚠️ Auto-deny past pending appointments failed on startup:', error.message);
     }
 
     app.listen(PORT, () => {

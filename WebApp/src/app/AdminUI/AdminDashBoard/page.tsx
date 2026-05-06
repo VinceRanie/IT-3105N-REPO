@@ -699,7 +699,21 @@ export default function AdminHome() {
         throw new Error(data.message || data.error || "Failed to mark date unavailable");
       }
 
-      alert("Date marked unavailable. Notification payload queued for future system integration.");
+      try {
+        let msg = 'Date marked unavailable.';
+        if (data?.affectedAppointments) {
+          msg += `\n\nAffected appointments:\nDenied: ${data.affectedAppointments.denied}`;
+          if (data.affectedAppointments.deniedIds?.length) msg += ` (IDs: ${data.affectedAppointments.deniedIds.join(', ')})`;
+          msg += `\nCancelled: ${data.affectedAppointments.cancelled}`;
+          if (data.affectedAppointments.cancelledIds?.length) msg += ` (IDs: ${data.affectedAppointments.cancelledIds.join(', ')})`;
+        }
+        if (data?.emailErrors && data.emailErrors.length) {
+          msg += '\n\nEmail errors:' + data.emailErrors.map((e: any) => `\nID ${e.appointmentId}: ${e.error}`).join('');
+        }
+        alert(msg);
+      } catch (e) {
+        alert('Date marked unavailable.');
+      }
       setUnavailableDate("");
       setUnavailableReason("");
       fetchUnavailableDates();
