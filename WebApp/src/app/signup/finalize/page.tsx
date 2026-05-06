@@ -40,7 +40,7 @@ function FinalizeContent() {
 
           if (!res.ok) {
             setStatus("error");
-            setErrorMsg(data.message || "Invalid token.");
+            setErrorMsg(data.message || "This registration link has expired or is invalid.");
             return;
           }
 
@@ -48,7 +48,7 @@ function FinalizeContent() {
           window.location.href = `/API/auth/google?token=${token}`;
         } catch {
           setStatus("error");
-          setErrorMsg("Failed to verify token. Please try again.");
+          setErrorMsg("Failed to verify your registration link. Please request a new one.");
         }
       })();
       return;
@@ -75,14 +75,22 @@ function FinalizeContent() {
       <div className="min-h-screen flex items-center justify-center bg-white">
         <div className="max-w-md bg-white rounded-lg shadow-lg p-8 text-center">
           <div className="text-red-500 text-5xl mb-4">✕</div>
-          <h2 className="text-xl font-bold text-[#113F67] mb-2">Something went wrong</h2>
+          <h2 className="text-xl font-bold text-[#113F67] mb-2">Link Expired or Invalid</h2>
           <p className="text-gray-600 mb-6">{errorMsg}</p>
-          <a
-            href="/signup"
-            className="inline-block bg-[#113F67] hover:bg-[#0a2a4a] text-white font-medium py-2 px-6 rounded transition-colors"
-          >
-            Back to Signup
-          </a>
+          <div className="flex gap-3 justify-center flex-wrap">
+            <a
+              href="/signup"
+              className="inline-block bg-[#113F67] hover:bg-[#0a2a4a] text-white font-medium py-2 px-6 rounded transition-colors"
+            >
+              Back to Signup
+            </a>
+            {/* <a
+              href="/Login"
+              className="inline-block border border-[#113F67] text-[#113F67] hover:bg-[#113F67]/10 font-medium py-2 px-6 rounded transition-colors"
+            >
+              Back to Login
+            </a> */}
+          </div>
         </div>
       </div>
     );
