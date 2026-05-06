@@ -232,7 +232,7 @@ exports.updateAppointmentStatus = async (id, status, remarks = null) => {
     params.push(remarks);
   }
   
-  if (status === 'denied') {
+  if (status === 'denied' || status === 'cancelled') {
     query += ", denial_reason=?";
     params.push(remarks);
   }
@@ -288,10 +288,22 @@ exports.getAppointmentsByDateRange = async (startDate, endDate, userId = null) =
   return rows;
 };
 
-// GET APPOINTMENTS FOR SPECIFIC DATE
+// GET APPOINTMENTS FOR SPECIFIC DATE (approved/ongoing only)
 exports.getAppointmentsByDate = async (date) => {
   const [rows] = await db.execute(
     "SELECT * FROM appointment WHERE DATE(date) = DATE(?) AND deleted_at IS NULL AND status IN ('approved', 'ongoing')",
+    [date]
+  );
+  return rows;
+};
+
+// GET ALL APPOINTMENTS FOR SPECIFIC DATE (any status)
+exports.getAppointmentsByDateAllStatuses = async (date) => {
+  const [rows] = await db.execute(
+    `SELECT * FROM appointment 
+     WHERE DATE(date) = DATE(?) 
+     AND deleted_at IS NULL 
+     AND status IN ('pending', 'approved', 'ongoing')`,
     [date]
   );
   return rows;

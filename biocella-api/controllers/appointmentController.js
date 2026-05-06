@@ -658,21 +658,113 @@ exports.markDateUnavailable = async (req, res) => {
     }
 
     const creatorId = Number(created_by_user_id);
+    const trimmedReason = String(reason).trim();
 
+    // Get all appointments on this date (pending, approved, ongoing)
+    const appointmentsOnDate = await Appointment.getAppointmentsByDateAllStatuses(date);
+
+    // Track affected appointments for response
+    const deniedAppointments = [];
+    const cancelledAppointments = [];
+    const emailErrors = [];
+
+    // Process each appointment
+    for (const appointment of appointmentsOnDate) {
+      const appointmentDate = new Date(appointment.date);
+      const formattedDate = appointmentDate.toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'Asia/Manila'
+      });
+
+      const recipientEmail = appointment.user_email || appointment.requester_email;
+      const identityLabel = appointment.student_id
+        ? `<p><strong>Student ID:</strong> ${appointment.student_id}</p>`
+        : appointment.requester_name
+        ? `<p><strong>Visitor Name:</strong> ${appointment.requester_name}</p>`
+        : '';
+
+      if (appointment.status === 'pending') {
+        // Auto-deny pending appointments
+        await Appointment.updateAppointmentStatus(appointment.appointment_id, 'denied', trimmedReason);
+        deniedAppointments.push(appointment.appointment_id);
+
+        // Send denial email
+        if (recipientEmail) {
+          sendEmail({
+            to: recipientEmail,
+            subject: 'Appointment Request Denied - Date Unavailable - Biocella',
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #f44336;">Your appointment request has been denied</h2>
+                <p><strong>Requested Date:</strong> ${formattedDate}</p>
+                <p><strong>Department:</strong> ${appointment.department}</p>
+                <p><strong>Purpose:</strong> ${appointment.purpose}</p>
+                ${identityLabel}
+                <hr>
+                <p><strong>Reason:</strong> The requested date has been marked as unavailable. ${trimmedReason}</p>
+                <p>Please contact us if you would like to reschedule for another date.</p>
+              </div>
+            `
+          }).catch((emailErr) => {
+            console.error('📧 Email send failed for pending appointment:', emailErr.message);
+            emailErrors.push({ appointmentId: appointment.appointment_id, error: emailErr.message });
+          });
+        }
+      } else if (appointment.status === 'approved' || appointment.status === 'ongoing') {
+        // Cancel approved/ongoing appointments
+        await Appointment.updateAppointmentStatus(appointment.appointment_id, 'cancelled', trimmedReason);
+        cancelledAppointments.push(appointment.appointment_id);
+
+        // Send cancellation email
+        if (recipientEmail) {
+          sendEmail({
+            to: recipientEmail,
+            subject: 'Appointment Cancelled - Date Unavailable - Biocella',
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #f44336;">Your appointment has been cancelled</h2>
+                <p><strong>Appointment Date:</strong> ${formattedDate}</p>
+                <p><strong>Department:</strong> ${appointment.department}</p>
+                <p><strong>Purpose:</strong> ${appointment.purpose}</p>
+                ${identityLabel}
+                <hr>
+                <p><strong>Reason for Cancellation:</strong> The scheduled date has been marked as unavailable. ${trimmedReason}</p>
+                <p>We apologize for the inconvenience. Please contact us if you would like to reschedule your appointment for another available date.</p>
+              </div>
+            `
+          }).catch((emailErr) => {
+            console.error('📧 Email send failed for appointment:', emailErr.message);
+            emailErrors.push({ appointmentId: appointment.appointment_id, error: emailErr.message });
+          });
+        }
+      }
+    }
+
+    // Mark date as unavailable
     await Appointment.upsertUnavailableDate({
       date,
-      reason: String(reason).trim(),
+      reason: trimmedReason,
       created_by_role: created_by_role || null,
       created_by_user_id: Number.isFinite(creatorId) ? creatorId : null
     });
 
-    // Notification payload is intentionally returned for future integration.
     res.status(201).json({
       message: "Date marked as unavailable",
       unavailable: true,
       date,
-      reason: String(reason).trim(),
-      notificationPending: true
+      reason: trimmedReason,
+      affectedAppointments: {
+        denied: deniedAppointments.length,
+        cancelled: cancelledAppointments.length,
+        deniedIds: deniedAppointments,
+        cancelledIds: cancelledAppointments
+      },
+      emailErrors: emailErrors.length > 0 ? emailErrors : null,
+      notificationComplete: true
     });
   } catch (err) {
     console.error('❌ Error marking date unavailable:', err);
