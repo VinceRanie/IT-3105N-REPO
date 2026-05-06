@@ -21,7 +21,8 @@ function ForgotResetContent() {
   const [password, setPassword] = useState("");
   const [retypePassword, setRetypePassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [verifying, setVerifying] = useState(true);
+  const [status, setStatus] = useState<"loading" | "verified" | "error">("loading");
+  const [errorMsg, setErrorMsg] = useState("");
   const [message, setMessage] = useState<{ text: string; type: "error" | "success" } | null>(null);
 
   const hasMinLength = password.length >= 8;
@@ -32,8 +33,8 @@ function ForgotResetContent() {
   useEffect(() => {
     const load = async () => {
       if (!token) {
-        setMessage({ text: "Missing reset token.", type: "error" });
-        setVerifying(false);
+        setStatus("error");
+        setErrorMsg("Missing reset token. Please use the link from your email.");
         return;
       }
 
@@ -41,14 +42,15 @@ function ForgotResetContent() {
         const res = await fetch(`/API/auth/reset-password/details?token=${encodeURIComponent(token)}`);
         const data = await res.json();
         if (!res.ok) {
-          setMessage({ text: data.message || "Invalid reset token.", type: "error" });
+          setStatus("error");
+          setErrorMsg(data.message || "Invalid or expired reset link.");
         } else {
           setDetails(data);
+          setStatus("verified");
         }
       } catch {
-        setMessage({ text: "Failed to verify reset link.", type: "error" });
-      } finally {
-        setVerifying(false);
+        setStatus("error");
+        setErrorMsg("Failed to verify reset link. Please try again.");
       }
     };
 
@@ -119,16 +121,43 @@ function ForgotResetContent() {
 
       <div className="flex items-center justify-center p-6">
         <div className="w-full max-w-2xl bg-white rounded-lg shadow-lg p-8">
-          <div className="pb-6 text-left">
-            <Image src="/UI/img/logo-biocella.png" alt="USC Biology Department Office" width={120} height={40} />
-            <h2 className="text-2xl font-bold text-[#113F67] mt-4">Reset Password</h2>
-            <p className="text-sm text-gray-600">Account details are loaded from your registration record.</p>
-          </div>
+          {status === "loading" && (
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#113F67] mx-auto mb-4" />
+              <p className="text-[#113F67] font-medium">Verifying reset link...</p>
+            </div>
+          )}
 
-          {verifying ? (
-            <p className="text-[#113F67]">Verifying reset link...</p>
-          ) : (
+          {status === "error" && (
+            <div className="text-center">
+              <div className="text-red-500 text-5xl mb-4">✕</div>
+              <h2 className="text-xl font-bold text-[#113F67] mb-2">Link Expired or Invalid</h2>
+              <p className="text-gray-600 mb-6">{errorMsg}</p>
+              <div className="flex gap-3 justify-center flex-wrap">
+                <a
+                  href="/forgot-password"
+                  className="inline-block bg-[#113F67] hover:bg-[#0a2a4a] text-white font-medium py-2 px-6 rounded transition-colors"
+                >
+                  Request New Link
+                </a>
+                <a
+                  href="/Login"
+                  className="inline-block border border-[#113F67] text-[#113F67] hover:bg-[#113F67]/10 font-medium py-2 px-6 rounded transition-colors"
+                >
+                  Back to Login
+                </a>
+              </div>
+            </div>
+          )}
+
+          {status === "verified" && (
             <>
+              <div className="pb-6 text-left">
+                <Image src="/UI/img/logo-biocella.png" alt="USC Biology Department Office" width={120} height={40} />
+                <h2 className="text-2xl font-bold text-[#113F67] mt-4">Reset Password</h2>
+                <p className="text-sm text-gray-600">Account details are loaded from your registration record.</p>
+              </div>
+
               {details?.profile_photo && (
                 <div className="flex items-center gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
                   <Image
