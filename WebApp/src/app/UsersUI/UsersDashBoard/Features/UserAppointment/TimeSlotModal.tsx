@@ -16,10 +16,8 @@ interface TimeSlotModalProps {
   availability: {
     date: string;
     unavailable?: boolean;
-    unavailableReason?: string | null;
     timeSlots: TimeSlot[];
   };
-  unavailableReason?: string | null;
   maxDuration: number;
   onClose: () => void;
   onSuccess: () => void;
@@ -28,7 +26,6 @@ interface TimeSlotModalProps {
 export default function TimeSlotModal({
   date,
   availability,
-  unavailableReason,
   maxDuration,
   onClose,
   onSuccess
@@ -132,7 +129,7 @@ export default function TimeSlotModal({
 
   const handleSubmit = async () => {
     if (availability.unavailable) {
-      setError(unavailableReason || availability.unavailableReason || 'This date is unavailable for booking.');
+      setError('This date is unavailable for booking.');
       return;
     }
 
@@ -329,9 +326,9 @@ export default function TimeSlotModal({
           {format(date, 'EEEE, MMMM dd, yyyy')}
         </p>
 
-        {(availability.unavailable || unavailableReason || availability.unavailableReason) && (
+        {availability.unavailable && (
           <div className={styles.error}>
-            This date is unavailable. {unavailableReason || availability.unavailableReason || ''}
+            This date is unavailable.
           </div>
         )}
 

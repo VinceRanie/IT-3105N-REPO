@@ -56,7 +56,7 @@ const autoDenyPastPendingAppointments = async () => {
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
               <h2 style="color: #f44336;">Your appointment request has been denied</h2>
               <p><strong>Requested Date:</strong> ${formattedDate}</p>
-              <p><strong>Department:</strong> ${appt.department}</p>
+              <p><strong>Department:</strong> ${getAppointmentDepartment(appt)}</p>
               <p><strong>Purpose:</strong> ${appt.purpose}</p>
               ${identityLabel}
               <hr>
@@ -102,6 +102,10 @@ const getClientIp = (req) => {
 
 const isValidEmail = (value = '') => {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value).trim());
+};
+
+const getAppointmentDepartment = (appointment) => {
+  return appointment.department || appointment.user_department || 'N/A';
 };
 
 // CREATE
@@ -346,7 +350,7 @@ exports.approve = async (req, res) => {
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #4CAF50;">Your appointment has been approved!</h2>
             <p><strong>Date:</strong> ${formattedDate}</p>
-            <p><strong>Department:</strong> ${appointment.department}</p>
+            <p><strong>Department:</strong> ${getAppointmentDepartment(appointment)}</p>
             <p><strong>Purpose:</strong> ${appointment.purpose}</p>
             ${identityLabel}
             ${req.body.remarks ? `<p><strong>Admin Remarks:</strong> ${req.body.remarks}</p>` : ''}
@@ -416,7 +420,7 @@ exports.deny = async (req, res) => {
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #f44336;">Your appointment request has been denied</h2>
             <p><strong>Requested Date:</strong> ${formattedDate}</p>
-            <p><strong>Department:</strong> ${appointment.department}</p>
+            <p><strong>Department:</strong> ${getAppointmentDepartment(appointment)}</p>
             <p><strong>Purpose:</strong> ${appointment.purpose}</p>
             ${identityLabel}
             <hr>
@@ -552,7 +556,7 @@ exports.getAvailability = async (req, res) => {
       '13:00', '14:00', '15:00', '16:00'
     ];
 
-    // If date is blocked, all slots are unavailable and include the reason
+    // If date is blocked, all slots are unavailable
     if (blockedDate) {
       const unavailableSlots = timeSlots.map(time => ({
         time,
@@ -563,7 +567,7 @@ exports.getAvailability = async (req, res) => {
       return res.json({
         date,
         unavailable: true,
-        unavailableReason: blockedDate.reason || null,
+        unavailableReason: null,
         totalSlots: timeSlots.length,
         bookedCount: timeSlots.length,
         availableCount: 0,
@@ -757,7 +761,7 @@ exports.markDateUnavailable = async (req, res) => {
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                 <h2 style="color: #f44336;">Your appointment request has been denied</h2>
                 <p><strong>Requested Date:</strong> ${formattedDate}</p>
-                <p><strong>Department:</strong> ${appointment.department}</p>
+                <p><strong>Department:</strong> ${getAppointmentDepartment(appointment)}</p>
                 <p><strong>Purpose:</strong> ${appointment.purpose}</p>
                 ${identityLabel}
                 <hr>
@@ -784,7 +788,7 @@ exports.markDateUnavailable = async (req, res) => {
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                 <h2 style="color: #f44336;">Your appointment has been cancelled</h2>
                 <p><strong>Appointment Date:</strong> ${formattedDate}</p>
-                <p><strong>Department:</strong> ${appointment.department}</p>
+                <p><strong>Department:</strong> ${getAppointmentDepartment(appointment)}</p>
                 <p><strong>Purpose:</strong> ${appointment.purpose}</p>
                 ${identityLabel}
                 <hr>

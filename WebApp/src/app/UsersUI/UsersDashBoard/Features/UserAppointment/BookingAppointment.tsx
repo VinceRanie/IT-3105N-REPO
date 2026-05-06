@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {format, startOfMonth, endOfMonth, eachDayOfInterval, isBefore, isToday, addMonths, startOfWeek, endOfWeek, isSameMonth, isSameDay } from "date-fns";
 import { ChevronLeft, ChevronRight, Check } from "lucide-react";
 import { useAppointmentContext } from "./AppointmentContext";
@@ -17,6 +17,7 @@ export default function Booking() {
   const [purpose, setPurpose] = useState("");
   const [availability, setAvailability] = useState<any>(null);
   const [loadingAvailability, setLoadingAvailability] = useState(false);
+  const [unavailableDates, setUnavailableDates] = useState<Set<string>>(new Set());
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -36,9 +37,32 @@ export default function Booking() {
     const today = new Date();
     const todayAtMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     const dateAtMidnight = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate());
-    if (dateAtMidnight <= todayAtMidnight || currentDate.getDay() === 0) return "disabled";
+    const dateKey = format(currentDate, "yyyy-MM-dd");
+    if (unavailableDates.has(dateKey) || dateAtMidnight <= todayAtMidnight || currentDate.getDay() === 0) return "disabled";
     return "available";
   };
+
+  const fetchUnavailableDates = async () => {
+    try {
+      const res = await fetch('/API/appointments/unavailable-dates');
+      if (!res.ok) return;
+
+      const data = await res.json();
+      const dates = new Set<string>();
+      (Array.isArray(data) ? data : []).forEach((item: any) => {
+        if (item?.unavailable_date) {
+          dates.add(String(item.unavailable_date));
+        }
+      });
+      setUnavailableDates(dates);
+    } catch (err) {
+      console.warn('Failed to load unavailable dates:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchUnavailableDates();
+  }, []);
 
   const fetchAvailability = async (selectedDate: Date) => {
     const dateStr = format(selectedDate, "yyyy-MM-dd");
@@ -69,7 +93,7 @@ export default function Booking() {
     }
 
     if (availability?.unavailable) {
-      setError(availability.unavailableReason || "This date is unavailable.");
+      setError("This date is unavailable.");
       return;
     }
 
