@@ -171,7 +171,7 @@ exports.checkScheduleConflict = async (date, end_time = null, excludeId = null, 
   // Query for appointments that overlap with the requested time range on the SAME DATE
   // Overlap occurs if: existing_start < requested_end AND existing_end > requested_start
   let query = `SELECT * FROM appointment 
-    WHERE status IN ('approved', 'ongoing') 
+    WHERE status IN ('pending', 'approved', 'ongoing') 
     AND deleted_at IS NULL
     AND DATE(date) = DATE(?)
     AND date < COALESCE(?, DATE_ADD(?, INTERVAL 1 HOUR))
@@ -276,7 +276,7 @@ exports.verifyQRCode = async (qrCode) => {
 
 // GET APPOINTMENTS FOR DATE RANGE (for calendar view)
 exports.getAppointmentsByDateRange = async (startDate, endDate, userId = null) => {
-  let query = "SELECT * FROM appointment WHERE date >= ? AND date <= ? AND deleted_at IS NULL AND status IN ('approved', 'ongoing')";
+  let query = "SELECT * FROM appointment WHERE date >= ? AND date <= ? AND deleted_at IS NULL AND status IN ('pending', 'approved', 'ongoing')";
   const params = [startDate, endDate];
   
   if (userId) {
@@ -291,7 +291,7 @@ exports.getAppointmentsByDateRange = async (startDate, endDate, userId = null) =
 // GET APPOINTMENTS FOR SPECIFIC DATE (approved/ongoing only)
 exports.getAppointmentsByDate = async (date) => {
   const [rows] = await db.execute(
-    "SELECT * FROM appointment WHERE DATE(date) = DATE(?) AND deleted_at IS NULL AND status IN ('approved', 'ongoing')",
+    "SELECT * FROM appointment WHERE DATE(date) = DATE(?) AND deleted_at IS NULL AND status IN ('pending', 'approved', 'ongoing')",
     [date]
   );
   return rows;
