@@ -494,6 +494,7 @@ exports.register = async (req, res) => {
 
     const resetToken = uuidv4();
     const tokenExpiry = new Date(Date.now() + RESET_LINK_TTL_MS);
+    const inferredRole = authModel.getRoleFromUscEmail(email);
 
     const emailResult = await sendFinalizeSetupEmail(email, resetToken);
     if (!emailResult.ok) {
@@ -503,7 +504,7 @@ exports.register = async (req, res) => {
       });
     }
 
-    const userId = await authModel.createUser(email, resetToken, tokenExpiry);
+    const userId = await authModel.createUser(email, resetToken, tokenExpiry, inferredRole);
 
          return res.status(HttpStatus.CREATED).json({
            message: "Registration successful. Please check your email for a password setup link.",

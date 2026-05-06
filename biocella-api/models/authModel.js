@@ -3,12 +3,17 @@ const bcrypt = require("bcryptjs");
 
 // Allowed roles for manual updates (DB enum uses 'staff' for RA)
 const ALLOWED_ROLES = ["student", "faculty", "staff"];
+const USC_EMAIL_DOMAIN = "usc.edu.ph";
 
 // CREATE - Register new user
-exports.createUser = async (email, resetToken, resetTokenExpires = null) => {
+exports.createUser = async (email, resetToken, resetTokenExpires = null, role = "student") => {
+  if (!ALLOWED_ROLES.includes(role)) {
+    throw new Error("Invalid role");
+  }
+
   const [result] = await db.execute(
     "INSERT INTO user (email, reset_token, reset_token_expires, first_name, last_name, role) VALUES (?, ?, ?, ?, ?, ?)",
-    [email, resetToken, resetTokenExpires, "", "", "student"]
+    [email, resetToken, resetTokenExpires, "", "", role]
   );
   return result.insertId;
 };
@@ -248,5 +253,15 @@ exports.validatePasswordStrength = (password) => {
 
 // UTILITY - Validate email domain
 exports.validateEmailDomain = (email) => {
-  return email.endsWith("usc.edu.ph");
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  return normalizedEmail.endsWith(`@${USC_EMAIL_DOMAIN}`);
+};
+
+// UTILITY - Determine role from USC email format
+exports.getRoleFromUscEmail = (email) => {
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  const localPart = normalizedEmail.split("@")[0] || "";
+
+  // Student emails are numeric (e.g., 21104163@usc.edu.ph); all others are faculty.
+  return /^\d+$/.test(localPart) ? "student" : "faculty";
 };
