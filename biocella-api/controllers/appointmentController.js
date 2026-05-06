@@ -25,6 +25,17 @@ const autoExpireOngoingAppointments = async () => {
   }
 };
 
+const autoDenyPastPendingAppointments = async () => {
+  try {
+    const deniedCount = await Appointment.autoDenyPastPendingAppointments();
+    if (deniedCount > 0) {
+      console.log(`📋 Auto-denied ${deniedCount} past pending appointment(s)`);
+    }
+  } catch (error) {
+    console.error('⚠️ Failed to auto-deny past pending appointments:', error.message);
+  }
+};
+
 const hasAppointmentElapsed = (appointment) => {
   const endCandidate = appointment.end_time
     ? new Date(appointment.end_time)
@@ -160,6 +171,7 @@ exports.getAll = async (req, res) => {
   try {
     console.log('📋 Fetching all appointments');
     await autoExpireOngoingAppointments();
+    await autoDenyPastPendingAppointments();
     const isSelfScoped = String(req.query?.scope || '').toLowerCase() === 'self';
     const userId = isSelfScoped && req.query?.user_id ? Number(req.query.user_id) : null;
     const studentId = isSelfScoped && req.query?.student_id ? String(req.query.student_id).trim() : null;
@@ -185,6 +197,7 @@ exports.getByStatus = async (req, res) => {
   try {
     const { status } = req.params;
     await autoExpireOngoingAppointments();
+    await autoDenyPastPendingAppointments();
     
     // Validate status parameter to prevent SQL injection and invalid queries
     const validStatuses = ['pending', 'approved', 'denied', 'ongoing', 'visited', 'no_show'];

@@ -334,6 +334,21 @@ exports.expireOldAppointments = async () => {
   return result.affectedRows;
 };
 
+// AUTO-DENY PAST PENDING APPOINTMENTS (cron job)
+exports.autoDenyPastPendingAppointments = async () => {
+  const denialReason = 'Your appointment schedule has already passed. The requested date and time are no longer available. Please submit a new appointment request for a future date.';
+  
+  const [result] = await db.execute(
+    `UPDATE appointment
+     SET status = 'denied', denied_at = NOW(), denial_reason = ?
+     WHERE status = 'pending'
+       AND deleted_at IS NULL
+       AND COALESCE(end_time, DATE_ADD(date, INTERVAL 1 HOUR)) < NOW()`,
+    [denialReason]
+  );
+  return result.affectedRows;
+};
+
 // MARK DATE AS UNAVAILABLE (upsert by date)
 exports.upsertUnavailableDate = async ({ date, reason, created_by_role = null, created_by_user_id = null }) => {
   const [result] = await db.execute(
