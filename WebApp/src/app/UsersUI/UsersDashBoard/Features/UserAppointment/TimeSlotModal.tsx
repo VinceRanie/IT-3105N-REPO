@@ -16,10 +16,8 @@ interface TimeSlotModalProps {
   availability: {
     date: string;
     unavailable?: boolean;
-    unavailableReason?: string | null;
     timeSlots: TimeSlot[];
   };
-  unavailableReason?: string | null;
   maxDuration: number;
   onClose: () => void;
   onSuccess: () => void;
@@ -28,7 +26,6 @@ interface TimeSlotModalProps {
 export default function TimeSlotModal({
   date,
   availability,
-  unavailableReason,
   maxDuration,
   onClose,
   onSuccess
@@ -44,6 +41,13 @@ export default function TimeSlotModal({
   const parseMinutes = (time: string) => {
     const [hours, minutes] = time.split(':').map(Number);
     return hours * 60 + minutes;
+  };
+
+  const formatMinutes = (minutes: number) => {
+    const normalized = ((minutes % 1440) + 1440) % 1440;
+    const hours = Math.floor(normalized / 60);
+    const mins = normalized % 60;
+    return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
   };
 
   const toHourSlot = (time: string) => `${time.slice(0, 2)}:00`;
@@ -86,6 +90,44 @@ export default function TimeSlotModal({
       .map((slot) => slot.time);
 
     return coveredSlots.some((slot) => bookedHourSet.has(slot));
+  };
+
+  const getNextAvailableRange = (requiredMinutes: number, afterTime: string) => {
+    const slots = [...availability.timeSlots].sort((a, b) => parseMinutes(a.time) - parseMinutes(b.time));
+    const afterMinutes = parseMinutes(afterTime);
+
+    for (let i = 0; i < slots.length; i++) {
+      if (!slots[i].available || slots[i].booked) continue;
+
+      const startMinutes = parseMinutes(slots[i].time);
+      if (startMinutes < afterMinutes) continue;
+
+      let contiguousMinutes = 60;
+      let endMinutes = startMinutes + 60;
+
+      if (requiredMinutes <= 60) {
+        return `${formatMinutes(startMinutes)} - ${formatMinutes(endMinutes)}`;
+      }
+
+      for (let j = i + 1; j < slots.length; j++) {
+        const currentSlot = slots[j];
+        const currentStart = parseMinutes(currentSlot.time);
+        const previousStart = parseMinutes(slots[j - 1].time);
+
+        if (!currentSlot.available || currentSlot.booked || currentStart !== previousStart + 60) {
+          break;
+        }
+
+        contiguousMinutes += 60;
+        endMinutes += 60;
+
+        if (contiguousMinutes >= requiredMinutes) {
+          return `${formatMinutes(startMinutes)} - ${formatMinutes(endMinutes)}`;
+        }
+      }
+    }
+
+    return null;
   };
 
   useEffect(() => {
@@ -132,7 +174,7 @@ export default function TimeSlotModal({
 
   const handleSubmit = async () => {
     if (availability.unavailable) {
-      setError(unavailableReason || availability.unavailableReason || 'This date is unavailable for booking.');
+      setError('This date is unavailable for booking.');
       return;
     }
 
@@ -162,7 +204,11 @@ export default function TimeSlotModal({
     }
 
     if (isHourBooked(selectedStartTime) || overlapsBookedHours(selectedStartTime, selectedEndTime)) {
-      setError('Selected time overlaps with booked slot(s). Please choose another range.');
+      const durationMinutes = parseMinutes(selectedEndTime) - parseMinutes(selectedStartTime);
+      const nextRange = getNextAvailableRange(durationMinutes, selectedStartTime);
+      setError(nextRange
+        ? `Selected time overlaps with booked slot(s). Next available range: ${nextRange}.`
+        : 'Selected time overlaps with booked slot(s). Please choose another range.');
       return;
     }
 
@@ -329,9 +375,9 @@ export default function TimeSlotModal({
           {format(date, 'EEEE, MMMM dd, yyyy')}
         </p>
 
-        {(availability.unavailable || unavailableReason || availability.unavailableReason) && (
+        {availability.unavailable && (
           <div className={styles.error}>
-            This date is unavailable. {unavailableReason || availability.unavailableReason || ''}
+            This date is unavailable.
           </div>
         )}
 

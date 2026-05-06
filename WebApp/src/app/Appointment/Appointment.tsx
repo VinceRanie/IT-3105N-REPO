@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Calendar, Clock, FileText, CheckCircle, Mail, User } from 'lucide-react';
@@ -29,9 +29,64 @@ export default function AppointmentBooking() {
   });
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadingAvailability, setLoadingAvailability] = useState(false);
+  const [availability, setAvailability] = useState<any>(null);
   const [error, setError] = useState('');
 
   const toSqlDateTime = (date: string, time: string) => `${date} ${time}:00`;
+
+  const parseMinutes = (time: string) => {
+    const [hours, minutes] = time.split(':').map(Number);
+    return hours * 60 + minutes;
+  };
+
+  const formatMinutes = (minutes: number) => {
+    const normalized = ((minutes % 1440) + 1440) % 1440;
+    const hours = Math.floor(normalized / 60);
+    const mins = normalized % 60;
+    return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+  };
+
+  const getNextAvailableOneHourSlot = (afterTime: string) => {
+    const slots = Array.isArray(availability?.timeSlots) ? [...availability.timeSlots] : [];
+    const afterMinutes = parseMinutes(afterTime);
+
+    const nextSlot = slots
+      .filter((slot: any) => slot.available && !slot.booked)
+      .map((slot: any) => slot.time)
+      .sort((a: string, b: string) => parseMinutes(a) - parseMinutes(b))
+      .find((slotTime: string) => parseMinutes(slotTime) >= afterMinutes);
+
+    if (!nextSlot) return null;
+
+    return `${formatMinutes(parseMinutes(nextSlot))} - ${formatMinutes(parseMinutes(nextSlot) + 60)}`;
+  };
+
+  const loadAvailability = async (date: string) => {
+    if (!date) return;
+    setLoadingAvailability(true);
+    try {
+      const res = await fetch(`/API/appointments/availability?date=${date}`);
+      if (!res.ok) {
+        setAvailability(null);
+        return;
+      }
+      const data = await res.json();
+      setAvailability(data);
+    } catch {
+      setAvailability(null);
+    } finally {
+      setLoadingAvailability(false);
+    }
+  };
+
+  useEffect(() => {
+    if (formData.date) {
+      loadAvailability(formData.date);
+    } else {
+      setAvailability(null);
+    }
+  }, [formData.date]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -56,6 +111,31 @@ export default function AppointmentBooking() {
     setError('');
 
     try {
+      if (availability?.unavailable) {
+        setError('This date is unavailable. Please choose another date.');
+        return;
+      }
+
+      const slots = Array.isArray(availability?.timeSlots) ? availability.timeSlots : [];
+      if (slots.length > 0) {
+        const selectedStart = parseMinutes(formData.time);
+        const selectedEnd = selectedStart + 60;
+        const hasOverlap = slots.some((slot: any) => {
+          const slotStart = parseMinutes(slot.time);
+          const slotEnd = slotStart + 60;
+          const booked = !slot.available || slot.booked;
+          return booked && selectedStart < slotEnd && selectedEnd > slotStart;
+        });
+
+        if (hasOverlap) {
+          const nextRange = getNextAvailableOneHourSlot(formData.time);
+          setError(nextRange
+            ? `Selected time overlaps with an existing appointment. Next available slot: ${nextRange}.`
+            : 'Selected time overlaps with an existing appointment. Please choose another time.');
+          return;
+        }
+      }
+
       const startDateTime = `${formData.date}T${formData.time}:00`;
       const start = new Date(startDateTime);
 
@@ -232,6 +312,18 @@ export default function AppointmentBooking() {
     required
     className="w-full border border-[#113F67]/30 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#113F67]/30"
   />
+  {loadingAvailability && (
+    <p className="text-xs text-gray-500 mt-1">Checking availability...</p>
+  )}
+  {availability?.unavailable && (
+    <p className="text-xs text-red-600 mt-1">This date is unavailable. Please choose another date.</p>
+  )}
+      {loadingAvailability && (
+        <p className="text-xs text-gray-500 mt-1">Checking availability...</p>
+      )}
+      {availability?.unavailable && (
+        <p className="text-xs text-red-600 mt-1">This date is unavailable. Please choose another date.</p>
+      )}
 </div>
 
 {/* Purpose */}

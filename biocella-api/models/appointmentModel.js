@@ -171,7 +171,7 @@ exports.checkScheduleConflict = async (date, end_time = null, excludeId = null, 
   // Query for appointments that overlap with the requested time range on the SAME DATE
   // Overlap occurs if: existing_start < requested_end AND existing_end > requested_start
   let query = `SELECT * FROM appointment 
-    WHERE status IN ('approved', 'ongoing') 
+    WHERE status IN ('pending', 'approved', 'ongoing') 
     AND deleted_at IS NULL
     AND DATE(date) = DATE(?)
     AND date < COALESCE(?, DATE_ADD(?, INTERVAL 1 HOUR))
@@ -232,7 +232,7 @@ exports.updateAppointmentStatus = async (id, status, remarks = null) => {
     params.push(remarks);
   }
   
-  if (status === 'denied') {
+  if (status === 'denied' || status === 'cancelled') {
     query += ", denial_reason=?";
     params.push(remarks);
   }
@@ -276,7 +276,7 @@ exports.verifyQRCode = async (qrCode) => {
 
 // GET APPOINTMENTS FOR DATE RANGE (for calendar view)
 exports.getAppointmentsByDateRange = async (startDate, endDate, userId = null) => {
-  let query = "SELECT * FROM appointment WHERE date >= ? AND date <= ? AND deleted_at IS NULL AND status IN ('approved', 'ongoing')";
+  let query = "SELECT * FROM appointment WHERE date >= ? AND date <= ? AND deleted_at IS NULL AND status IN ('pending', 'approved', 'ongoing')";
   const params = [startDate, endDate];
   
   if (userId) {
@@ -288,10 +288,24 @@ exports.getAppointmentsByDateRange = async (startDate, endDate, userId = null) =
   return rows;
 };
 
-// GET APPOINTMENTS FOR SPECIFIC DATE
+// GET APPOINTMENTS FOR SPECIFIC DATE (approved/ongoing only)
 exports.getAppointmentsByDate = async (date) => {
   const [rows] = await db.execute(
-    "SELECT * FROM appointment WHERE DATE(date) = DATE(?) AND deleted_at IS NULL AND status IN ('approved', 'ongoing')",
+    "SELECT * FROM appointment WHERE DATE(date) = DATE(?) AND deleted_at IS NULL AND status IN ('pending', 'approved', 'ongoing')",
+    [date]
+  );
+  return rows;
+};
+
+// GET ALL APPOINTMENTS FOR SPECIFIC DATE (any status)
+exports.getAppointmentsByDateAllStatuses = async (date) => {
+  const [rows] = await db.execute(
+    `SELECT a.*, u.email AS user_email, u.first_name AS user_first_name, u.last_name AS user_last_name, u.role AS user_role, u.department AS user_department
+     FROM appointment a
+     LEFT JOIN user u ON a.user_id = u.user_id
+     WHERE DATE(date) = DATE(?) 
+     AND a.deleted_at IS NULL 
+     AND a.status IN ('pending', 'approved', 'ongoing')`,
     [date]
   );
   return rows;
@@ -320,6 +334,36 @@ exports.expireOldAppointments = async () => {
        AND COALESCE(end_time, DATE_ADD(date, INTERVAL 1 HOUR)) < NOW()`
   );
   return result.affectedRows;
+};
+
+// AUTO-DENY PAST PENDING APPOINTMENTS (cron job)
+exports.autoDenyPastPendingAppointments = async () => {
+  const denialReason = 'Your appointment schedule has already passed. The requested date and time are no longer available. Please submit a new appointment request for a future date.';
+
+  // First, collect pending appointments that have already elapsed with useful info for notifications
+  const [rows] = await db.execute(
+    `SELECT a.appointment_id, a.user_id, u.email AS user_email, a.requester_email, a.requester_name, a.student_id, a.date, a.department, a.purpose
+     FROM appointment a
+     LEFT JOIN user u ON a.user_id = u.user_id
+     WHERE a.status = 'pending'
+       AND a.deleted_at IS NULL
+       AND COALESCE(a.end_time, DATE_ADD(a.date, INTERVAL 1 HOUR)) < NOW()`
+  );
+
+  if (!rows || rows.length === 0) return [];
+
+  // Perform the status update
+  await db.execute(
+    `UPDATE appointment
+     SET status = 'denied', denied_at = NOW(), denial_reason = ?
+     WHERE status = 'pending'
+       AND deleted_at IS NULL
+       AND COALESCE(end_time, DATE_ADD(date, INTERVAL 1 HOUR)) < NOW()`,
+    [denialReason]
+  );
+
+  // Attach the denial reason for convenience to each row
+  return rows.map(r => ({ ...r, denial_reason: denialReason }));
 };
 
 // MARK DATE AS UNAVAILABLE (upsert by date)

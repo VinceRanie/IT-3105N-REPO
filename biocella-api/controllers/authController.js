@@ -630,9 +630,39 @@ exports.adminInvite = async (req, res) => {
       });
     }
 
-    const existingUser = await authModel.userExists(email);
+    const existingUser = await authModel.getUserByEmail(email);
+    
+    // If user exists, check if they're in pending state (no password and setup incomplete)
     if (existingUser) {
-      return sendAuthMessageResponse(res, ACCOUNT_REGISTERED_MESSAGE, HttpStatus.CONFLICT);
+      const isPending = existingUser.password === null && existingUser.is_setup_complete === 0;
+      
+      if (!isPending) {
+        // User is fully registered, cannot re-invite
+        return sendAuthMessageResponse(res, ACCOUNT_REGISTERED_MESSAGE, HttpStatus.CONFLICT);
+      }
+      
+      // User is pending (expired token or incomplete signup) — update their reset token and re-send invite
+      const resetToken = uuidv4();
+      const tokenExpiry = new Date(Date.now() + RESET_LINK_TTL_MS);
+
+      const emailResult = await sendAdminInviteEmail(email, resetToken, normalizedRole);
+      if (!emailResult.ok) {
+        return res.status(emailResult.statusCode).json({
+          message: emailResult.message,
+          statusCode: emailResult.statusCode,
+        });
+      }
+
+      // Update the pending user's reset token
+      await authModel.setResetToken(existingUser.user_id, resetToken, tokenExpiry);
+
+      return res.status(HttpStatus.OK).json({
+        message: "New invitation link has been sent to the email. The previous link is no longer valid.",
+        userId: existingUser.user_id,
+        email,
+        role: normalizedRole,
+        statusCode: HttpStatus.OK,
+      });
     }
 
     const resetToken = uuidv4();

@@ -215,7 +215,6 @@ export default function StudentAppointmentCalendar() {
         <TimeSlotModal
           date={selectedDate}
           availability={availability}
-          unavailableReason={availability.unavailableReason || null}
           maxDuration={maxDuration}
           onClose={() => setShowModal(false)}
           onSuccess={() => {
