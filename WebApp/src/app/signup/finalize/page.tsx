@@ -2,6 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
+import Image from "next/image";
 import FinalizeSignup from "./FinalizeSignup";
 
 function FinalizeContent() {
@@ -72,24 +73,33 @@ function FinalizeContent() {
 
   if (status === "error") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <div className="max-w-md bg-white rounded-lg shadow-lg p-8 text-center">
-          <div className="text-red-500 text-5xl mb-4">✕</div>
-          <h2 className="text-xl font-bold text-[#113F67] mb-2">Link Expired or Invalid</h2>
-          <p className="text-gray-600 mb-6">{errorMsg}</p>
-          <div className="flex gap-3 justify-center flex-wrap">
-            <a
-              href="/signup"
-              className="inline-block bg-[#113F67] hover:bg-[#0a2a4a] text-white font-medium py-2 px-6 rounded transition-colors"
-            >
-              Back to Signup
-            </a>
-            {/* <a
-              href="/Login"
-              className="inline-block border border-[#113F67] text-[#113F67] hover:bg-[#113F67]/10 font-medium py-2 px-6 rounded transition-colors"
-            >
-              Back to Login
-            </a> */}
+      <div className="min-h-screen grid grid-cols-1 md:grid-cols-2 bg-white">
+        <div className="relative hidden md:block">
+          <Image src="/UI/img/BioOffice.webp" alt="Laboratory Background" fill className="object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent to-white/70" />
+        </div>
+
+        <div className="flex items-center justify-center p-6">
+          <div className="w-full max-w-2xl bg-white rounded-lg shadow-lg p-8">
+            <div className="text-center">
+              <div className="text-red-500 text-5xl mb-4">✕</div>
+              <h2 className="text-xl font-bold text-[#113F67] mb-2">Link Expired or Invalid</h2>
+              <p className="text-gray-600 mb-6">{errorMsg || "This token has expired. Please request a new one."}</p>
+              <div className="flex gap-3 justify-center flex-wrap">
+                <a
+                  href="/signup"
+                  className="inline-block bg-[#113F67] hover:bg-[#0a2a4a] text-white font-medium py-2 px-6 rounded transition-colors"
+                >
+                  Back to Signup
+                </a>
+                <a
+                  href="/Login"
+                  className="inline-block border border-[#113F67] text-[#113F67] hover:bg-[#113F67]/10 font-medium py-2 px-6 rounded transition-colors"
+                >
+                  Back to Login
+                </a>
+              </div>
+            </div>
           </div>
         </div>
       </div>
