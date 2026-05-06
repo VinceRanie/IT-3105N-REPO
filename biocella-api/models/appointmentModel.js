@@ -337,8 +337,21 @@ exports.expireOldAppointments = async () => {
 // AUTO-DENY PAST PENDING APPOINTMENTS (cron job)
 exports.autoDenyPastPendingAppointments = async () => {
   const denialReason = 'Your appointment schedule has already passed. The requested date and time are no longer available. Please submit a new appointment request for a future date.';
-  
-  const [result] = await db.execute(
+
+  // First, collect pending appointments that have already elapsed with useful info for notifications
+  const [rows] = await db.execute(
+    `SELECT a.appointment_id, a.user_id, u.email AS user_email, a.requester_email, a.requester_name, a.student_id, a.date, a.department, a.purpose
+     FROM appointment a
+     LEFT JOIN user u ON a.user_id = u.user_id
+     WHERE a.status = 'pending'
+       AND a.deleted_at IS NULL
+       AND COALESCE(a.end_time, DATE_ADD(a.date, INTERVAL 1 HOUR)) < NOW()`
+  );
+
+  if (!rows || rows.length === 0) return [];
+
+  // Perform the status update
+  await db.execute(
     `UPDATE appointment
      SET status = 'denied', denied_at = NOW(), denial_reason = ?
      WHERE status = 'pending'
@@ -346,7 +359,9 @@ exports.autoDenyPastPendingAppointments = async () => {
        AND COALESCE(end_time, DATE_ADD(date, INTERVAL 1 HOUR)) < NOW()`,
     [denialReason]
   );
-  return result.affectedRows;
+
+  // Attach the denial reason for convenience to each row
+  return rows.map(r => ({ ...r, denial_reason: denialReason }));
 };
 
 // MARK DATE AS UNAVAILABLE (upsert by date)

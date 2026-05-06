@@ -63,9 +63,12 @@ const startServer = async () => {
       console.warn('   Email sending may still work when retried.');
     }
 
-    // Auto-deny past pending appointments on startup
+    // Auto-deny past pending appointments on startup (and notify users)
     try {
-      const deniedCount = await Appointment.autoDenyPastPendingAppointments();
+      const deniedCount = await (async () => {
+        const result = await Appointment.autoDenyPastPendingAppointments();
+        return Array.isArray(result) ? result.length : Number(result) || 0;
+      })();
       if (deniedCount > 0) {
         console.log(`📋 Auto-denied ${deniedCount} past pending appointment(s) on startup`);
       }

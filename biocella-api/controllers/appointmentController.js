@@ -27,12 +27,55 @@ const autoExpireOngoingAppointments = async () => {
 
 const autoDenyPastPendingAppointments = async () => {
   try {
-    const deniedCount = await Appointment.autoDenyPastPendingAppointments();
-    if (deniedCount > 0) {
-      console.log(`📋 Auto-denied ${deniedCount} past pending appointment(s)`);
+    const deniedAppointments = await Appointment.autoDenyPastPendingAppointments();
+    if (!deniedAppointments || deniedAppointments.length === 0) return 0;
+
+    console.log(`📋 Auto-denied ${deniedAppointments.length} past pending appointment(s)`);
+
+    // Notify each affected user if we have an email
+    for (const appt of deniedAppointments) {
+      try {
+        const appointmentDate = new Date(appt.date);
+        const formattedDate = appointmentDate.toLocaleString('en-US', {
+          year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila'
+        });
+
+        const identityLabel = appt.student_id
+          ? `<p><strong>Student ID:</strong> ${appt.student_id}</p>`
+          : appt.requester_name
+          ? `<p><strong>Visitor Name:</strong> ${appt.requester_name}</p>`
+          : '';
+
+        const recipientEmail = appt.user_email || appt.requester_email;
+        if (!recipientEmail) continue;
+
+        await sendEmail({
+          to: recipientEmail,
+          subject: 'Appointment Request Denied - Biocella',
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #f44336;">Your appointment request has been denied</h2>
+              <p><strong>Requested Date:</strong> ${formattedDate}</p>
+              <p><strong>Department:</strong> ${appt.department}</p>
+              <p><strong>Purpose:</strong> ${appt.purpose}</p>
+              ${identityLabel}
+              <hr>
+              <p><strong>Reason:</strong> ${appt.denial_reason}</p>
+              <p>Please contact us if you have any questions or would like to reschedule.</p>
+            </div>
+          `
+        }).catch(emailErr => {
+          console.error('📧 Auto-deny email failed for', recipientEmail, emailErr.message || emailErr);
+        });
+      } catch (err) {
+        console.error('⚠️ Error notifying about auto-deny for appointment:', appt.appointment_id, err.message || err);
+      }
     }
+
+    return deniedAppointments.length;
   } catch (error) {
     console.error('⚠️ Failed to auto-deny past pending appointments:', error.message);
+    return 0;
   }
 };
 
