@@ -33,6 +33,28 @@ export default function Booking() {
     return hours * 60 + minutes;
   };
 
+  const formatMinutes = (minutes: number) => {
+    const normalized = ((minutes % 1440) + 1440) % 1440;
+    const hours = Math.floor(normalized / 60);
+    const mins = normalized % 60;
+    return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+  };
+
+  const getNextAvailableOneHourSlot = (afterTime: string) => {
+    const slots = Array.isArray(availability?.timeSlots) ? [...availability.timeSlots] : [];
+    const afterMinutes = parseMinutes(afterTime);
+
+    const nextSlot = slots
+      .filter((slot) => slot.available && !slot.booked)
+      .map((slot) => slot.time)
+      .sort((a, b) => parseMinutes(a) - parseMinutes(b))
+      .find((slotTime) => parseMinutes(slotTime) >= afterMinutes);
+
+    if (!nextSlot) return null;
+
+    return `${formatMinutes(parseMinutes(nextSlot))} - ${formatMinutes(parseMinutes(nextSlot) + 60)}`;
+  };
+
   const getDateStatus = (currentDate: Date): DayStatus => {
     const today = new Date();
     const todayAtMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -117,7 +139,8 @@ export default function Booking() {
       );
       const selectedHourSlot = `${time.slice(0, 2)}:00`;
       if (bookedHourSet.has(selectedHourSlot)) {
-        setError("Selected time overlaps with booked slots.");
+        const nextSlot = getNextAvailableOneHourSlot(time);
+        setError(nextSlot ? `Selected time overlaps with booked slots. Next available slot: ${nextSlot}.` : "Selected time overlaps with booked slots. Please choose another range.");
         return;
       }
     }

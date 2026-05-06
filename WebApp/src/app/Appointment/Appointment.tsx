@@ -40,6 +40,28 @@ export default function AppointmentBooking() {
     return hours * 60 + minutes;
   };
 
+  const formatMinutes = (minutes: number) => {
+    const normalized = ((minutes % 1440) + 1440) % 1440;
+    const hours = Math.floor(normalized / 60);
+    const mins = normalized % 60;
+    return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+  };
+
+  const getNextAvailableOneHourSlot = (afterTime: string) => {
+    const slots = Array.isArray(availability?.timeSlots) ? [...availability.timeSlots] : [];
+    const afterMinutes = parseMinutes(afterTime);
+
+    const nextSlot = slots
+      .filter((slot: any) => slot.available && !slot.booked)
+      .map((slot: any) => slot.time)
+      .sort((a: string, b: string) => parseMinutes(a) - parseMinutes(b))
+      .find((slotTime: string) => parseMinutes(slotTime) >= afterMinutes);
+
+    if (!nextSlot) return null;
+
+    return `${formatMinutes(parseMinutes(nextSlot))} - ${formatMinutes(parseMinutes(nextSlot) + 60)}`;
+  };
+
   const loadAvailability = async (date: string) => {
     if (!date) return;
     setLoadingAvailability(true);
@@ -106,7 +128,10 @@ export default function AppointmentBooking() {
         });
 
         if (hasOverlap) {
-          setError('Selected time overlaps with an existing appointment. Please choose another time.');
+          const nextRange = getNextAvailableOneHourSlot(formData.time);
+          setError(nextRange
+            ? `Selected time overlaps with an existing appointment. Next available slot: ${nextRange}.`
+            : 'Selected time overlaps with an existing appointment. Please choose another time.');
           return;
         }
       }
@@ -287,6 +312,12 @@ export default function AppointmentBooking() {
     required
     className="w-full border border-[#113F67]/30 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#113F67]/30"
   />
+  {loadingAvailability && (
+    <p className="text-xs text-gray-500 mt-1">Checking availability...</p>
+  )}
+  {availability?.unavailable && (
+    <p className="text-xs text-red-600 mt-1">This date is unavailable. Please choose another date.</p>
+  )}
       {loadingAvailability && (
         <p className="text-xs text-gray-500 mt-1">Checking availability...</p>
       )}
