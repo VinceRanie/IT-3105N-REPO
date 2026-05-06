@@ -1049,6 +1049,14 @@ exports.getUserByToken = async (req, res) => {
       });
     }
 
+    // Check if token has expired
+    if (user.reset_token_expires && new Date() > new Date(user.reset_token_expires)) {
+      return res.status(HttpStatus.UNAUTHORIZED).json({
+        message: "This token has expired. Please request a new one.",
+        statusCode: HttpStatus.UNAUTHORIZED,
+      });
+    }
+
     return res.status(HttpStatus.OK).json({
       message: "User data retrieved successfully.",
       user: {
