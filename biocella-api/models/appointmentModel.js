@@ -300,10 +300,12 @@ exports.getAppointmentsByDate = async (date) => {
 // GET ALL APPOINTMENTS FOR SPECIFIC DATE (any status)
 exports.getAppointmentsByDateAllStatuses = async (date) => {
   const [rows] = await db.execute(
-    `SELECT * FROM appointment 
+    `SELECT a.*, u.email AS user_email, u.first_name AS user_first_name, u.last_name AS user_last_name, u.role AS user_role, u.department AS user_department
+     FROM appointment a
+     LEFT JOIN user u ON a.user_id = u.user_id
      WHERE DATE(date) = DATE(?) 
-     AND deleted_at IS NULL 
-     AND status IN ('pending', 'approved', 'ongoing')`,
+     AND a.deleted_at IS NULL 
+     AND a.status IN ('pending', 'approved', 'ongoing')`,
     [date]
   );
   return rows;

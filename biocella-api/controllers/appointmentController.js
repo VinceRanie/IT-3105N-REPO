@@ -339,7 +339,7 @@ exports.approve = async (req, res) => {
       // Remove data URL prefix to get just the base64 data
       const base64Data = qrCodeDataUrl.replace(/^data:image\/png;base64,/, '');
       
-      sendEmail({
+      await sendEmail({
         to: recipientEmail,
         subject: 'Appointment Approved - Biocella',
         html: `
@@ -409,7 +409,7 @@ exports.deny = async (req, res) => {
 
     // Send email to user if email exists (but don't crash if it fails)
     if (recipientEmail) {
-      sendEmail({
+      await sendEmail({
         to: recipientEmail,
         subject: 'Appointment Request Denied - Biocella',
         html: `
@@ -750,7 +750,7 @@ exports.markDateUnavailable = async (req, res) => {
 
         // Send denial email
         if (recipientEmail) {
-          sendEmail({
+          await sendEmail({
             to: recipientEmail,
             subject: 'Appointment Request Denied - Date Unavailable - Biocella',
             html: `
@@ -777,7 +777,7 @@ exports.markDateUnavailable = async (req, res) => {
 
         // Send cancellation email
         if (recipientEmail) {
-          sendEmail({
+          await sendEmail({
             to: recipientEmail,
             subject: 'Appointment Cancelled - Date Unavailable - Biocella',
             html: `
