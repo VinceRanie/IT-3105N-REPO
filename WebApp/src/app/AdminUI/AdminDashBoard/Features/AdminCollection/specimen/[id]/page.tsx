@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Edit, QrCode, Trash2, Plus, Download, ChevronDown, ChevronUp, ExternalLink, Loader2 } from "lucide-react";
 import Image from "next/image";
 import jsPDF from "jspdf";
+import SpecimenModal from "../../SpecimenModal";
 
 interface SpecimenDetailProps {
   params: Promise<{
@@ -92,6 +93,7 @@ const groupCustomFieldsBySection = (customFields: any) => {
 export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
   const resolvedParams = use(params);
   const [specimen, setSpecimen] = useState<any>(null);
+  const [projects, setProjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [generatingPDF, setGeneratingPDF] = useState(false);
   const [activeTab, setActiveTab] = useState("info");
@@ -99,6 +101,8 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
   const [blastLoading, setBlastLoading] = useState(false);
   const [blastPolling, setBlastPolling] = useState(false);
   const [blastExpired, setBlastExpired] = useState(false);
+  const [isSpecimenModalOpen, setIsSpecimenModalOpen] = useState(false);
+  const [selectedSpecimen, setSelectedSpecimen] = useState<any | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -109,6 +113,10 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
     }
     fetchSpecimenDetails();
   }, [resolvedParams.id]);
+
+  useEffect(() => {
+    fetchProjects();
+  }, []);
 
   const fetchSpecimenDetails = async () => {
     try {
@@ -125,6 +133,40 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
       console.error("Error fetching specimen details:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchProjects = async () => {
+    try {
+      const response = await fetch(`${API_URL}/projects`);
+      if (response.ok) {
+        const data = await response.json();
+        setProjects(data);
+      }
+    } catch (error) {
+      console.error("Error fetching projects:", error);
+    }
+  };
+
+  const handleSaveSpecimen = async (specimenData: FormData) => {
+    try {
+      const response = await fetch(`${API_URL}/microbials/${resolvedParams.id}`, {
+        method: "PUT",
+        body: specimenData,
+      });
+
+      if (response.ok) {
+        await fetchSpecimenDetails();
+        setIsSpecimenModalOpen(false);
+        setSelectedSpecimen(null);
+        alert("Specimen updated successfully!");
+      } else {
+        const error = await response.json();
+        alert(`Error: ${error.error || "Failed to save specimen"}`);
+      }
+    } catch (error) {
+      console.error("Error saving specimen:", error);
+      alert("Error saving specimen");
     }
   };
 
@@ -807,7 +849,10 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
               )}
             </button>
             <button
-              onClick={() => router.push(`/AdminUI/AdminDashBoard/Features/AdminCollection?edit=${resolvedParams.id}`)}
+              onClick={() => {
+                setSelectedSpecimen(specimen);
+                setIsSpecimenModalOpen(true);
+              }}
               className="flex items-center gap-2 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600"
             >
               <Edit className="w-4 h-4" />
@@ -1386,6 +1431,17 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
           </div>
         </div>
       </div>
+
+      <SpecimenModal
+        isOpen={isSpecimenModalOpen}
+        onClose={() => {
+          setIsSpecimenModalOpen(false);
+          setSelectedSpecimen(null);
+        }}
+        onSave={handleSaveSpecimen}
+        specimen={selectedSpecimen}
+        projects={projects}
+      />
     </div>
   );
 }
