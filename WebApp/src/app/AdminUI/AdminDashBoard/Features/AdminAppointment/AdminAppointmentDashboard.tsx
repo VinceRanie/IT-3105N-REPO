@@ -63,6 +63,7 @@ export default function AdminAppointmentDashboard() {
   const [unavailableReason, setUnavailableReason] = useState('');
   const [unavailableDates, setUnavailableDates] = useState<UnavailableDate[]>([]);
   const [savingUnavailable, setSavingUnavailable] = useState(false);
+  const [lastUnavailableResult, setLastUnavailableResult] = useState<any>(null);
   const [showUnavailablePanel] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -239,7 +240,8 @@ export default function AdminAppointmentDashboard() {
       if (!response.ok) {
         throw new Error(data.message || data.error || 'Failed to mark date unavailable');
       }
-
+      // store API result so the notice modal can display details
+      setLastUnavailableResult(data || null);
       setModalType('notice');
       setShowModal(true);
       setUnavailableDate('');
@@ -1153,9 +1155,26 @@ export default function AdminAppointmentDashboard() {
               </div>
             ) : modalType === 'notice' ? (
               <div className="space-y-4">
-                <div className="rounded-lg border border-[#113F67]/20 bg-[#113F67]/5 p-4 text-sm text-[#113F67]">
-                  Date marked unavailable.
-                </div>
+                    <div className="rounded-lg border border-[#113F67]/20 bg-[#113F67]/5 p-4 text-sm text-[#113F67]">
+                      <div>Date marked unavailable.</div>
+                      {lastUnavailableResult?.affectedAppointments && (
+                        <div className="mt-2 text-sm text-gray-700">
+                          <div><strong>Affected appointments:</strong></div>
+                          <div>Denied: {lastUnavailableResult.affectedAppointments.denied} {lastUnavailableResult.affectedAppointments.deniedIds?.length ? ` (IDs: ${lastUnavailableResult.affectedAppointments.deniedIds.join(', ')})` : ''}</div>
+                          <div>Cancelled: {lastUnavailableResult.affectedAppointments.cancelled} {lastUnavailableResult.affectedAppointments.cancelledIds?.length ? ` (IDs: ${lastUnavailableResult.affectedAppointments.cancelledIds.join(', ')})` : ''}</div>
+                        </div>
+                      )}
+                      {lastUnavailableResult?.emailErrors && lastUnavailableResult.emailErrors.length > 0 && (
+                        <div className="mt-2 text-sm text-red-600">
+                          <div><strong>Email errors:</strong></div>
+                          <ul className="list-disc ml-5">
+                            {lastUnavailableResult.emailErrors.map((e: any) => (
+                              <li key={e.appointmentId}>ID {e.appointmentId}: {e.error}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
                 <button
                   onClick={closeModal}
                   className="w-full bg-[#113F67] text-white px-4 py-2 rounded-md hover:bg-[#0d2f4d]"
