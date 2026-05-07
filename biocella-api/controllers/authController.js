@@ -537,12 +537,12 @@ exports.forgotPassword = async (req, res) => {
     const user = await authModel.getUserByEmail(email);
 
     if (!user) {
-      return sendAuthMessageResponse(res, ACCOUNT_NOT_REGISTERED_MESSAGE);
+      return sendAuthMessageResponse(res, ACCOUNT_NOT_REGISTERED_MESSAGE, HttpStatus.NOT_FOUND);
     }
 
     // Only send reset email if account setup is complete
     if (Number(user.is_setup_complete) !== 1) {
-      return sendAuthMessageResponse(res, ACCOUNT_NOT_REGISTERED_MESSAGE);
+      return sendAuthMessageResponse(res, ACCOUNT_NOT_REGISTERED_MESSAGE, HttpStatus.NOT_FOUND);
     }
 
     const resetResult = await issuePasswordResetForUser(user);

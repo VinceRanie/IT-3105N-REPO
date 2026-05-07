@@ -62,7 +62,7 @@ export default function ForgotPasswordPage() {
             </div>
 
             {message && (
-              <p className={`text-center text-sm ${message.type === "error" ? "text-red-600" : "text-green-600"}`}>
+              <p className={`text-center text-sm ${message.type === "error" ? "text-green-600" : "text-red-600"}`}>
                 {message.text}
               </p>
             )}

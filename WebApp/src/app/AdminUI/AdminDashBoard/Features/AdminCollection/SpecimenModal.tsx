@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { X, Upload, ChevronDown, ChevronRight, Dna, Plus, Trash2 } from "lucide-react";
 import Image from "next/image";
 import { API_URL } from "@/config/api";
+import { validateFASTAFile, FASTAValidationResult } from "@/lib/fastaValidator";
+import FASTAValidationDisplay from "@/components/FASTAValidationDisplay";
 
 type SectionKey = "basic" | "molecular" | "biochemical" | "morphology" | "culture";
 type CustomFieldType = "text" | "textarea" | "status" | "file" | "image_description";
@@ -171,6 +173,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
   const [customFieldImageFiles, setCustomFieldImageFiles] = useState<Record<string, File>>({});
   const [customFieldImagePreviews, setCustomFieldImagePreviews] = useState<Record<string, string>>({});
   const [fastaFile, setFastaFile] = useState<File | null>(null);
+  const [fastaValidation, setFastaValidation] = useState<FASTAValidationResult | null>(null);
   const [blastStatus, setBlastStatus] = useState<string>("");
   const [blastResults, setBlastResults] = useState<any>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -228,6 +231,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
 
       setCustomFieldImageFiles({});
       setCustomFieldImagePreviews({});
+      setFastaValidation(null);
     } else {
       // Reset for new specimen
       setFormData({
@@ -264,6 +268,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
       setImageFile(null);
       setImagePreview("");
       setFastaFile(null);
+      setFastaValidation(null);
       setBlastStatus("");
       setBlastResults(null);
       setCustomFieldImageFiles({});
@@ -287,11 +292,28 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
     }
   };
 
-  const handleFastaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFastaChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setFastaFile(file);
 
+      // Validate FASTA file
+      try {
+        const validation = await validateFASTAFile(file);
+        setFastaValidation(validation);
+      } catch (error) {
+        console.error('FASTA validation error:', error);
+        setFastaValidation({
+          isValid: false,
+          errors: ['Failed to validate FASTA file'],
+          warnings: [],
+          sequenceType: null,
+          sequenceLength: 0,
+          message: 'Error reading file - please try again'
+        });
+      }
+
+      // Extract accession number if present (and validation passed)
       file.text().then((text) => {
         const extractedAccession = extractAccessionFromFasta(text);
         if (extractedAccession) {
@@ -610,6 +632,12 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
       return;
     }
 
+    // Check FASTA validation if a new file was selected
+    if (fastaFile && fastaValidation && !fastaValidation.isValid) {
+      alert(`Invalid FASTA file: ${fastaValidation.message}\n\nPlease fix the issues before submitting.`);
+      return;
+    }
+
     if (isSubmitting) {
       return;
     }
@@ -682,10 +710,10 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
       
       if (response.ok) {
         setBlastStatus("pending");
-        alert(`BLAST submitted! RID: ${data.rid}. Results will be ready in 30-60 seconds.`);
-        
-        // Poll for results after 30 seconds
-        setTimeout(() => checkBlastResults(), 30000);
+        alert(`BLAST submitted! RID: ${data.rid}. Results usually take 2–10 minutes and may take longer during peak load.`);
+
+        // Poll for results after 60 seconds
+        setTimeout(() => checkBlastResults(), 60000);
       } else {
         setBlastStatus("error");
         alert(`BLAST submission failed: ${data.error}`);
@@ -709,7 +737,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
         alert("BLAST results ready!");
       } else if (data.status === 'pending') {
         setBlastStatus("pending");
-        alert("BLAST is still running. Check again in a few seconds.");
+        alert("BLAST is still running. Results usually take 2–10 minutes and may take longer during peak load.");
       } else {
         setBlastStatus(data.status);
       }
@@ -1024,6 +1052,18 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
                   <p className="mt-1 text-xs text-gray-500">
                     Supports common NCBI FASTA formats for nucleotide/protein sequences. If an accession is present in the header, it will auto-fill below.
                   </p>
+                  
+                  {/* FASTA Validation Display */}
+                  {fastaFile && fastaValidation && (
+                    <FASTAValidationDisplay
+                      isValid={fastaValidation.isValid}
+                      errors={fastaValidation.errors}
+                      warnings={fastaValidation.warnings}
+                      sequenceType={fastaValidation.sequenceType}
+                      sequenceLength={fastaValidation.sequenceLength}
+                      message={fastaValidation.message}
+                    />
+                  )}
                 </div>
 
                 {/* BLAST Button */}
