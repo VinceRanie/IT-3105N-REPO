@@ -566,7 +566,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
                     <button
                       type="button"
                       onClick={handleBlastSubmit}
-                      disabled={blastStatus === 'submitting' || blastStatus === 'pending' || (fastaFile && fastaValidation && !fastaValidation.isValid)}
+                      disabled={blastStatus === 'submitting' || blastStatus === 'pending' || Boolean(fastaFile && fastaValidation && !fastaValidation.isValid)}
                       className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-400 flex items-center gap-2"
                     >
                       <Dna className="w-4 h-4" />
