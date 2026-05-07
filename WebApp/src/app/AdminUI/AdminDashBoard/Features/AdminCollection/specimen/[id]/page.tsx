@@ -7,6 +7,7 @@ import { ArrowLeft, Edit, QrCode, Trash2, Plus, Download, ChevronDown, ChevronUp
 import Image from "next/image";
 import jsPDF from "jspdf";
 import SpecimenModal from "../../SpecimenModal";
+import ConfirmModal from "../../ConfirmModal";
 
 interface SpecimenDetailProps {
   params: Promise<{
@@ -102,6 +103,7 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
   const [blastPolling, setBlastPolling] = useState(false);
   const [blastExpired, setBlastExpired] = useState(false);
   const [isSpecimenModalOpen, setIsSpecimenModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedSpecimen, setSelectedSpecimen] = useState<any | null>(null);
   const router = useRouter();
 
@@ -171,8 +173,6 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
   };
 
   const handleDelete = async () => {
-    if (!confirm("Are you sure you want to delete this specimen?")) return;
-    
     try {
       const response = await fetch(`${API_URL}/microbials/${resolvedParams.id}`, {
         method: "DELETE",
@@ -859,7 +859,7 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
               Edit
             </button>
             <button
-              onClick={handleDelete}
+              onClick={() => setIsDeleteModalOpen(true)}
               className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
             >
               <Trash2 className="w-4 h-4" />
@@ -1431,6 +1431,19 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
           </div>
         </div>
       </div>
+
+      <ConfirmModal
+        isOpen={isDeleteModalOpen}
+        title="Delete Specimen"
+        message={`Are you sure you want to delete "${specimen?.code_name || "this specimen"}"? This action cannot be undone.`}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        onCancel={() => setIsDeleteModalOpen(false)}
+        onConfirm={() => {
+          setIsDeleteModalOpen(false);
+          handleDelete();
+        }}
+      />
 
       <SpecimenModal
         isOpen={isSpecimenModalOpen}
