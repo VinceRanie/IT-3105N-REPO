@@ -253,7 +253,7 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
 
       if (response.ok) {
         const data = await response.json();
-        alert(`BLAST submitted successfully! RID: ${data.rid}\n\nResults will be available in ${data.estimatedTime}`);
+        alert(`BLAST submitted successfully! RID: ${data.rid}\n\nNCBI BLAST usually takes 2-10 minutes, but can take longer during peak hours.`);
         await fetchSpecimenDetails();
         startBlastPolling();
       } else {
@@ -339,7 +339,7 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
       if (!isComplete) {
         setTimeout(() => {
           if (!specimen.blast_results) {
-            alert(`BLAST search is still processing. RID: ${specimen.blast_rid}\n\nThis can take 1-2 minutes. The page will auto-refresh when results are ready.`);
+            alert(`BLAST search is still processing. RID: ${specimen.blast_rid}\n\nThis often takes 2-10 minutes and may exceed 10 minutes. The page will auto-refresh when results are ready.`);
           }
           setBlastPolling(false);
         }, 2000);
@@ -354,7 +354,7 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
     setBlastPolling(true);
     
     let pollCount = 0;
-    const maxPolls = 30;
+    const maxPolls = 90;
     
     const pollInterval = setInterval(async () => {
       pollCount++;
@@ -365,7 +365,7 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
       } else if (pollCount >= maxPolls) {
         clearInterval(pollInterval);
         setBlastPolling(false);
-        console.log("BLAST polling stopped after 5 minutes");
+        console.log("BLAST polling stopped after 15 minutes");
       }
     }, 10000);
   };
@@ -1151,7 +1151,7 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
                         </div>
                         {!specimen.blast_results && (
                           <p className="text-xs text-blue-600 mt-2">
-                            BLAST analysis in progress. Results typically available in 30-60 seconds.
+                            BLAST analysis in progress. Results usually take 2-10 minutes and can occasionally take longer.
                           </p>
                         )}
                       </div>
@@ -1324,7 +1324,7 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
                                 </p>
                               )}
                               <p className="text-xs text-gray-500">
-                                Results typically available in 30-60 seconds after submission
+                                Results usually take 2-10 minutes after submission and can occasionally take longer
                               </p>
                             </>
                           ) : blastExpired || isBlastRidExpired() ? (
@@ -1374,7 +1374,7 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
                                 Check Results Now
                               </button>
                               <p className="text-xs text-gray-500 mt-2">
-                                Results typically take 1-2 minutes to process
+                                Results usually take 2-10 minutes to process
                               </p>
                               <a
                                 href={`https://blast.ncbi.nlm.nih.gov/Blast.cgi?CMD=Get&RID=${specimen.blast_rid}`}
