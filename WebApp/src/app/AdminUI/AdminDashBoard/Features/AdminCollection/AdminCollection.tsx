@@ -605,24 +605,6 @@ export default function CollectionTable({
                       </td>
                     </tr>
 
-                    {/* Confirm delete modal local to table */}
-                    <ConfirmModal
-                      isOpen={!!pendingDelete}
-                      title="Delete Specimen"
-                      message={
-                        pendingDelete
-                          ? `Are you sure you want to delete "${pendingDelete.name || 'this specimen'}"? This action cannot be undone.`
-                          : "Are you sure?"
-                      }
-                      confirmLabel="Delete"
-                      cancelLabel="Cancel"
-                      onCancel={() => setPendingDelete(null)}
-                      onConfirm={() => {
-                        if (pendingDelete) onDelete(pendingDelete.id);
-                        setPendingDelete(null);
-                      }}
-                    />
-
                     {selectedId === specimen._id && (
                       <tr className="bg-gray-50">
                         <td colSpan={8} className="p-4 text-sm text-gray-600">
@@ -636,6 +618,23 @@ export default function CollectionTable({
             </tbody>
           </table>
         </div>
+
+        <ConfirmModal
+          isOpen={!!pendingDelete}
+          title="Delete Specimen"
+          message={
+            pendingDelete
+              ? `Are you sure you want to delete "${pendingDelete.name || 'this specimen'}"? This action cannot be undone.`
+              : "Are you sure?"
+          }
+          confirmLabel="Delete"
+          cancelLabel="Cancel"
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={() => {
+            if (pendingDelete) onDelete(pendingDelete.id);
+            setPendingDelete(null);
+          }}
+        />
 
         <div className="px-4 py-3 border-t bg-gray-50 text-sm text-gray-600">
           Showing {specimens.length} specimen

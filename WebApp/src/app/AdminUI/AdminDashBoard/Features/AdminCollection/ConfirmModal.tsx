@@ -22,7 +22,7 @@ export default function ConfirmModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black/30 backdrop-blur-md flex items-center justify-center z-50">
       <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 space-y-4">
         <h4 className="text-lg font-semibold text-[#113F67]">{title}</h4>
         <p className="text-sm text-gray-700 whitespace-pre-line">{message}</p>

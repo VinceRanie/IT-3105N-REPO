@@ -1046,7 +1046,9 @@ export default function AdminAppointmentDashboard() {
       {showModal && (
         <div
           className={`fixed inset-0 flex items-center justify-center z-50 p-3 sm:p-4 ${
-            modalType === 'scan' ? 'bg-black/70 backdrop-blur-[1px]' : 'bg-black bg-opacity-50'
+            modalType === 'scan'
+              ? 'bg-gradient-to-br from-black/70 via-slate-900/65 to-black/75 backdrop-blur-[2px]'
+              : 'bg-gradient-to-br from-slate-950/55 via-slate-900/50 to-black/60 backdrop-blur-[3px]'
           }`}
         >
           <div className="bg-white rounded-lg p-4 sm:p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">

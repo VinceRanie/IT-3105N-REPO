@@ -5,6 +5,7 @@ import { Chemical, Batch } from "./types";
 import AddChemicalModal from "./AddChemicalModal";
 import EditChemicalModal from "./EditChemicalModal";
 import { Search, Plus, Edit, ChevronLeft, ChevronRight, Package, ChevronUp, ChevronDown } from "lucide-react";
+import BatchDeleteConfirmModal from "@/app/components/BatchDeleteConfirmModal";
 import { API_URL } from "@/config/api";
 import { useProtectedRoute } from "@/app/hooks/useProtectedRoute";
 import { getAuthHeader } from "@/app/utils/authUtil";
@@ -37,6 +38,8 @@ export default function RAStaffInventory() {
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [expandedChemicalIds, setExpandedChemicalIds] = useState<Set<number>>(new Set());
+  const [selectedBatch, setSelectedBatch] = useState<number | null>(null);
+  const [isBatchDeleteModalOpen, setIsBatchDeleteModalOpen] = useState(false);
 
   // Fetch chemicals and batches from API
   const fetchChemicals = async () => {
@@ -557,6 +560,7 @@ export default function RAStaffInventory() {
                                     <th className="px-4 py-2 text-left font-semibold">Exp. Date</th>
                                     <th className="px-4 py-2 text-left font-semibold">Location</th>
                                     <th className="px-4 py-2 text-left font-semibold">QR</th>
+                                    <th className="px-4 py-2 text-left font-semibold">Actions</th>
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
@@ -588,8 +592,19 @@ export default function RAStaffInventory() {
                                               Print QR
                                             </button>
                                           ) : (
-                                            <span className="text-xs text-gray-400">No QR</span>
+                                            "N/A"
                                           )}
+                                        </td>
+                                        <td className="px-4 py-3 text-slate-700">
+                                          <div className="flex gap-2">
+                                            <button
+                                              onClick={() => { setSelectedBatch(batch.batch_id); setIsBatchDeleteModalOpen(true); }}
+                                              title={`Delete container #${batch.batch_id}`}
+                                              className="px-2 py-1 text-sm font-medium text-red-600 bg-red-50 rounded hover:bg-red-100"
+                                            >
+                                              Delete
+                                            </button>
+                                          </div>
                                         </td>
                                       </tr>
                                     ))
@@ -651,6 +666,16 @@ export default function RAStaffInventory() {
           onClose={() => setEditingChemical(null)}
           onSuccess={handleEditSuccess}
           chemical={editingChemical}
+        />
+      )}
+
+      {isBatchDeleteModalOpen && (
+        <BatchDeleteConfirmModal
+          isOpen={isBatchDeleteModalOpen}
+          onClose={() => { setIsBatchDeleteModalOpen(false); setSelectedBatch(null); }}
+          onSuccess={async () => { await fetchChemicals(); setIsBatchDeleteModalOpen(false); setSelectedBatch(null); }}
+          batchId={selectedBatch}
+          headers={getAuthHeader()}
         />
       )}
     </div>
