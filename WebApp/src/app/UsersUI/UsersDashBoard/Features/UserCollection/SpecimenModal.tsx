@@ -277,10 +277,10 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
       
       if (response.ok) {
         setBlastStatus("pending");
-        setModalConfig({ type: 'success', title: 'BLAST Submitted', message: `BLAST submitted! RID: ${data.rid}. Results will be ready in 30-60 seconds.` });
-        
-        // Poll for results after 30 seconds
-        setTimeout(() => checkBlastResults(), 30000);
+        setModalConfig({ type: 'success', title: 'BLAST Submitted', message: `BLAST submitted! RID: ${data.rid}. Results usually take 2–10 minutes and may take longer during peak load.` });
+
+        // Poll for results after 60 seconds
+        setTimeout(() => checkBlastResults(), 60000);
       } else {
         setBlastStatus("error");
         setModalConfig({ type: 'error', title: 'Error', message: `BLAST submission failed: ${data.error}` });
@@ -304,7 +304,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
         setModalConfig({ type: 'success', title: 'BLAST Complete', message: 'BLAST results ready!' });
       } else if (data.status === 'pending') {
         setBlastStatus("pending");
-        setModalConfig({ type: 'info', title: 'BLAST Running', message: 'BLAST is still running. Check again in a few seconds.' });
+        setModalConfig({ type: 'info', title: 'BLAST Running', message: 'BLAST is still running. Results usually take 2–10 minutes and may take longer during peak load.' });
       } else {
         setBlastStatus(data.status);
       }
