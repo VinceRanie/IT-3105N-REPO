@@ -359,6 +359,8 @@ import ConfirmModal from "./ConfirmModal";
 interface Collection {
   _id: string;
   publish_status?: "published" | "unpublished";
+  created_by?: string;
+  updated_by?: string;
   code_name: string;
   classification: string;
   source: string;
@@ -500,6 +502,9 @@ export default function CollectionTable({
                 <SortableHeader column="locale" label="Locale" />
                 <SortableHeader column="source" label="Source" />
                 <SortableHeader column="classification" label="Classification" />
+                <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">
+                  Added By
+                </th>
                 <SortableHeader column="publish_status" label="Status" />
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">
                   Actions
@@ -510,7 +515,7 @@ export default function CollectionTable({
             <tbody className="divide-y divide-gray-100">
               {getSortedData().length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-10 text-center text-gray-500">
+                  <td colSpan={9} className="py-10 text-center text-gray-500">
                     No specimens found.
                   </td>
                 </tr>
@@ -542,6 +547,9 @@ export default function CollectionTable({
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-800">
                         {specimen.classification || "N/A"}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-800">
+                        {specimen.created_by || specimen.updated_by || "N/A"}
                       </td>
 
                       <td className="px-4 py-3 text-sm">

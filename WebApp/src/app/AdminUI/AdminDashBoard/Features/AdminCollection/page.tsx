@@ -23,6 +23,7 @@ interface Project {
 interface Specimen {
   _id: string;
   publish_status?: 'published' | 'unpublished';
+  created_by?: string;
   code_name: string;
   classification: string;
   source: string;
@@ -253,6 +254,13 @@ export default function AdminCollectionPage() {
       const userId = getCurrentUserId();
       if (userId) {
         specimenData.set("user_id", String(userId));
+      }
+
+      if (!selectedSpecimen) {
+        const createdBy = getCurrentUserDisplayName();
+        if (createdBy) {
+          specimenData.set("created_by", createdBy);
+        }
       }
 
       const response = await fetch(url, {

@@ -21,6 +21,7 @@ interface Project {
 interface Specimen {
   _id: string;
   publish_status?: 'published' | 'unpublished';
+  created_by?: string;
   code_name: string;
   classification: string;
   source: string;
@@ -93,6 +94,26 @@ export default function AdminCollectionPage() {
   const getCurrentUserId = () => {
     const user = getUserData();
     return user?.userId ?? null;
+  };
+
+  const getCurrentUserDisplayName = () => {
+    if (typeof window === "undefined") return "";
+
+    try {
+      const fromUserData = localStorage.getItem("userData");
+      const fromUser = localStorage.getItem("user");
+      const raw = fromUserData || fromUser;
+      if (!raw) return "";
+
+      const parsed = JSON.parse(raw);
+      const firstName = String(parsed.first_name || parsed.firstName || "").trim();
+      const lastName = String(parsed.last_name || parsed.lastName || "").trim();
+      const fullName = `${firstName} ${lastName}`.trim();
+
+      return fullName || String(parsed.name || parsed.email || parsed.username || "").trim();
+    } catch {
+      return "";
+    }
   };
 
   // Fetch projects
@@ -172,6 +193,13 @@ export default function AdminCollectionPage() {
       const userId = getCurrentUserId();
       if (userId) {
         specimenData.set("user_id", String(userId));
+      }
+
+      if (!selectedSpecimen) {
+        const createdBy = getCurrentUserDisplayName();
+        if (createdBy) {
+          specimenData.set("created_by", createdBy);
+        }
       }
 
       const response = await fetch(url, {

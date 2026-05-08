@@ -11,6 +11,8 @@ interface Collection {
   classification: string;
   source: string;
   date_accessed: string;
+  created_by?: string;
+  updated_by?: string;
   locale?: string;
   project_fund?: string;
   accession_number?: string;
@@ -139,6 +141,9 @@ export default function CollectionTable({ specimens, onView }: {
                   Classification
                 </th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">
+                  Added By
+                </th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">
                   Actions
                 </th>
               </tr>
@@ -146,7 +151,7 @@ export default function CollectionTable({ specimens, onView }: {
             <tbody className="divide-y divide-gray-200">
               {specimens.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={9} className="px-4 py-8 text-center text-gray-500">
                     No specimens found. Add your first specimen to get started.
                   </td>
                 </tr>
@@ -179,6 +184,9 @@ export default function CollectionTable({ specimens, onView }: {
                         {specimen.classification || (typeof specimen.project_id === 'object' ? specimen.project_id?.classification : "N/A")}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-800">
+                        {specimen.created_by || specimen.updated_by || "N/A"}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-800">
                         <div className="flex gap-2">
                           <button
                             onClick={(e) => {
@@ -198,7 +206,7 @@ export default function CollectionTable({ specimens, onView }: {
 
                     {selectedId === specimen._id && (
                       <tr className="bg-gray-50">
-                        <td colSpan={8}>
+                        <td colSpan={9}>
                           <div className="p-4">
                             <h4 className="font-semibold text-gray-700 mb-2">Description:</h4>
                             <p className="text-sm text-gray-600">
