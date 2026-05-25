@@ -113,7 +113,7 @@ const normalizeImportRow = async (row, rowNumber) => {
     errors.push(`Row ${rowNumber}: project not found`);
   }
 
-  const codeName = normalizeString(rawRow.code_name);
+  const codeName = normalizeString(rawRow.code_name || rawRow.code || rawRow.sheet_name || rawRow.sheetName);
   if (!codeName) errors.push(`Row ${rowNumber}: code_name is required`);
 
   const classification = normalizeString(rawRow.classification);
@@ -143,17 +143,10 @@ const normalizeImportRow = async (row, rowNumber) => {
   const fastaSequence = normalizeString(rawRow.fasta_sequence);
   const accessionNo = normalizeString(rawRow.accession_no) || extractAccessionFromFasta(fastaSequence);
 
-  const duplicateQuery = {
-    code_name: codeName,
-  };
-  if (project?._id) {
-    duplicateQuery.project_id = project._id;
-  }
-
-  if (codeName && project?._id) {
-    const existing = await MicrobialInfo.findOne(duplicateQuery).lean();
+  if (codeName) {
+    const existing = await MicrobialInfo.findOne({ code_name: codeName }).lean();
     if (existing) {
-      warnings.push(`Row ${rowNumber}: specimen already exists for this project`);
+      errors.push(`Row ${rowNumber}: code_name already exists in the live collection`);
     }
   }
 
@@ -233,8 +226,18 @@ exports.createImportBatch = async (req, res) => {
     }
 
     const normalizedRows = [];
+    const seenCodeNames = new Set();
     for (let index = 0; index < rows.length; index += 1) {
       const normalized = await normalizeImportRow(rows[index], index + 1);
+      const codeKey = normalizeString(normalized.normalized_row?.code_name).toLowerCase();
+      if (codeKey) {
+        if (seenCodeNames.has(codeKey)) {
+          normalized.errors.push(`Row ${index + 1}: duplicate code_name "${normalized.normalized_row.code_name}" found in this batch`);
+          normalized.status = 'invalid';
+        } else {
+          seenCodeNames.add(codeKey);
+        }
+      }
       normalizedRows.push(normalized);
     }
 
@@ -333,6 +336,11 @@ exports.approveImportBatch = async (req, res) => {
       }
 
       try {
+        const duplicate = await MicrobialInfo.findOne({ code_name: row.normalized_row?.code_name }).lean();
+        if (duplicate) {
+          throw new Error(`code_name "${row.normalized_row?.code_name}" already exists in the live collection`);
+        }
+
         const specimenData = buildSpecimenDataFromRow(row, actor);
         const microbial = new MicrobialInfo(specimenData);
         await microbial.save();

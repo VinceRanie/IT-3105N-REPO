@@ -149,12 +149,92 @@ const parseDateValue = (value: string) => {
   return trimmed;
 };
 
+const normalizeCodeValue = (value: string) => normalizeText(value).replace(/\s+/g, "");
+
 const resolveProjectId = (value: string, projects: ProjectOption[]) => {
   const normalized = normalizeText(value);
   if (!normalized) return "";
 
   const exactMatch = projects.find((project) => project._id === value || normalizeText(project.title) === normalized || normalizeText(project.code) === normalized);
   return exactMatch?._id || "";
+};
+
+const isNonEmptyCell = (value: unknown) => String(value ?? "").trim().length > 0;
+
+const buildSheetRows = (sheet: XLSX.WorkSheet, sheetName: string) => {
+  const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", blankrows: false }) as unknown[][];
+  const rows = rawRows.filter((row) => Array.isArray(row) && row.some(isNonEmptyCell));
+
+  if (rows.length === 0) {
+    return [] as ImportRow[];
+  }
+
+  const compactRows = rows.map((row) => row.map((cell) => String(cell ?? "").trim()));
+  const looksLikeKeyValue = compactRows.every((row) => row.length <= 2) && compactRows.some((row) => row.length >= 2);
+
+  if (looksLikeKeyValue) {
+    const entry: ImportRow = {};
+    compactRows.forEach((row) => {
+      const key = row[0];
+      const value = row[1] ?? "";
+      if (key) {
+        entry[key] = value;
+      }
+    });
+
+    if (!entry.code_name) {
+      entry.code_name = sheetName;
+    }
+
+    return [entry];
+  }
+
+  const [headerRow, ...bodyRows] = compactRows;
+  const headers = headerRow.map((header) => String(header || "").trim()).filter(Boolean);
+  if (headers.length === 0) {
+    return [];
+  }
+
+  const firstRow = bodyRows.find((row) => row.some(isNonEmptyCell));
+  if (!firstRow) {
+    const entry: ImportRow = {};
+    headers.forEach((header) => {
+      entry[header] = "";
+    });
+    if (!entry.code_name) {
+      entry.code_name = sheetName;
+    }
+    return [entry];
+  }
+
+  const entry: ImportRow = {};
+  headers.forEach((header, index) => {
+    entry[header] = String(firstRow[index] ?? "").trim();
+  });
+  if (!entry.code_name) {
+    entry.code_name = sheetName;
+  }
+
+  return [entry];
+};
+
+const buildRowsFromWorkbook = (workbook: XLSX.WorkBook) => {
+  const parsedRows: ImportRow[] = [];
+
+  workbook.SheetNames.forEach((sheetName) => {
+    const sheet = workbook.Sheets[sheetName];
+    if (!sheet) return;
+
+    const sheetRows = buildSheetRows(sheet, sheetName);
+    sheetRows.forEach((row) => {
+      if (!row.code_name) {
+        row.code_name = sheetName;
+      }
+      parsedRows.push(row);
+    });
+  });
+
+  return parsedRows;
 };
 
 const buildRow = (row: ImportRow, headers: string[], mapping: Record<string, string>, projects: ProjectOption[]): PreviewRow => {
@@ -306,7 +386,25 @@ export default function CollectionImportModal({ isOpen, onClose, projects, onImp
 
   const previewRows = useMemo(() => {
     if (!headers.length || !rows.length) return [];
-    return rows.map((row, index) => ({ ...buildRow(row, headers, columnMapping, projects), index }));
+    const baseRows = rows.map((row, index) => ({ ...buildRow(row, headers, columnMapping, projects), index }));
+    const duplicateCounts = new Map<string, number>();
+    baseRows.forEach((row) => {
+      const codeKey = normalizeCodeValue(row.values?.code_name || "");
+      if (!codeKey) return;
+      duplicateCounts.set(codeKey, (duplicateCounts.get(codeKey) || 0) + 1);
+    });
+
+    return baseRows.map((row) => {
+      const codeKey = normalizeCodeValue(row.values?.code_name || "");
+      if (!codeKey || (duplicateCounts.get(codeKey) || 0) <= 1) {
+        return row;
+      }
+
+      return {
+        ...row,
+        errors: [...row.errors, `Duplicate code_name "${row.values?.code_name || codeKey}" found in this file.`],
+      };
+    });
   }, [columnMapping, headers, projects, rows]);
 
   const detectedCount = previewRows.filter((row) => row.errors.length === 0).length;
@@ -320,37 +418,28 @@ export default function CollectionImportModal({ isOpen, onClose, projects, onImp
     try {
       const buffer = await file.arrayBuffer();
       const workbook = XLSX.read(buffer, { type: "array" });
-      const sheetName = workbook.SheetNames[0];
-
-      if (!sheetName) {
+      if (!workbook.SheetNames.length) {
         throw new Error("The selected file does not contain any sheets.");
       }
 
-      const sheet = workbook.Sheets[sheetName];
-      const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" }) as unknown[][];
-      const [headerRow, ...bodyRows] = rawRows;
+      const nextRows = buildRowsFromWorkbook(workbook);
 
-      if (!headerRow || headerRow.length === 0) {
-        throw new Error("The first sheet does not contain a header row.");
+      if (nextRows.length === 0) {
+        throw new Error("No usable specimen rows were found in the workbook.");
       }
 
-      const nextHeaders = headerRow.map((header) => String(header || "").trim()).filter(Boolean);
-      const nextRows = bodyRows
-        .filter((row) => Array.isArray(row) && row.some((value) => String(value || "").trim().length > 0))
-        .map((row) => {
-          const entry: ImportRow = {};
-          nextHeaders.forEach((header, index) => {
-            entry[header] = String(row[index] ?? "").trim();
-          });
-          return entry;
-        });
+      const nextHeaders = Array.from(
+        new Set(
+          nextRows.flatMap((row) => Object.keys(row)).filter(Boolean)
+        )
+      );
 
       const nextMapping = nextHeaders.reduce((acc, header) => {
         acc[header] = guessTargetField(header);
         return acc;
       }, {} as Record<string, string>);
 
-      setFileName(file.name);
+      setFileName(workbook.SheetNames.length > 1 ? `${file.name} (${workbook.SheetNames.length} sheets)` : file.name);
       setHeaders(nextHeaders);
       setRows(nextRows);
       setColumnMapping(nextMapping);
@@ -409,7 +498,7 @@ export default function CollectionImportModal({ isOpen, onClose, projects, onImp
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-slate-900">1. Upload file</p>
-                  <p className="text-sm text-slate-600">Excel and CSV are supported. First sheet only.</p>
+                  <p className="text-sm text-slate-600">Excel and CSV are supported. Each worksheet can become one specimen row.</p>
                 </div>
                 <Upload className="h-5 w-5 text-[#113F67]" />
               </div>
@@ -428,7 +517,7 @@ export default function CollectionImportModal({ isOpen, onClose, projects, onImp
                 />
                 <Sparkles className="h-8 w-8 text-[#113F67]" />
                 <span className="mt-3 text-sm font-medium text-slate-900">Click to choose a spreadsheet</span>
-                <span className="mt-1 text-xs text-slate-500">Auto-detect headers and stage rows before import.</span>
+                <span className="mt-1 text-xs text-slate-500">Auto-detect headers, use sheet names as specimen codes, and stage rows before import.</span>
               </label>
 
               {fileName && (
