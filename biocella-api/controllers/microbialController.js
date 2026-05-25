@@ -11,6 +11,23 @@ const CollectionActivity = require('../models/CollectionActivity');
 const PUBLISH_STATUSES = new Set(['published', 'unpublished']);
 const PRIVILEGED_ROLES = new Set(['admin', 'staff']);
 
+const normalizeCodeValue = (value) => String(value || '').trim().toLowerCase();
+
+const findSpecimenDuplicate = async (codeName, excludeId = null) => {
+  const normalizedCode = normalizeCodeValue(codeName);
+  if (!normalizedCode) return null;
+
+  const filter = {
+    code_name: new RegExp(`^${normalizedCode.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'),
+  };
+
+  if (excludeId) {
+    filter._id = { $ne: excludeId };
+  }
+
+  return MicrobialInfo.findOne(filter).lean();
+};
+
 const normalizeRole = (role) => {
   if (!role) return '';
   const normalized = String(role).trim().toLowerCase();
@@ -165,6 +182,16 @@ const applyCustomImageUploads = ({ customFields, customImageMapRaw, uploadedCust
 // CREATE
 exports.createMicrobial = async (req, res) => {
   try {
+    const incomingCodeName = String(req.body.code_name || '').trim();
+    if (!incomingCodeName) {
+      return res.status(400).json({ error: 'Specimen code is required.' });
+    }
+
+    const duplicate = await findSpecimenDuplicate(incomingCodeName);
+    if (duplicate) {
+      return res.status(409).json({ error: 'Specimen code already exists. Use a unique specimen code.' });
+    }
+
     // Handle file uploads (image and FASTA)
     let image_url = req.body.image_url || '';
     let fasta_file = '';
@@ -379,11 +406,22 @@ exports.updateMicrobial = async (req, res) => {
   try {
     // Handle file uploads if new files are provided
     let updateData = { ...req.body };
-    let oldSpecimen = null;
+    const oldSpecimen = await MicrobialInfo.findById(req.params.id);
+    if (!oldSpecimen) return res.status(404).json({ error: 'Not found' });
+
+    const hasIncomingCodeName = Object.prototype.hasOwnProperty.call(updateData, 'code_name');
+    const incomingCodeName = String(updateData.code_name || '').trim();
+    if (hasIncomingCodeName && !incomingCodeName) {
+      return res.status(400).json({ error: 'Specimen code is required.' });
+    }
+
+    const effectiveCodeName = incomingCodeName || String(oldSpecimen.code_name || '').trim();
+    const duplicate = await findSpecimenDuplicate(effectiveCodeName, req.params.id);
+    if (duplicate) {
+      return res.status(409).json({ error: 'Specimen code already exists. Use a unique specimen code.' });
+    }
     
     if (req.files) {
-      oldSpecimen = await MicrobialInfo.findById(req.params.id);
-      
       // Handle new image upload
       if (req.files.image && req.files.image[0]) {
         // Delete old image if exists
@@ -427,10 +465,6 @@ exports.updateMicrobial = async (req, res) => {
           updateData.fasta_sequence = '';
         }
       }
-    }
-
-    if (!oldSpecimen) {
-      oldSpecimen = await MicrobialInfo.findById(req.params.id);
     }
 
     // Parse JSON fields if they're strings (from multipart form data)

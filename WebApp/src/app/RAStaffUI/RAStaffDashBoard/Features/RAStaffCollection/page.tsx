@@ -118,6 +118,28 @@ export default function RAStaffCollectionPage() {
     return user?.userId ?? null;
   };
 
+  const normalizeCodeValue = (value: string) => String(value || "").trim().toLowerCase();
+
+  const hasDuplicateProjectCode = (code: string, excludeId?: string | null) => {
+    const normalized = normalizeCodeValue(code);
+    if (!normalized) return false;
+
+    return projects.some((project) => {
+      if (excludeId && project._id === excludeId) return false;
+      return normalizeCodeValue(project.code) === normalized;
+    });
+  };
+
+  const hasDuplicateSpecimenCode = (code: string, excludeId?: string | null) => {
+    const normalized = normalizeCodeValue(code);
+    if (!normalized) return false;
+
+    return specimens.some((specimen) => {
+      if (excludeId && specimen._id === excludeId) return false;
+      return normalizeCodeValue(specimen.code_name) === normalized;
+    });
+  };
+
   // Fetch projects
   const fetchProjects = async () => {
     try {
@@ -195,6 +217,11 @@ export default function RAStaffCollectionPage() {
   // Project handlers
   const handleSaveProject = async (projectData: any) => {
     try {
+      if (hasDuplicateProjectCode(projectData.code, selectedProject?._id || null)) {
+        alert("Project code already exists. Use a unique project code.");
+        return;
+      }
+
       const method = selectedProject ? "PUT" : "POST";
       const url = selectedProject
         ? `${API_URL}/projects/${selectedProject._id}`
@@ -227,6 +254,12 @@ export default function RAStaffCollectionPage() {
   // Specimen handlers
   const handleSaveSpecimen = async (specimenData: FormData) => {
     try {
+      const nextCodeName = String(specimenData.get("code_name") || "").trim();
+      if (hasDuplicateSpecimenCode(nextCodeName, selectedSpecimen?._id || null)) {
+        alert("Specimen code already exists. Use a unique specimen code.");
+        return;
+      }
+
       const method = selectedSpecimen ? "PUT" : "POST";
       const url = selectedSpecimen
         ? `${API_URL}/microbials/${selectedSpecimen._id}`
