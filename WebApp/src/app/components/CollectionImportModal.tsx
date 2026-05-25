@@ -161,6 +161,21 @@ const resolveProjectId = (value: string, projects: ProjectOption[]) => {
 
 const isNonEmptyCell = (value: unknown) => String(value ?? "").trim().length > 0;
 
+const hasCodeLikeFirstColumn = (row: string[]) => {
+  const firstCell = String(row[0] ?? "").trim();
+  return Boolean(firstCell) && /[A-Za-z]/.test(firstCell) && /\d/.test(firstCell);
+};
+
+const isDataTableSheet = (headerRowIndex: number, rows: string[][]) => {
+  const bodyRows = rows.slice(headerRowIndex + 1).filter((row) => row.some(isNonEmptyCell));
+  if (bodyRows.length === 0) return false;
+
+  const sampleRows = bodyRows.slice(0, 5);
+  const recordLikeRows = sampleRows.filter((row) => hasCodeLikeFirstColumn(row));
+
+  return recordLikeRows.length >= Math.max(1, Math.ceil(sampleRows.length / 2));
+};
+
 const buildSheetRows = (sheet: XLSX.WorkSheet, sheetName: string) => {
   const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", blankrows: false }) as unknown[][];
   const rows = rawRows.filter((row) => Array.isArray(row) && row.some(isNonEmptyCell));
@@ -170,37 +185,18 @@ const buildSheetRows = (sheet: XLSX.WorkSheet, sheetName: string) => {
   }
 
   const compactRows = rows.map((row) => row.map((cell) => String(cell ?? "").trim()));
-  const looksLikeKeyValue = compactRows.every((row) => row.length <= 2) && compactRows.some((row) => row.length >= 2);
-
-  if (looksLikeKeyValue) {
-    const entry: ImportRow = {};
-    compactRows.forEach((row) => {
-      const key = row[0];
-      const value = row[1] ?? "";
-      if (key) {
-        entry[key] = value;
-      }
-    });
-
-    if (!entry.code_name) {
-      entry.code_name = sheetName;
-    }
-
-    return [entry];
-  }
-
-  const headerRowIndex = compactRows.findIndex((row) => {
-    const nonEmptyCount = row.filter(isNonEmptyCell).length;
-    if (nonEmptyCount < 2) return false;
-
-    return row.some((cell) => {
+  const candidateHeaderRows = compactRows
+    .map((row, index) => ({ row, index }))
+    .filter(({ row }) => row.filter(isNonEmptyCell).length >= 2)
+    .filter(({ row }) => row.some((cell) => {
       const normalized = normalizeText(cell);
-      return normalized.includes("code") || normalized.includes("project") || normalized.includes("classification") || normalized.includes("source") || normalized.includes("date");
-    });
-  });
+      return normalized.includes("code") || normalized.includes("project") || normalized.includes("classification") || normalized.includes("source") || normalized.includes("bioactivity") || normalized.includes("fund");
+    }));
 
-  const resolvedHeaderRowIndex = headerRowIndex >= 0 ? headerRowIndex : compactRows.findIndex((row) => row.filter(isNonEmptyCell).length >= 4);
-  const effectiveHeaderRowIndex = resolvedHeaderRowIndex >= 0 ? resolvedHeaderRowIndex : 0;
+  const effectiveHeaderRowIndex = candidateHeaderRows.find(({ index }) => isDataTableSheet(index, compactRows))?.index ?? -1;
+  if (effectiveHeaderRowIndex < 0) {
+    return [];
+  }
 
   const headerRow = compactRows[effectiveHeaderRowIndex] || [];
   const headers = headerRow.map((header) => String(header || "").trim()).filter(Boolean);
@@ -209,17 +205,6 @@ const buildSheetRows = (sheet: XLSX.WorkSheet, sheetName: string) => {
   }
 
   const bodyRows = compactRows.slice(effectiveHeaderRowIndex + 1).filter((row) => row.some(isNonEmptyCell));
-  if (bodyRows.length === 0) {
-    const entry: ImportRow = {};
-    headers.forEach((header) => {
-      entry[header] = "";
-    });
-    if (!entry.code_name) {
-      entry.code_name = sheetName;
-    }
-    return [entry];
-  }
-
   return bodyRows.map((bodyRow) => {
     const entry: ImportRow = {};
     headers.forEach((header, index) => {
