@@ -6,6 +6,7 @@ import AdminCollection from "./AdminCollection";
 import AdminControls from "./AdminControls";
 import ProjectModal from "./ProjectModal";
 import SpecimenModal from "./SpecimenModal";
+import CollectionImportModal, { NormalizedSpecimenRow } from "@/app/components/CollectionImportModal";
 import { useRouter } from "next/navigation";
 import AlertModal from "./AlertModal";
 import { getUserData } from "@/app/utils/authUtil";
@@ -85,6 +86,7 @@ export default function AdminCollectionPage() {
   // Modal states
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
   const [isSpecimenModalOpen, setIsSpecimenModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [selectedSpecimen, setSelectedSpecimen] = useState<Specimen | null>(null);
   const [alertModal, setAlertModal] = useState<{
@@ -347,6 +349,57 @@ export default function AdminCollectionPage() {
     }
   };
 
+  const handleImportSpecimens = async (rows: NormalizedSpecimenRow[]) => {
+    const displayName = getCurrentUserDisplayName();
+    const userId = getCurrentUserId();
+    const basePayload = {
+      source_file_name: "Spreadsheet import",
+      role: "admin",
+      created_by: displayName,
+      reviewed_by: displayName,
+      approved_by: displayName,
+      user_id: userId,
+      rows,
+    };
+
+    const createResponse = await fetch(`${API_URL}/microbials/import-batches`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(basePayload),
+    });
+
+    if (!createResponse.ok) {
+      const error = await createResponse.json().catch(() => ({}));
+      throw new Error(error.error || "Failed to stage import batch");
+    }
+
+    const createdBatch = await createResponse.json();
+
+    const approveResponse = await fetch(`${API_URL}/microbials/import-batches/${createdBatch._id}/approve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        approved_by: displayName,
+        user_id: userId,
+      }),
+    });
+
+    if (!approveResponse.ok) {
+      const error = await approveResponse.json().catch(() => ({}));
+      throw new Error(error.error || "Failed to approve staged import batch");
+    }
+
+    const result = await approveResponse.json();
+    await fetchSpecimens();
+    setIsImportModalOpen(false);
+    showAlert(
+      "Import complete",
+      `Created ${result.created} specimen${result.created === 1 ? "" : "s"} from batch ${createdBatch._id}. ${result.failed > 0 ? `${result.failed} row${result.failed === 1 ? " was" : "s were"} skipped.` : ""}`.trim()
+    );
+
+    return { created: result.created || 0, failed: result.failed || 0 };
+  };
+
   const handleViewSpecimen = (specimen: any) => {
     console.log("View specimen:", specimen);
     if (!specimen._id) {
@@ -411,6 +464,7 @@ export default function AdminCollectionPage() {
           setSelectedSpecimen(null);
           setIsSpecimenModalOpen(true);
         }}
+        onImportSpecimens={() => setIsImportModalOpen(true)}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         statusFilter={statusFilter}
@@ -444,6 +498,14 @@ export default function AdminCollectionPage() {
         onSave={handleSaveSpecimen}
         specimen={selectedSpecimen}
         projects={projects}
+      />
+
+      <CollectionImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        projects={projects}
+        onImport={handleImportSpecimens}
+        roleLabel="admin"
       />
 
     <AlertModal
