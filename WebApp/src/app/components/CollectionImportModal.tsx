@@ -223,12 +223,55 @@ const buildRow = (row: ImportRow, headers: string[], mapping: Record<string, str
       return;
     }
 
-    if (target === "image_url" || target === "fasta_file" || target === "fasta_sequence" || target === "created_by" || target === "updated_by" || target === "update_notes") {
-      values[target] = rawValue;
+    if (target === "locale") {
+      values.locale = rawValue;
       return;
     }
 
-    (values as Record<string, string>)[target] = rawValue;
+    if (target === "project_fund") {
+      values.project_fund = rawValue;
+      return;
+    }
+
+    if (target === "description") {
+      values.description = rawValue;
+      return;
+    }
+
+    if (target === "created_by") {
+      values.created_by = rawValue;
+      return;
+    }
+
+    if (target === "updated_by") {
+      values.updated_by = rawValue;
+      return;
+    }
+
+    if (target === "update_notes") {
+      values.update_notes = rawValue;
+      return;
+    }
+
+    if (target === "image_url") {
+      values.image_url = rawValue;
+      return;
+    }
+
+    if (target === "fasta_file") {
+      values.fasta_file = rawValue;
+      return;
+    }
+
+    if (target === "fasta_sequence") {
+      values.fasta_sequence = rawValue;
+      return;
+    }
+
+    values.custom_fields = {
+      ...(values.custom_fields || {}),
+      [target]: rawValue,
+    };
   });
 
   if (!values.project_id) errors.push("Missing project match.");
