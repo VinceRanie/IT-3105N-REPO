@@ -161,6 +161,28 @@ const resolveProjectId = (value: string, projects: ProjectOption[]) => {
 
 const isNonEmptyCell = (value: unknown) => String(value ?? "").trim().length > 0;
 
+// Sheets that are clearly not specimen data
+const NON_SPECIMEN_SHEET_NAMES = ["pivot table", "summary", "index", "search", "sheet1", "metadata", "instructions"];
+
+// Check if sheet is likely to contain specimen records
+const isLikelySpecimenSheet = (sheetName: string, headers: string[]): boolean => {
+  const normalizedName = sheetName.toLowerCase();
+  
+  // Exclude known non-specimen sheets
+  if (NON_SPECIMEN_SHEET_NAMES.some(name => normalizedName.includes(name))) {
+    return false;
+  }
+  
+  // Check if headers contain specimen-related fields (case-insensitive)
+  const normalizedHeaders = headers.map(h => h.toLowerCase());
+  const hasSpecimenFields = 
+    normalizedHeaders.some(h => h.includes("code")) ||
+    normalizedHeaders.some(h => h.includes("project")) ||
+    normalizedHeaders.some(h => h.includes("classification"));
+  
+  return hasSpecimenFields;
+};
+
 const buildSheetRows = (sheet: XLSX.WorkSheet, sheetName: string) => {
   const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", blankrows: false }) as unknown[][];
   const rows = rawRows.filter((row) => Array.isArray(row) && row.some(isNonEmptyCell));
@@ -192,6 +214,11 @@ const buildSheetRows = (sheet: XLSX.WorkSheet, sheetName: string) => {
   const [headerRow, ...bodyRows] = compactRows;
   const headers = headerRow.map((header) => String(header || "").trim()).filter(Boolean);
   if (headers.length === 0) {
+    return [];
+  }
+
+  // Skip sheets that don't contain specimen-related data
+  if (!isLikelySpecimenSheet(sheetName, headers)) {
     return [];
   }
 
