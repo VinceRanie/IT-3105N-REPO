@@ -169,6 +169,77 @@ const resolveProjectId = (value: string, projects: ProjectOption[]) => {
   return exactMatch?._id || "";
 };
 
+const FORM_LABELS = [
+  "code",
+  "code name",
+  "specimen code",
+  "sample code",
+  "project",
+  "project code",
+  "project title",
+  "project fund",
+  "classification",
+  "source",
+  "date accessed",
+  "locale",
+  "accession no",
+  "similarity percent",
+  "description",
+  "publish status",
+  "status",
+  "update notes",
+  "created by",
+  "updated by",
+  "image url",
+  "fasta file",
+  "fasta sequence",
+];
+
+const isLikelyFormLabel = (value: unknown) => {
+  const text = String(value ?? "").trim();
+  if (!text) return false;
+
+  const stripped = text.replace(/:\s*$/, "");
+  const normalized = normalizeText(stripped);
+  return text.endsWith(":") || FORM_LABELS.some((label) => headerMatches(normalized, label));
+};
+
+const extractFormStyleRows = (sheet: XLSX.WorkSheet, sheetName: string) => {
+  const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", blankrows: false }) as unknown[][];
+  const entry: ImportRow = {};
+  let foundLabel = false;
+
+  rawRows.forEach((row) => {
+    row.forEach((cell, index) => {
+      const labelCell = String(cell ?? "").trim();
+      if (!isLikelyFormLabel(labelCell)) return;
+
+      let value = "";
+      for (let nextIndex = index + 1; nextIndex < row.length; nextIndex += 1) {
+        const nextCell = String(row[nextIndex] ?? "").trim();
+        if (nextCell) {
+          value = nextCell;
+          break;
+        }
+      }
+
+      if (!value) return;
+
+      const key = labelCell.replace(/:\s*$/, "").trim();
+      entry[key] = value;
+      foundLabel = true;
+    });
+  });
+
+  if (!foundLabel) return [] as ImportRow[];
+
+  if (!entry.code_name && !entry.code && !entry["Code"]) {
+    entry.code_name = sheetName;
+  }
+
+  return [entry];
+};
+
 const getIssuePriority = (message: string) => {
   if (message.startsWith("Missing project match")) return 1;
   if (message.startsWith("Missing code name")) return 2;
@@ -217,9 +288,61 @@ const getProjectLabel = (projectId: string, projects: ProjectOption[]) => {
   return `${match.title} (${match.code})`;
 };
 
+const normalizeCodeKey = (value: string) => normalizeCodeValue(value || "");
+
+const getRowCodeValue = (row: ImportRow) => {
+  const candidateKeys = [
+    "code_name",
+    "code",
+    "code name",
+    "specimen code",
+    "sample code",
+    "specimen id",
+    "sample id",
+    "Code",
+    "Code:",
+    "Specimen Code",
+    "Sample Code",
+  ];
+
+  for (const key of candidateKeys) {
+    const value = String(row[key] ?? "").trim();
+    if (value) return value;
+  }
+
+  const foundKey = Object.keys(row).find((key) => {
+    const normalizedKey = normalizeText(key);
+    return normalizedKey === "code" || normalizedKey === "code name" || normalizedKey === "specimen code" || normalizedKey === "sample code" || normalizedKey === "specimen id" || normalizedKey === "sample id";
+  });
+
+  if (foundKey) {
+    const value = String(row[foundKey] ?? "").trim();
+    if (value) return value;
+  }
+
+  return "";
+};
+
+const mergeRowIntoBucket = (bucket: ImportRow, incoming: ImportRow) => {
+  Object.entries(incoming).forEach(([field, value]) => {
+    const trimmed = String(value ?? "").trim();
+    if (!trimmed) return;
+
+    const current = String(bucket[field] ?? "").trim();
+    if (!current) {
+      bucket[field] = trimmed;
+    }
+  });
+};
+
 const validateNormalizedRow = (values: NormalizedSpecimenRow) => {
   const warnings: string[] = [];
   const errors: string[] = [];
+
+  const sourceSheets = String(row.__source_sheets || "").trim();
+  if (sourceSheets) {
+    warnings.push(`Merged from worksheets: ${sourceSheets}.`);
+  }
 
   if (!values.project_id) errors.push("Missing project match.");
   if (!values.code_name) errors.push("Missing code name.");
@@ -253,6 +376,11 @@ const buildSheetRows = (sheet: XLSX.WorkSheet, sheetName: string) => {
     return [] as ImportRow[];
   }
 
+  const labelCellCount = rows.flat().filter(isLikelyFormLabel).length;
+  if (labelCellCount >= 4) {
+    return extractFormStyleRows(sheet, sheetName);
+  }
+
   const compactRows = rows.map((row) => row.map((cell) => String(cell ?? "").trim()));
   const candidateHeaderRows = compactRows
     .map((row, index) => ({ row, index }))
@@ -279,15 +407,13 @@ const buildSheetRows = (sheet: XLSX.WorkSheet, sheetName: string) => {
     headers.forEach((header, index) => {
       entry[header] = String(bodyRow[index] ?? "").trim();
     });
-    if (!entry.code_name) {
-      entry.code_name = sheetName;
-    }
     return entry;
   });
 };
 
 const buildRowsFromWorkbook = (workbook: XLSX.WorkBook) => {
-  const parsedRows: ImportRow[] = [];
+  const mergedRows = new Map<string, ImportRow>();
+  let rowCounter = 0;
 
   workbook.SheetNames.forEach((sheetName) => {
     const sheet = workbook.Sheets[sheetName];
@@ -295,14 +421,32 @@ const buildRowsFromWorkbook = (workbook: XLSX.WorkBook) => {
 
     const sheetRows = buildSheetRows(sheet, sheetName);
     sheetRows.forEach((row) => {
-      if (!row.code_name) {
-        row.code_name = sheetName;
+      const codeValue = getRowCodeValue(row);
+      const codeKey = normalizeCodeKey(codeValue);
+      const bucketKey = codeKey || `__row_${rowCounter}`;
+      rowCounter += 1;
+
+      const existing = mergedRows.get(bucketKey);
+      if (!existing) {
+        const nextRow: ImportRow = { ...row };
+        if (codeValue && !nextRow.code_name) {
+          nextRow.code_name = codeValue;
+        }
+        nextRow.__source_sheets = sheetName;
+        mergedRows.set(bucketKey, nextRow);
+        return;
       }
-      parsedRows.push(row);
+
+      mergeRowIntoBucket(existing, row);
+      const priorSheets = String(existing.__source_sheets || "").trim();
+      existing.__source_sheets = priorSheets ? `${priorSheets}, ${sheetName}` : sheetName;
+      if (!existing.code_name && codeValue) {
+        existing.code_name = codeValue;
+      }
     });
   });
 
-  return parsedRows;
+  return Array.from(mergedRows.values());
 };
 
 const buildRow = (row: ImportRow, headers: string[], mapping: Record<string, string>, projects: ProjectOption[]): PreviewRow => {
@@ -524,7 +668,9 @@ export default function CollectionImportModal({ isOpen, onClose, projects, onImp
 
       const nextHeaders = Array.from(
         new Set(
-          nextRows.flatMap((row) => Object.keys(row)).filter(Boolean)
+          nextRows
+            .flatMap((row) => Object.keys(row))
+            .filter((header) => Boolean(header) && !header.startsWith("__"))
         )
       );
 
