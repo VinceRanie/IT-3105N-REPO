@@ -385,7 +385,9 @@ const validateNormalizedRow = (values: NormalizedSpecimenRow) => {
     warnings.push(`Project "${projectHint}" will be created during import if needed.`);
   }
   if (!values.code_name) errors.push("Missing code name.");
-  if (!values.classification) errors.push("Missing classification.");
+  if (!values.classification) {
+    warnings.push("Missing classification. This will be included in the import report after staging.");
+  }
 
   return { warnings, errors };
 };
