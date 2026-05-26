@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Check if user already completed setup
-    if (user.is_setup_complete === 1) {
+    if (Number(user.is_setup_complete) === 1) {
       return NextResponse.json(
         { message: "Account setup is already complete. Please log in." },
         { status: 409 }

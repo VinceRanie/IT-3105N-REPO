@@ -655,6 +655,7 @@ exports.adminInvite = async (req, res) => {
       }
 
       // Update the pending user's reset token
+      await authModel.updateUserRole(existingUser.user_id, normalizedRole);
       await authModel.setResetToken(existingUser.user_id, resetToken, tokenExpiry);
 
       return res.status(HttpStatus.OK).json({
@@ -1085,6 +1086,13 @@ exports.getUserByToken = async (req, res) => {
       return res.status(HttpStatus.UNAUTHORIZED).json({
         message: "This token has expired. Please request a new one.",
         statusCode: HttpStatus.UNAUTHORIZED,
+      });
+    }
+
+    if (Number(user.is_setup_complete) === 1) {
+      return res.status(HttpStatus.CONFLICT).json({
+        message: "Account setup is already complete. Please log in.",
+        statusCode: HttpStatus.CONFLICT,
       });
     }
 

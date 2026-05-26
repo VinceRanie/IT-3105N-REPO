@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { google } from "googleapis";
 import { requireEnv } from "@/app/API/lib/routeEnv";
 
-// Google redirects here after the student signs in.
+// Google redirects here after the user signs in.
 // Fetch their profile, verify the email matches the one they registered,
 // then redirect to the finalize form with profile data in the URL.
 
@@ -97,7 +97,7 @@ export async function GET(request: NextRequest) {
       return errorRedirect(parsed?.message || "Invalid or expired registration link.");
     }
 
-    if (user.is_setup_complete === 1) {
+    if (Number(user.is_setup_complete) === 1) {
       return errorRedirect("Account setup is already complete. Please log in.");
     }
 
@@ -115,6 +115,7 @@ export async function GET(request: NextRequest) {
     finalizeUrl.searchParams.set("last_name", profile.family_name || "");
     finalizeUrl.searchParams.set("photo", profile.picture || "");
     finalizeUrl.searchParams.set("email", user.email);
+    finalizeUrl.searchParams.set("role", String(user.role || "student"));
     finalizeUrl.searchParams.set("verified", "true");
 
     return NextResponse.redirect(finalizeUrl.toString());
