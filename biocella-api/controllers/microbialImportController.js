@@ -190,7 +190,7 @@ const normalizeImportRow = async (row, rowNumber) => {
     image_url: normalizeString(rawRow.image_url),
     fasta_file: normalizeString(rawRow.fasta_file),
     fasta_sequence: fastaSequence,
-    biochemical_tests,
+    biochemical_tests: biochemicalTests,
     morphology,
     custom_fields,
   };

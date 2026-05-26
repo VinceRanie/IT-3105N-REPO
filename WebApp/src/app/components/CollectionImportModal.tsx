@@ -253,8 +253,19 @@ const isLikelyFormLabel = (value: unknown) => {
   return text.endsWith(":") || FORM_LABELS.some((label) => headerMatches(normalized, label));
 };
 
+const isInstructionSheet = (rows: unknown[][]) => {
+  const text = rows
+    .flat()
+    .map((cell) => normalizeText(String(cell ?? "")))
+    .join(" ");
+
+  return text.includes("information sheet") || text.includes("only input the code in the highlighted cell below") || text.includes("do not alter the formula") || text.includes("search by id/code") || text.includes("culture collection of applied microbiology laboratory");
+};
+
 const extractFormStyleRows = (sheet: XLSX.WorkSheet, sheetName: string) => {
   const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", blankrows: false }) as unknown[][];
+  if (isInstructionSheet(rawRows)) return [] as ImportRow[];
+
   const entry: ImportRow = {};
   let foundLabel = false;
 
@@ -389,11 +400,6 @@ const buildSheetRows = (sheet: XLSX.WorkSheet, sheetName: string) => {
     return [] as ImportRow[];
   }
 
-  const labelCellCount = rows.flat().filter(isLikelyFormLabel).length;
-  if (labelCellCount >= 4) {
-    return extractFormStyleRows(sheet, sheetName);
-  }
-
   const compactRows = rows.map((row) => row.map((cell) => String(cell ?? "").trim()));
   const candidateHeaderRows = compactRows
     .map((row, index) => ({ row, index }))
@@ -403,7 +409,38 @@ const buildSheetRows = (sheet: XLSX.WorkSheet, sheetName: string) => {
       return normalized.includes("code") || normalized.includes("project") || normalized.includes("classification") || normalized.includes("source") || normalized.includes("bioactivity") || normalized.includes("fund");
     }));
 
-  const effectiveHeaderRowIndex = candidateHeaderRows.find(({ index }) => isDataTableSheet(index, compactRows))?.index ?? -1;
+  const tableHeaderRowIndex = candidateHeaderRows.find(({ index }) => isDataTableSheet(index, compactRows))?.index ?? -1;
+  if (tableHeaderRowIndex >= 0) {
+    const headerRow = compactRows[tableHeaderRowIndex] || [];
+    const headers = headerRow.map((header) => String(header || "").trim()).filter(Boolean);
+    if (headers.length > 0) {
+      const bodyRows = compactRows.slice(tableHeaderRowIndex + 1).filter((row) => row.some(isNonEmptyCell));
+      const tableRows = bodyRows
+        .map((bodyRow) => {
+          const entry: ImportRow = {};
+          headers.forEach((header, index) => {
+            entry[header] = String(bodyRow[index] ?? "").trim();
+          });
+          return isLikelySpecimenRow(entry) ? entry : null;
+        })
+        .filter((row): row is ImportRow => Boolean(row));
+
+      if (tableRows.length > 0) {
+        return tableRows;
+      }
+    }
+  }
+
+  if (isInstructionSheet(rows)) {
+    return [] as ImportRow[];
+  }
+
+  const labelCellCount = rows.flat().filter(isLikelyFormLabel).length;
+  if (labelCellCount >= 4) {
+    return extractFormStyleRows(sheet, sheetName);
+  }
+
+  const effectiveHeaderRowIndex = tableHeaderRowIndex;
   if (effectiveHeaderRowIndex < 0) {
     return [];
   }
