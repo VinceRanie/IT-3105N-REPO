@@ -235,7 +235,6 @@ exports.approveImportBatch = async (req, res) => {
     res.status(500).json({ error: 'Failed to approve import batch', details: error.message });
   }
 };
-  }
 
   const biochemicalTests = parseMaybeJson(rawRow.biochemical_tests) || {};
   const morphology = parseMaybeJson(rawRow.morphology) || {};
