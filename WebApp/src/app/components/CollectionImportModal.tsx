@@ -339,11 +339,6 @@ const validateNormalizedRow = (values: NormalizedSpecimenRow) => {
   const warnings: string[] = [];
   const errors: string[] = [];
 
-  const sourceSheets = String(row.__source_sheets || "").trim();
-  if (sourceSheets) {
-    warnings.push(`Merged from worksheets: ${sourceSheets}.`);
-  }
-
   if (!values.project_id) errors.push("Missing project match.");
   if (!values.code_name) errors.push("Missing code name.");
   if (!values.classification) errors.push("Missing classification.");
@@ -606,6 +601,11 @@ export default function CollectionImportModal({ isOpen, onClose, projects, onImp
       const builtRow = buildRow(row, headers, columnMapping, projects);
       const patchedValues = applyRowPatch(builtRow.values || ({} as NormalizedSpecimenRow), rowPatches[index]);
       const validation = validateNormalizedRow(patchedValues);
+      const sourceSheets = String(row.__source_sheets || "").trim();
+
+      if (sourceSheets) {
+        validation.warnings.push(`Merged from worksheets: ${sourceSheets}.`);
+      }
 
       return {
         index,
