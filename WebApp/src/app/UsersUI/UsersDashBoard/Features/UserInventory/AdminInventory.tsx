@@ -65,6 +65,10 @@ export default function AdminInventory() {
   useEffect(() => {
     let result = chemicals;
 
+    // Only show chemicals that still have at least one active batch.
+    const activeChemicalIds = new Set(batches.map((batch) => batch.chemical_id));
+    result = result.filter((chemical) => activeChemicalIds.has(chemical.chemical_id));
+
     // Search filter
     if (searchTerm) {
       result = result.filter((chemical) =>
@@ -84,7 +88,7 @@ export default function AdminInventory() {
 
     setFilteredChemicals(result);
     setCurrentPage(1); // Reset to first page on filter change
-  }, [searchTerm, unitFilter, typeFilter, chemicals]);
+  }, [searchTerm, unitFilter, typeFilter, chemicals, batches]);
 
   // Pagination logic
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -121,9 +125,22 @@ export default function AdminInventory() {
     setIsDeleteModalOpen(false);
   };
 
-  // Check if quantity is below threshold
+  const getChemicalBatches = (chemicalId: number) =>
+    batches.filter((batch) => batch.chemical_id === chemicalId);
+
+  const getRemainingQuantity = (chemicalId: number) => {
+    const chemicalBatches = getChemicalBatches(chemicalId);
+    if (!chemicalBatches.length) return 0;
+
+    return chemicalBatches.reduce(
+      (sum, batch) => sum + Math.max(0, batch.quantity - batch.used_quantity),
+      0
+    );
+  };
+
+  // Threshold is evaluated against total remaining stock across all active containers.
   const isLowStock = (chemical: Chemical) => {
-    return chemical.quantity <= chemical.threshold;
+    return getRemainingQuantity(chemical.chemical_id) <= chemical.threshold;
   };
 
   if (loading) {
@@ -208,8 +225,6 @@ export default function AdminInventory() {
           <table className="w-full">
             <thead className="bg-[#113F67] text-white">
               <tr>
-                <th className="px-6 py-3 text-left text-sm font-semibold">Chem ID</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold">Batch ID</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold">Name</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold">Type</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold">Quantity</th>
@@ -217,19 +232,19 @@ export default function AdminInventory() {
                 <th className="px-6 py-3 text-left text-sm font-semibold">Location</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold">Exp. Date</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold">Status</th>
-                <th className="px-6 py-3 text-center text-sm font-semibold">QR Code</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {currentItems.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
                     No chemicals found
                   </td>
                 </tr>
               ) : (
                 currentItems.map((chemical) => {
                   const chemicalBatch = batches.find(b => b.chemical_id === chemical.chemical_id);
+                  const remainingQuantity = getRemainingQuantity(chemical.chemical_id);
                   return (
                   <tr
                     key={chemical.chemical_id}
@@ -237,12 +252,6 @@ export default function AdminInventory() {
                       isLowStock(chemical) ? "bg-red-50" : ""
                     }`}
                   >
-                    <td className="px-6 py-4 text-sm text-gray-900">
-                      {chemical.chemical_id}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-900 font-semibold">
-                      {chemicalBatch?.batch_id || 'N/A'}
-                    </td>
                     <td className="px-6 py-4 text-sm font-medium text-gray-900">
                       {chemical.name}
                     </td>
@@ -252,7 +261,7 @@ export default function AdminInventory() {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">
-                      {chemicalBatch ? chemicalBatch.quantity - chemicalBatch.used_quantity : chemical.quantity}
+                      {remainingQuantity}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">
                       {chemical.unit}
@@ -264,38 +273,20 @@ export default function AdminInventory() {
                       {chemicalBatch?.expiration_date ? new Date(chemicalBatch.expiration_date).toLocaleDateString() : 'N/A'}
                     </td>
                     <td className="px-6 py-4 text-sm">
-                      {isLowStock(chemical) ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                          Low Stock
+                      <div className="flex flex-wrap gap-1.5">
+                        {isLowStock(chemical) ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            Low Stock
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            In Stock
+                          </span>
+                        )}
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700">
+                          Shared Threshold
                         </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                          In Stock
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-center">
-                      {chemicalBatch?.qr_code ? (
-                        <button
-                          onClick={() => {
-                            const link = document.createElement('a');
-                            link.href = chemicalBatch.qr_code!;
-                            link.download = `batch_${chemicalBatch.batch_id}_qr.png`;
-                            link.click();
-                          }}
-                          className="inline-block"
-                          title="Download QR Code"
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img 
-                            src={chemicalBatch.qr_code} 
-                            alt={`QR Code for ${chemical.name}`}
-                            className="w-12 h-12 mx-auto hover:scale-110 transition-transform cursor-pointer"
-                          />
-                        </button>
-                      ) : (
-                        <span className="text-gray-400 text-xs">No QR</span>
-                      )}
+                      </div>
                     </td>
                   </tr>
                   );

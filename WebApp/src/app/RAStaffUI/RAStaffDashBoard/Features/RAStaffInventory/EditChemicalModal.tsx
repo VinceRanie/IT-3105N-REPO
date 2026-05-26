@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { X } from "lucide-react";
 import { Chemical } from "./types";
 import { API_URL } from "@/config/api";
@@ -15,6 +15,24 @@ interface EditChemicalModalProps {
 
 type EditChemicalFormData = Omit<Chemical, 'chemical_id' | 'last_updated'>;
 
+const ALL_UNITS = ["mL", "L", "g", "kg", "mg", "μL", "pieces", "bottles"] as const;
+const MASS_UNITS = ["g", "kg", "mg"] as const;
+const VOLUME_UNITS = ["mL", "L", "μL"] as const;
+
+const getAllowedUnitsForType = (type: string) => {
+  const normalized = type.trim().toLowerCase();
+
+  if (["agar", "protein", "salt", "dye", "stain", "enzyme", "antibody"].includes(normalized)) {
+    return [...MASS_UNITS];
+  }
+
+  if (["acid", "base", "buffer", "solvent"].includes(normalized)) {
+    return [...VOLUME_UNITS];
+  }
+
+  return [...ALL_UNITS];
+};
+
 export default function EditChemicalModal({
   isOpen,
   onClose,
@@ -28,10 +46,9 @@ export default function EditChemicalModal({
     unit: chemical.unit,
     threshold: chemical.threshold,
   });
-  const [amountUsed, setAmountUsed] = useState(0);
-  const [purpose, setPurpose] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const allowedUnits = useMemo(() => getAllowedUnitsForType(formData.type), [formData.type]);
 
   // Update form data when chemical prop changes
   useEffect(() => {
@@ -44,12 +61,22 @@ export default function EditChemicalModal({
     });
   }, [chemical]);
 
+  useEffect(() => {
+    if (!allowedUnits.includes(formData.unit as (typeof allowedUnits)[number])) {
+      setFormData((prev) => ({ ...prev, unit: allowedUnits[0] }));
+    }
+  }, [allowedUnits, formData.unit]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
     try {
+      if (!allowedUnits.includes(formData.unit as (typeof allowedUnits)[number])) {
+        throw new Error(`Selected unit is not valid for type ${formData.type}.`);
+      }
+
       // Update chemical
       console.log('Updating chemical with data:', formData);
       const response = await fetch(
@@ -67,79 +94,6 @@ export default function EditChemicalModal({
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || "Failed to update chemical");
-      }
-
-      console.log('Chemical updated. Amount used:', amountUsed, 'Purpose:', purpose);
-
-      // If there's usage logged, create usage log entry
-      if (amountUsed > 0 && purpose.trim()) {
-        console.log('Logging usage...');
-        // First, get the batch ID for this chemical
-        const batchResponse = await fetch(`${API_URL}/batches`, {
-          headers: getAuthHeader(),
-        });
-        const batches = await batchResponse.json();
-        console.log('All batches:', batches);
-        const chemicalBatch = batches.find((b: { chemical_id: number }) => b.chemical_id === chemical.chemical_id);
-        console.log('Found batch for chemical:', chemicalBatch);
-        
-        if (chemicalBatch) {
-          // Update batch used_quantity
-          const newUsedQuantity = (chemicalBatch.used_quantity || 0) + amountUsed;
-          console.log('Updating batch used_quantity to:', newUsedQuantity);
-          
-          const updateBatchResponse = await fetch(`${API_URL}/batches/${chemicalBatch.batch_id}`, {
-            method: "PUT",
-            headers: {
-              "Content-Type": "application/json",
-              ...getAuthHeader(),
-            },
-            body: JSON.stringify({
-              quantity: chemicalBatch.quantity,
-              used_quantity: newUsedQuantity,
-              expiration_date: chemicalBatch.expiration_date,
-              location: chemicalBatch.location,
-            }),
-          });
-
-          if (!updateBatchResponse.ok) {
-            console.error('Failed to update batch:', await updateBatchResponse.text());
-          } else {
-            console.log('Batch updated successfully');
-          }
-
-          // Log usage
-          const usageData = {
-            chemical_id: chemical.chemical_id,
-            user_id: 3,
-            date_used: new Date().toISOString(),
-            amount_used: amountUsed,
-            purpose,
-            batch_id: chemicalBatch.batch_id,
-          };
-          console.log('Creating usage log with data:', usageData);
-
-          const usageResponse = await fetch(`${API_URL}/usage`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              ...getAuthHeader(),
-            },
-            body: JSON.stringify(usageData),
-          });
-
-          if (!usageResponse.ok) {
-            const errorText = await usageResponse.text();
-            console.error('Failed to log usage:', errorText);
-            throw new Error('Failed to log usage: ' + errorText);
-          } else {
-            console.log('Usage logged successfully');
-          }
-        } else {
-          console.warn('No batch found for this chemical');
-        }
-      } else {
-        console.log('Skipping usage logging - no amount or purpose provided');
       }
 
       onSuccess();
@@ -242,18 +196,20 @@ export default function EditChemicalModal({
             {/* Quantity */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Quantity *
+                Quantity (Auto from Lots)
               </label>
               <input
                 type="number"
                 name="quantity"
                 value={formData.quantity}
-                onChange={handleChange}
-                required
-                min="0"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
-                placeholder="Enter quantity"
+                readOnly
+                disabled
+                className="w-full px-3 py-2 border border-gray-200 bg-gray-100 text-gray-600 rounded-lg"
+                placeholder="Calculated from active lots"
               />
+              <p className="mt-1 text-xs text-gray-500">
+                Quantity is derived from total remaining stock across active lots/containers.
+              </p>
             </div>
 
             {/* Unit */}
@@ -268,21 +224,19 @@ export default function EditChemicalModal({
                 required
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
               >
-                <option value="mL">mL</option>
-                <option value="L">L</option>
-                <option value="g">g</option>
-                <option value="kg">kg</option>
-                <option value="mg">mg</option>
-                <option value="μL">μL</option>
-                <option value="pieces">pieces</option>
-                <option value="bottles">bottles</option>
+                {allowedUnits.map((unit) => (
+                  <option key={unit} value={unit}>{unit}</option>
+                ))}
               </select>
+              <p className="mt-1 text-xs text-gray-500">
+                Unit options are filtered based on selected type.
+              </p>
             </div>
 
             {/* Threshold */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Low Stock Threshold *
+                Reorder Threshold (Total Stock) *
               </label>
               <input
                 type="number"
@@ -295,46 +249,10 @@ export default function EditChemicalModal({
                 placeholder="Enter threshold"
               />
               <p className="mt-1 text-xs text-gray-500">
-                Alert when quantity falls below this value
+                Applied to total remaining stock across all lots/containers.
               </p>
             </div>
 
-            {/* Usage Logging Section */}
-            <div className="border-t pt-4 mt-4">
-              <h3 className="text-lg font-semibold text-[#113F67] mb-3">Log Usage (Optional)</h3>
-              
-              {/* Amount Used */}
-              <div className="mb-3">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Amount Used
-                </label>
-                <input
-                  type="number"
-                  value={amountUsed}
-                  onChange={(e) => setAmountUsed(Number(e.target.value))}
-                  min="0"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
-                  placeholder="Enter amount used (if any)"
-                />
-              </div>
-
-              {/* Purpose */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Purpose
-                </label>
-                <textarea
-                  value={purpose}
-                  onChange={(e) => setPurpose(e.target.value)}
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
-                  placeholder="Describe what this was used for..."
-                />
-                <p className="mt-1 text-xs text-gray-500">
-                  Fill this out to log usage in chemical_usage_log
-                </p>
-              </div>
-            </div>
           </div>
 
           {/* Actions */}

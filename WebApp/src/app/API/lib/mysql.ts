@@ -2,10 +2,8 @@ import mysql, { RowDataPacket, ResultSetHeader } from 'mysql2/promise'
 
 let pool: mysql.Pool | null = null;
 
-function getPool() {
-    if (pool) {
-        return pool;
-    }
+const getPool = (): mysql.Pool => {
+    if (pool) return pool;
 
     const DB_HOST = process.env.DB_HOST;
     const DB_USER = process.env.DB_USER;
@@ -29,20 +27,20 @@ function getPool() {
     });
 
     return pool;
-}
+};
 
 export async function query<T extends RowDataPacket  | ResultSetHeader>(
     sql: string,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     values?: any[]
 ): Promise<T[]>{
-    const connectionPool = getPool();
+    const activePool = getPool();
 
     if (sql.trim().toUpperCase().startsWith('SELECT')){
-        const [rows] = await connectionPool.execute(sql, values);
+        const [rows] = await activePool.execute(sql, values);
         return rows as T[]
     }else{
-        const [result] = await connectionPool.execute(sql, values);
+        const [result] = await activePool.execute(sql, values);
         return [result as T]; 
     }
 }

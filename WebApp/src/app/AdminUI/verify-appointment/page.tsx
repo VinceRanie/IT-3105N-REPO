@@ -27,6 +27,23 @@ function VerifyAppointmentContent() {
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
+    const fetchAppointment = async () => {
+      try {
+        const response = await fetch(`/API/appointments/verify?token=${token}&id=${id}`);
+        const data = await response.json();
+        
+        if (response.ok) {
+          setAppointment(data.appointment);
+        } else {
+          setError(data.message || 'Invalid QR code');
+        }
+      } catch {
+        setError('Failed to verify QR code');
+      } finally {
+        setLoading(false);
+      }
+    };
+
     if (token && id) {
       fetchAppointment();
     } else {
@@ -34,23 +51,6 @@ function VerifyAppointmentContent() {
       setLoading(false);
     }
   }, [token, id]);
-
-  const fetchAppointment = async () => {
-    try {
-      const response = await fetch(`/API/appointments/verify?token=${token}&id=${id}`);
-      const data = await response.json();
-      
-      if (response.ok) {
-        setAppointment(data.appointment);
-      } else {
-        setError(data.message || 'Invalid QR code');
-      }
-    } catch (err) {
-      setError('Failed to verify QR code');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleVerify = async () => {
     if (!appointment) return;
@@ -74,7 +74,7 @@ function VerifyAppointmentContent() {
       } else {
         setError(data.message || 'Failed to verify appointment');
       }
-    } catch (err) {
+    } catch {
       setError('Failed to verify appointment');
     } finally {
       setVerifying(false);

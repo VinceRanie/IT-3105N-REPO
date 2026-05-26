@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
 
     if (!month || !year) {
       return NextResponse.json(
-        { error: 'Month and year parameters are required', daysWithAppointments: {} },
+        { error: 'Month and year parameters are required', daysWithAppointments: {}, daysUnavailable: {} },
         { status: 400 }
       );
     }
@@ -32,7 +32,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         month,
         year,
-        daysWithAppointments: {}
+        daysWithAppointments: {},
+        daysUnavailable: {}
       });
     }
 
@@ -43,7 +44,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       month: new Date().getMonth() + 1,
       year: new Date().getFullYear(),
-      daysWithAppointments: {}
+      daysWithAppointments: {},
+      daysUnavailable: {}
     });
   }
 }

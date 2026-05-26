@@ -58,7 +58,7 @@ interface Collection {
   special_reqs?: string;
   activity?: string;
   result?: string;
-  custom_fields?: Record<string, string>;
+  custom_fields?: Record<string, any>;
 }
 
 const sampleCollections_backup = [
@@ -90,6 +90,24 @@ export default function CollectionTable({ specimens, onView }: {
 
   const handleRowClick = (id: string) => {
     setSelectedId((prev) => (prev === id ? null : id));
+  };
+
+  const getCustomFieldLabel = (key: string, value: any) => {
+    if (value && typeof value === "object" && !Array.isArray(value) && value.label) {
+      return String(value.label);
+    }
+    return key.replace(/_/g, " ");
+  };
+
+  const formatCustomFieldValue = (value: any) => {
+    if (value === null || value === undefined || value === "") return "N/A";
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      if ("value" in value) {
+        return String(value.value || "N/A");
+      }
+      return JSON.stringify(value);
+    }
+    return String(value);
   };
 
   return (
@@ -233,8 +251,8 @@ export default function CollectionTable({ specimens, onView }: {
                                 <>
                                   {Object.entries(specimen.custom_fields).map(([key, value]) => (
                                     <div key={key}>
-                                      <span className="font-medium capitalize">{key.replace(/_/g, ' ')}:</span>{" "}
-                                      {value}
+                                      <span className="font-medium capitalize">{getCustomFieldLabel(key, value)}:</span>{" "}
+                                      {formatCustomFieldValue(value)}
                                     </div>
                                   ))}
                                 </>

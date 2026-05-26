@@ -15,6 +15,7 @@ router.use('/biochemical', require('./biochemicalRoutes'));
 router.use('/genome', require('./genomeRoutes'));
 router.use('/bioactivity', require('./bioactivityRoutes'));
 router.use('/resource', require('./resourceRoutes'));
+router.use('/collection-activity', require('./collectionActivityRoutes'));
 
 // Appointment Routes
 router.use('/appointments', require('./appointmentRoutes'));
@@ -23,6 +24,7 @@ router.use('/appointments', require('./appointmentRoutes'));
 router.use('/chemicals', require('./chemicalRoutes'));
 router.use('/batches', require('./batchRoutes'));
 router.use('/usage', require('./usageRoutes'));
+router.use('/reports', require('./reportRoutes'));
 
 //Blaast
 router.post('/submit', blastController.runBlast);

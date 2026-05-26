@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 
 interface Collection {
   _id: string;
+  publish_status?: 'published' | 'unpublished';
   code_name: string;
   classification: string;
   source: string;
@@ -58,13 +59,14 @@ interface Collection {
   special_reqs?: string;
   activity?: string;
   result?: string;
-  custom_fields?: Record<string, string>;
+  custom_fields?: Record<string, any>;
 }
 
-export default function RAStaffCollection({ specimens, onEdit, onView }: { 
+export default function RAStaffCollection({ specimens, onEdit, onView, onTogglePublish }: { 
   specimens: Collection[], 
   onEdit: (specimen: Collection) => void,
-  onView: (specimen: Collection) => void 
+  onView: (specimen: Collection) => void,
+  onTogglePublish: (specimen: Collection) => void
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sortColumn, setSortColumn] = useState<string | null>(null);
@@ -126,6 +128,13 @@ export default function RAStaffCollection({ specimens, onEdit, onView }: {
     </th>
   );
 
+  const formatCustomFieldValue = (value: any) => {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      return String(value.value || "N/A");
+    }
+    return String(value || "N/A");
+  };
+
   return (
     <div className="w-full flex flex-col px-4 sm:px-6 lg:px-8 py-6">
       <div className="bg-white rounded-lg shadow-lg border border-gray-200 flex flex-col flex-1 overflow-hidden">
@@ -139,6 +148,7 @@ export default function RAStaffCollection({ specimens, onEdit, onView }: {
                 <SortableHeader column="locale" label="Locale" />
                 <SortableHeader column="source" label="Source" />
                 <SortableHeader column="classification" label="Classification" />
+                <SortableHeader column="publish_status" label="Status" />
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">
                   Actions
                 </th>
@@ -147,7 +157,7 @@ export default function RAStaffCollection({ specimens, onEdit, onView }: {
             <tbody className="divide-y divide-gray-200">
               {getSortedData().length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
                     No specimens found. Add your first specimen to get started.
                   </td>
                 </tr>
@@ -177,6 +187,17 @@ export default function RAStaffCollection({ specimens, onEdit, onView }: {
                         {specimen.classification || (typeof specimen.project_id === 'object' ? specimen.project_id?.classification : "N/A")}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-800">
+                        <span
+                          className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
+                            specimen.publish_status === 'published'
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}
+                        >
+                          {specimen.publish_status === 'published' ? 'Published' : 'Unpublished'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-800">
                         <div className="flex gap-2">
                           <button
                             onClick={(e) => {
@@ -201,6 +222,16 @@ export default function RAStaffCollection({ specimens, onEdit, onView }: {
                             title="Edit"
                           >
                             <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onTogglePublish(specimen);
+                            }}
+                            className="px-2 py-1 text-xs text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded"
+                            title={specimen.publish_status === 'published' ? 'Unpublish' : 'Publish'}
+                          >
+                            {specimen.publish_status === 'published' ? 'Unpublish' : 'Publish'}
                           </button>
                         </div>
                       </td>
@@ -261,8 +292,10 @@ export default function RAStaffCollection({ specimens, onEdit, onView }: {
                                 <>
                                   {Object.entries(specimen.custom_fields).map(([key, value]) => (
                                     <div key={key}>
-                                      <span className="font-medium capitalize">{key.replace(/_/g, ' ')}:</span>{" "}
-                                      {value}
+                                      <span className="font-medium capitalize">
+                                        {(value && typeof value === "object" && value.label) ? value.label : key.replace(/_/g, ' ')}:
+                                      </span>{" "}
+                                      {formatCustomFieldValue(value)}
                                     </div>
                                   ))}
                                 </>

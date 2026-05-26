@@ -1,5 +1,10 @@
 import StudentAppointmentCalendar from "./StudentAppointmentCalendar";
+import { AppointmentProvider } from "./AppointmentContext";
 
 export default function UserAppointmentPage(){
-    return <StudentAppointmentCalendar/>;
+    return (
+        <AppointmentProvider>
+            <StudentAppointmentCalendar />
+        </AppointmentProvider>
+    );
 }

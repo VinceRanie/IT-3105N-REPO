@@ -4,6 +4,9 @@ import { useState, useEffect } from "react";
 import { X, Upload, ChevronDown, ChevronRight, Dna, Plus, Trash2 } from "lucide-react";
 import Image from "next/image";
 import { API_URL } from "@/config/api";
+import Modal from "@/app/components/Modal";
+import { validateFASTAFile, FASTAValidationResult } from "@/lib/fastaValidator";
+import FASTAValidationDisplay from "@/components/FASTAValidationDisplay";
 
 interface SpecimenModalProps {
   isOpen: boolean;
@@ -68,6 +71,8 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
   const [fastaFile, setFastaFile] = useState<File | null>(null);
   const [blastStatus, setBlastStatus] = useState<string>("");
   const [blastResults, setBlastResults] = useState<any>(null);
+  const [fastaValidation, setFastaValidation] = useState<FASTAValidationResult | null>(null);
+  const [modalConfig, setModalConfig] = useState<{ type: "success" | "error" | "info"; title: string; message: string } | null>(null);
 
   useEffect(() => {
     if (specimen) {
@@ -136,6 +141,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
       setFastaFile(null);
       setBlastStatus("");
       setBlastResults(null);
+      setFastaValidation(null);
     }
   }, [specimen]);
 
@@ -155,10 +161,26 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
     }
   };
 
-  const handleFastaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFastaChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setFastaFile(file);
+      
+      // Validate FASTA file
+      try {
+        const validation = await validateFASTAFile(file);
+        setFastaValidation(validation);
+      } catch (error) {
+        console.error('FASTA validation error:', error);
+        setFastaValidation({
+          isValid: false,
+          errors: ['Failed to validate FASTA file'],
+          warnings: [],
+          sequenceType: null,
+          sequenceLength: 0,
+          message: 'Error reading file - please try again'
+        });
+      }
     }
   };
 
@@ -206,6 +228,12 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Check FASTA validation if a file was selected
+    if (fastaFile && fastaValidation && !fastaValidation.isValid) {
+      setModalConfig({ type: 'error', title: 'Invalid FASTA File', message: `${fastaValidation.message}\n\nPlease fix the issues before submitting.` });
+      return;
+    }
+    
     const submitData = new FormData();
     
     // Add all form fields
@@ -230,7 +258,13 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
 
   const handleBlastSubmit = async () => {
     if (!specimen || !specimen._id) {
-      alert("Please save the specimen first before running BLAST");
+      setModalConfig({ type: 'error', title: 'Error', message: 'Please save the specimen first before running BLAST' });
+      return;
+    }
+
+    // Check FASTA validation if a new file was selected
+    if (fastaFile && fastaValidation && !fastaValidation.isValid) {
+      setModalConfig({ type: 'error', title: 'Invalid FASTA File', message: `${fastaValidation.message}\\n\\nPlease fix the issues before submitting to BLAST.` });
       return;
     }
 
@@ -243,17 +277,17 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
       
       if (response.ok) {
         setBlastStatus("pending");
-        alert(`BLAST submitted! RID: ${data.rid}. Results will be ready in 30-60 seconds.`);
-        
-        // Poll for results after 30 seconds
-        setTimeout(() => checkBlastResults(), 30000);
+        setModalConfig({ type: 'success', title: 'BLAST Submitted', message: `BLAST submitted! RID: ${data.rid}. Results usually take 2–10 minutes and may take longer during peak load.` });
+
+        // Poll for results after 60 seconds
+        setTimeout(() => checkBlastResults(), 60000);
       } else {
         setBlastStatus("error");
-        alert(`BLAST submission failed: ${data.error}`);
+        setModalConfig({ type: 'error', title: 'Error', message: `BLAST submission failed: ${data.error}` });
       }
     } catch (error) {
       setBlastStatus("error");
-      alert("Failed to submit BLAST request");
+      setModalConfig({ type: 'error', title: 'Error', message: 'Failed to submit BLAST request' });
     }
   };
 
@@ -267,10 +301,10 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
       if (data.status === 'completed') {
         setBlastStatus("completed");
         setBlastResults(data.results);
-        alert("BLAST results ready!");
+        setModalConfig({ type: 'success', title: 'BLAST Complete', message: 'BLAST results ready!' });
       } else if (data.status === 'pending') {
         setBlastStatus("pending");
-        alert("BLAST is still running. Check again in a few seconds.");
+        setModalConfig({ type: 'info', title: 'BLAST Running', message: 'BLAST is still running. Results usually take 2–10 minutes and may take longer during peak load.' });
       } else {
         setBlastStatus(data.status);
       }
@@ -501,7 +535,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
                   <div className="flex items-center gap-4">
                     <input
                       type="file"
-                      accept=".fasta,.fa,.txt"
+                      accept=".fasta,.fa,.fna,.ffn,.faa,text/plain,application/octet-stream"
                       onChange={handleFastaChange}
                       className="flex-1 text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                     />
@@ -512,6 +546,18 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
                   {specimen && specimen.fasta_file && !fastaFile && (
                     <p className="mt-1 text-sm text-gray-500">Current: {specimen.fasta_file.split('/').pop()}</p>
                   )}
+                  
+                  {/* FASTA Validation Display */}
+                  {fastaFile && fastaValidation && (
+                    <FASTAValidationDisplay
+                      isValid={fastaValidation.isValid}
+                      errors={fastaValidation.errors}
+                      warnings={fastaValidation.warnings}
+                      sequenceType={fastaValidation.sequenceType}
+                      sequenceLength={fastaValidation.sequenceLength}
+                      message={fastaValidation.message}
+                    />
+                  )}
                 </div>
 
                 {/* BLAST Button */}
@@ -520,7 +566,7 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
                     <button
                       type="button"
                       onClick={handleBlastSubmit}
-                      disabled={blastStatus === 'submitting' || blastStatus === 'pending'}
+                      disabled={blastStatus === 'submitting' || blastStatus === 'pending' || Boolean(fastaFile && fastaValidation && !fastaValidation.isValid)}
                       className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-400 flex items-center gap-2"
                     >
                       <Dna className="w-4 h-4" />
@@ -797,6 +843,18 @@ export default function SpecimenModal({ isOpen, onClose, onSave, specimen, proje
           </div>
         </form>
       </div>
+
+      {/* Modal */}
+      {modalConfig && (
+        <Modal
+          isOpen={true}
+          type={modalConfig.type}
+          title={modalConfig.title}
+          message={modalConfig.message}
+          onClose={() => setModalConfig(null)}
+          autoCloseMs={modalConfig.type === 'success' ? 3000 : 0}
+        />
+      )}
     </div>
   );
 }

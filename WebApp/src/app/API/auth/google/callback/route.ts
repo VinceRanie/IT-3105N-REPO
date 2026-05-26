@@ -1,39 +1,58 @@
 import { NextRequest, NextResponse } from "next/server";
 import { google } from "googleapis";
-import { RowDataPacket } from "mysql2";
-import { query } from "@/app/API/lib/mysql";
+import { requireEnv } from "@/app/API/lib/routeEnv";
 
 // Google redirects here after the student signs in.
 // Fetch their profile, verify the email matches the one they registered,
 // then redirect to the finalize form with profile data in the URL.
 
-interface UserRow extends RowDataPacket {
-  user_id: number;
-  email: string;
-  is_setup_complete: number;
-}
-
-const getOAuthClient = () =>
-  new google.auth.OAuth2(
-    process.env.GMAIL_CLIENT_ID!,
-    process.env.GMAIL_CLIENT_SECRET!,
-    `${process.env.NEXT_PUBLIC_APP_BASE_URL!}/API/auth/google/callback`
-  );
-
 export async function GET(request: NextRequest) {
-  if (!process.env.GMAIL_CLIENT_ID || !process.env.GMAIL_CLIENT_SECRET || !process.env.NEXT_PUBLIC_APP_BASE_URL) {
-    return NextResponse.json(
-      { message: "Google OAuth is not configured." },
-      { status: 500 }
+  const env = requireEnv(["NEXT_PUBLIC_API_URL"] as const);
+  if (!env.ok) return env.response;
+
+  const API_BASE_URL = env.values.NEXT_PUBLIC_API_URL;
+  const clientId = process.env.GMAIL_CLIENT_ID || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GMAIL_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET;
+
+  const forwardedProto = request.headers.get("x-forwarded-proto");
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  const host = request.headers.get("host");
+  const requestOrigin = new URL(request.url).origin;
+
+  const forwardedOrigin =
+    forwardedProto && forwardedHost
+      ? `${forwardedProto.split(",")[0].trim()}://${forwardedHost.split(",")[0].trim()}`
+      : null;
+
+  const hostOrigin = host
+    ? `${request.nextUrl.protocol.replace(":", "") || "https"}://${host}`
+    : null;
+
+  const APP_BASE_URL = (
+    process.env.NEXT_PUBLIC_APP_BASE_URL || forwardedOrigin || hostOrigin || requestOrigin
+  ).replace(/\/+$/, "");
+
+  if (!clientId || !clientSecret) {
+    console.error(
+      "Server misconfiguration: Missing Google OAuth credentials. " +
+        "Expected GMAIL_CLIENT_ID (or NEXT_PUBLIC_GOOGLE_CLIENT_ID) and GMAIL_CLIENT_SECRET (or GOOGLE_CLIENT_SECRET)."
+    );
+    return NextResponse.redirect(
+      `${APP_BASE_URL}/signup/finalize?error=${encodeURIComponent("Google authentication is not configured on the server.")}`
     );
   }
 
-  const oauth2Client = getOAuthClient();
+  const oauth2Client = new google.auth.OAuth2(
+    clientId,
+    clientSecret,
+    `${APP_BASE_URL}/API/auth/google/callback`
+  );
+
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const state = searchParams.get("state"); // this is the registration token
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_BASE_URL!;
+  const baseUrl = APP_BASE_URL;
   const errorRedirect = (msg: string) =>
     NextResponse.redirect(
       `${baseUrl}/signup/finalize?error=${encodeURIComponent(msg)}`
@@ -56,16 +75,26 @@ export async function GET(request: NextRequest) {
       return errorRedirect("Could not retrieve email from Google.");
     }
 
-    // Look up the user by the registration token (state)
-    const users = await query<UserRow>(
-      "SELECT user_id, email, is_setup_complete FROM user WHERE reset_token = ?",
-      [state]
-    );
+    // Validate token and fetch user from backend API.
+    // This avoids requiring DB credentials in the frontend deployment.
+    const userResponse = await fetch(`${API_BASE_URL}/auth/get-user-by-token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: state }),
+    });
 
-    const user = users[0];
+    const raw = await userResponse.text();
+    let parsed;
+    try {
+      parsed = raw ? JSON.parse(raw) : {};
+    } catch {
+      parsed = {};
+    }
 
-    if (!user) {
-      return errorRedirect("Invalid or expired registration link.");
+    const user = parsed?.user;
+
+    if (!userResponse.ok || !user) {
+      return errorRedirect(parsed?.message || "Invalid or expired registration link.");
     }
 
     if (user.is_setup_complete === 1) {

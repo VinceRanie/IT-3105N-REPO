@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { RowDataPacket } from "mysql2";
-import { query } from "@/app/API/lib/mysql";
-
-interface UserRow extends RowDataPacket {
-  user_id: number;
-  email: string;
-  is_setup_complete: number;
-  reset_token_expires: Date | null;
-}
+import { requireEnv } from "@/app/API/lib/routeEnv";
 
 export async function GET(request: NextRequest) {
+  const env = requireEnv(["NEXT_PUBLIC_API_URL"] as const);
+  if (!env.ok) return env.response;
+  const API_BASE_URL = env.values.NEXT_PUBLIC_API_URL;
+
   try {
     const { searchParams } = new URL(request.url);
     const token = searchParams.get("token");
@@ -21,18 +17,19 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Look up user by reset_token
-    const users = await query<UserRow>(
-      "SELECT user_id, email, is_setup_complete, reset_token_expires FROM user WHERE reset_token = ?",
-      [token]
-    );
+    const response = await fetch(`${API_BASE_URL}/auth/get-user-by-token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    });
 
-    const user = users[0];
+    const data = await response.json();
+    const user = data?.user;
 
-    if (!user) {
+    if (!response.ok || !user) {
       return NextResponse.json(
-        { message: "Invalid or expired token." },
-        { status: 401 }
+        { message: data?.message || "Invalid or expired token." },
+        { status: response.status || 401 }
       );
     }
 

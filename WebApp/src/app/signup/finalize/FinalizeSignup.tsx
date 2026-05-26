@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import SearchableSelect from "@/app/components/SearchableSelect";
+import { departments, getProgramsForDepartment } from "@/app/components/departmentPrograms";
 
 interface FinalizeSignupProps {
   token: string;
@@ -28,6 +30,12 @@ export default function FinalizeSignup({
   const [message, setMessage] = useState<{ text: string; type: "error" | "success" } | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const hasMinLength = formData.password.length >= 8;
+  const hasLowercase = /[a-z]/.test(formData.password);
+  const hasUppercase = /[A-Z]/.test(formData.password);
+  const hasNumber = /\d/.test(formData.password);
+  const availablePrograms = getProgramsForDepartment(formData.department);
+
   const handleChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
@@ -41,15 +49,15 @@ export default function FinalizeSignup({
       return;
     }
 
-    if (formData.password.length < 6) {
+    if (formData.password.length < 8) {
       setMessage({
-        text: "Password must be at least 6 characters with at least one uppercase, one lowercase, and one number.",
+        text: "Password must be at least 8 characters with at least one uppercase, one lowercase, and one number.",
         type: "error",
       });
       return;
     }
 
-    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{6,}$/;
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
     if (!passwordRegex.test(formData.password)) {
       setMessage({
         text: "Password must include at least one uppercase, one lowercase, and one number.",
@@ -100,10 +108,9 @@ export default function FinalizeSignup({
       {/* Left Side Image */}
       <div className="relative hidden md:block">
         <Image
-          src="/UI/img/Laboratory.jpg"
-          alt="Laboratory Background"
+          src="/UI/img/BioOffice.webp"
+          alt="USC Biology Department Office"
           fill
-          sizes="(max-width: 768px) 0px, 50vw"
           className="object-cover"
         />
         <div className="absolute inset-0 bg-gradient-to-r from-transparent to-white/70" />
@@ -187,26 +194,37 @@ export default function FinalizeSignup({
 
             {/* Editable fields */}
             <div>
-              <label className="text-sm text-gray-700">Department</label>
-              <input
-                type="text"
-                placeholder="Enter department"
+              <SearchableSelect
+                label="Department"
                 value={formData.department}
-                onChange={(e) => handleChange("department", e.target.value)}
-                className="w-full border border-[#113F67] rounded-md px-3 py-2 text-[#113F67] focus:ring-2 focus:ring-[#113F67] focus:border-transparent"
-                required
+                options={departments}
+                placeholder="Search department"
+                onChange={(value) => {
+                  handleChange("department", value);
+                  handleChange("course", "");
+                }}
               />
             </div>
             <div>
-              <label className="text-sm text-gray-700">Course</label>
-              <input
-                type="text"
-                placeholder="Enter course"
+              <SearchableSelect
+                label="Program"
                 value={formData.course}
-                onChange={(e) => handleChange("course", e.target.value)}
-                className="w-full border border-[#113F67] rounded-md px-3 py-2 text-[#113F67] focus:ring-2 focus:ring-[#113F67] focus:border-transparent"
-                required
+                options={availablePrograms}
+                placeholder={formData.department ? "Search program" : "Select department first"}
+                disabled={!formData.department}
+                autoFocus={!!formData.department}
+                onChange={(value) => handleChange("course", value)}
               />
+            </div>
+
+            <div className="col-span-full rounded-md border border-[#113F67]/20 bg-[#113F67]/5 px-3 py-2 text-sm">
+              <p className="mb-1 text-[#113F67] font-medium">Please create a password with:</p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li className={hasMinLength ? "text-green-600" : "text-red-600"}>At least 8 characters long</li>
+                <li className={hasLowercase ? "text-green-600" : "text-red-600"}>Has a lowercase letter</li>
+                <li className={hasUppercase ? "text-green-600" : "text-red-600"}>Has an uppercase letter</li>
+                <li className={hasNumber ? "text-green-600" : "text-red-600"}>Has a number</li>
+              </ul>
             </div>
 
             {/* Password Fields */}

@@ -6,12 +6,95 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, QrCode, Download, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
 import Image from "next/image";
 import jsPDF from "jspdf";
+import Modal from "@/app/components/Modal";
 
 interface SpecimenDetailProps {
   params: Promise<{
     id: string;
   }>;
 }
+
+const getCustomFieldLabel = (key: string, value: any) => {
+  if (value && typeof value === "object" && !Array.isArray(value) && value.label) {
+    return String(value.label);
+  }
+  return key.replace(/_/g, " ");
+};
+
+const formatCustomFieldValue = (value: any): string => {
+  if (value === null || value === undefined || value === "") return "N/A";
+
+  if (Array.isArray(value)) {
+    return value.length ? value.map((item) => String(item)).join(", ") : "N/A";
+  }
+
+  if (typeof value === "object") {
+    if ("value" in value) {
+      return formatCustomFieldValue(value.value);
+    }
+
+    // For image_description objects, return just the image URL if present
+    // so it can be detected and rendered in PDF
+    if ("image_url" in value && value.image_url) {
+      return String(value.image_url).trim();
+    }
+
+    if ("description" in value) {
+      return String(value.description || "").trim() || "N/A";
+    }
+
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return "N/A";
+    }
+  }
+
+  return String(value);
+};
+
+const normalizeCustomImageDescriptionValue = (value: any) => {
+  try {
+    // If wrapped in { value: ... } unwrap it first
+    if (value && typeof value === "object" && !Array.isArray(value) && "value" in value) {
+      return normalizeCustomImageDescriptionValue((value as any).value);
+    }
+
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            return {
+              image_url: String(parsed.image_url || parsed.imageUrl || parsed.image || ""),
+              description: String(parsed.description || parsed.Description || ""),
+            };
+          }
+        } catch {
+          // fall through
+        }
+      }
+
+      if (trimmed.includes('/uploads/specimens/') || trimmed.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+        return { image_url: trimmed, description: "" };
+      }
+
+      return { image_url: "", description: trimmed };
+    }
+
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      return {
+        image_url: String(value.image_url || value.imageUrl || value.image || ""),
+        description: String(value.description || value.Description || ""),
+      };
+    }
+
+    return { image_url: "", description: String(value || "") };
+  } catch (e) {
+    return { image_url: "", description: String(value || "") };
+  }
+};
 
 export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
   const resolvedParams = use(params);
@@ -20,6 +103,7 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
   const [generatingPDF, setGeneratingPDF] = useState(false);
   const [activeTab, setActiveTab] = useState("info");
   const [expandedBlastResults, setExpandedBlastResults] = useState<Set<number>>(new Set());
+  const [modalConfig, setModalConfig] = useState<{ type: "success" | "error" | "info"; title: string; message: string } | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -38,6 +122,11 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
       const response = await fetch(`${API_URL}/microbials/${resolvedParams.id}`);
       if (response.ok) {
         const data = await response.json();
+        const status = String(data?.publish_status || "published").trim().toLowerCase();
+        if (status !== "published") {
+          setSpecimen(null);
+          return;
+        }
         setSpecimen(data);
       } else {
         console.error("Failed to fetch specimen:", response.status, response.statusText);
@@ -135,17 +224,23 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
         }
       };
 
-      // Title
+      const headerLogoData = await getImageBase64('/UI/img/logo-biocella.png');
+
+      // Header
+      if (headerLogoData) {
+        doc.addImage(headerLogoData, 'PNG', margin, yPos - 4, 12, 12);
+      }
+
       doc.setFontSize(18);
       doc.setFont("helvetica", "bold");
-      doc.text("Specimen Information Report", margin, yPos);
-      yPos += 10;
+      doc.text("BIOCELLA Specimen Overview", headerLogoData ? margin + 16 : margin, yPos + 4);
+      yPos += 12;
 
       // Horizontal line
       doc.setDrawColor(17, 63, 103);
       doc.setLineWidth(0.5);
       doc.line(margin, yPos, pageWidth - margin, yPos);
-      yPos += 10;
+      yPos += 8;
 
       // Add specimen image on the left if available
       let imageHeight = 0;
@@ -363,34 +458,57 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
       doc.setFontSize(10);
       doc.setFont("helvetica", "normal");
       
-      Object.entries(specimen.custom_fields).forEach(([key, value]) => {
+      for (const [key, value] of Object.entries(specimen.custom_fields)) {
         checkPageBreak();
+        const label = getCustomFieldLabel(key, value);
+        const displayValue = formatCustomFieldValue(value);
         doc.setFont("helvetica", "bold");
-        doc.text(`${key.replace(/_/g, ' ')}:`, margin, yPos);
+        doc.text(`${label}:`, margin, yPos);
         doc.setFont("helvetica", "normal");
-        doc.text(String(value), margin + 50, yPos);
-        yPos += lineHeight;
-      });
+        
+        // Check if the value is an image URL or image_description object
+        const isImageUrl = displayValue && (displayValue.includes('/uploads/specimens/') || displayValue.match(/\.(jpg|jpeg|png|gif|webp)$/i));
+        
+        if (isImageUrl) {
+          try {
+            const absoluteImageUrl = displayValue.startsWith('http')
+              ? displayValue
+              : `${API_URL}${displayValue}`;
+            
+            const imageData = await getImageBase64(absoluteImageUrl);
+            if (imageData) {
+              const imgWidth = 60;
+              const imgHeight = 60;
+              doc.addImage(imageData, 'JPEG', margin + 52, yPos, imgWidth, imgHeight);
+              yPos += imgHeight + 3;
+            }
+          } catch (error) {
+            console.error(`Error adding image for field ${label}:`, error);
+          }
+          
+          // Try to show description using normalized value (handles stringified JSON too)
+          const normalized = normalizeCustomImageDescriptionValue(value);
+          const description = normalized.description;
+          if (description) {
+            checkPageBreak(5);
+            const descText = doc.splitTextToSize(`Description: ${description}`, contentWidth - 52);
+            doc.text(descText, margin + 52, yPos);
+            yPos += lineHeight * Math.max(1, descText.length);
+          }
+        } else {
+          // Regular text field or no image URL
+          const wrappedValue = doc.splitTextToSize(displayValue, contentWidth - 52);
+          doc.text(wrappedValue, margin + 52, yPos);
+          yPos += lineHeight * Math.max(1, wrappedValue.length);
+        }
+      }
     }
 
-    // Footer with logo on first page and branding
-    const logoUrl = '/UI/img/BiocellaLogo.png';
-    const logoData = await getImageBase64(logoUrl);
+    // Footer branding
     
     const pageCount = doc.getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
       doc.setPage(i);
-      
-      // Add logo to top right corner on first page only
-      if (i === 1 && logoData) {
-        try {
-          const logoWidth = 30;
-          const logoHeight = 20;
-          doc.addImage(logoData, 'PNG', pageWidth - margin - logoWidth, 8, logoWidth, logoHeight);
-        } catch (error) {
-          console.error("Error adding logo to PDF:", error);
-        }
-      }
       
       // Add footer text
       doc.setFontSize(8);
@@ -412,7 +530,7 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
       doc.save(`Specimen_${specimen.code_name}_${new Date().toISOString().split('T')[0]}.pdf`);
     } catch (error) {
       console.error("Error generating PDF:", error);
-      alert("Error generating PDF. Please try again.");
+      setModalConfig({ type: 'error', title: 'Error', message: 'Error generating PDF. Please try again.' });
     } finally {
       setGeneratingPDF(false);
     }
@@ -593,9 +711,46 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
                   <div className="bg-white shadow rounded-xl p-6">
                     <h2 className="text-lg font-semibold mb-4">Additional Information</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {Object.entries(specimen.custom_fields).map(([key, value]: [string, any]) => (
-                        <InfoItem key={key} label={key.replace(/_/g, " ")} value={value || "N/A"} />
-                      ))}
+                      {Object.entries(specimen.custom_fields).map(([key, value]: [string, any]) => {
+                        const label = getCustomFieldLabel(key, value);
+
+                        const normalized = normalizeCustomImageDescriptionValue(value);
+                        if (normalized.image_url) {
+                          const imageUrl = String(normalized.image_url || '');
+                          const description = String(normalized.description || '');
+                          const absolute = imageUrl.startsWith('http') ? imageUrl : `${API_URL}${imageUrl}`;
+                          return (
+                            <div key={key}>
+                              <span className="text-xs font-medium text-gray-500 uppercase">{label}</span>
+                              <div className="mt-1">
+                                <img src={absolute} alt={label} className="max-w-full h-36 object-contain rounded" />
+                                {description ? (
+                                  <p className="text-sm text-gray-800 mt-2">{description}</p>
+                                ) : null}
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        // If value is a string that looks like an uploads path or an image URL, render image (fallback)
+                        const displayValue = formatCustomFieldValue(value);
+                        if (displayValue && (displayValue.includes('/uploads/specimens/') || displayValue.match(/\.(jpg|jpeg|png|gif|webp)$/i))) {
+                          const absolute = displayValue.startsWith('http') ? displayValue : `${API_URL}${displayValue}`;
+                          return (
+                            <div key={key}>
+                              <span className="text-xs font-medium text-gray-500 uppercase">{label}</span>
+                              <div className="mt-1">
+                                <img src={absolute} alt={label} className="max-w-full h-36 object-contain rounded" />
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        // Fallback to regular InfoItem
+                        return (
+                          <InfoItem key={key} label={label} value={String(formatCustomFieldValue(value))} />
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -896,6 +1051,18 @@ export default function SpecimenDetailPage({ params }: SpecimenDetailProps) {
           </div>
         </div>
       </div>
+
+      {/* Modal */}
+      {modalConfig && (
+        <Modal
+          isOpen={true}
+          type={modalConfig.type}
+          title={modalConfig.title}
+          message={modalConfig.message}
+          onClose={() => setModalConfig(null)}
+          autoCloseMs={modalConfig.type === 'success' ? 3000 : 0}
+        />
+      )}
     </div>
   );
 }

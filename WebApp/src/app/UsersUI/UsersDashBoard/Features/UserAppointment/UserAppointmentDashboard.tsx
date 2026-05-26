@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { format, addDays, parse } from 'date-fns';
 import { API_URL } from '@/config/api';
 import { getUserData } from '@/app/utils/authUtil';
+import Modal from '@/app/components/Modal';
 
 interface Appointment {
   appointment_id: number;
@@ -12,6 +13,7 @@ interface Appointment {
   department: string;
   purpose: string;
   date: string;
+  end_time?: string | null;
   status: 'pending' | 'approved' | 'denied' | 'ongoing' | 'visited';
   qr_code: string | null;
   created_at: string;
@@ -32,23 +34,18 @@ export default function UserAppointmentDashboard() {
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ department: '', date: '', time: '', purpose: '' });
-  const [conflicts, setConflicts] = useState<Record<string, boolean>>({});
+  const [sameDayAppointments, setSameDayAppointments] = useState<Appointment[]>([]);
+  const [timeConflict, setTimeConflict] = useState(false);
   const [checkingAvailability, setCheckingAvailability] = useState(false);
   const [userId, setUserId] = useState<number | null>(null);
   const [isMounted, setIsMounted] = useState(false);
   const [userEmail, setUserEmail] = useState<string>('');
+  const [modalConfig, setModalConfig] = useState<{ type: "success" | "error" | "info"; title: string; message: string } | null>(null);
 
   // Define availability rules
   const blockedWeekdays = [0]; // 0 = Sunday
   const blockedDates: string[] = []; // Add specific YYYY-MM-DD dates if admins block certain days
-  const timeSlots = [
-    '09:00', '10:00', '11:00', '12:00',
-    '13:00', '14:00', '15:00', '16:00'
-  ];
-
   const minDate = format(addDays(new Date(), 1), 'yyyy-MM-dd');
-
-  const formatSlot = (slot: string) => format(parse(slot, 'HH:mm', new Date()), 'hh:mm a');
 
   const extractStudentId = (email: string): string => {
     if (!email) return '';
@@ -125,11 +122,7 @@ export default function UserAppointmentDashboard() {
         return appDay === dateStr && (app.status === 'approved' || app.status === 'ongoing');
       });
 
-      const conflictMap: Record<string, boolean> = {};
-      timeSlots.forEach((slot) => {
-        conflictMap[slot] = sameDay.some((app) => format(new Date(app.date), 'HH:mm') === slot);
-      });
-      setConflicts(conflictMap);
+      setSameDayAppointments(sameDay);
     } catch (error) {
       console.error('Error checking availability:', error);
     } finally {
@@ -137,24 +130,48 @@ export default function UserAppointmentDashboard() {
     }
   };
 
+  const parseTimeToMinutes = (time: string) => {
+    const [hours, minutes] = time.split(':').map(Number);
+    return hours * 60 + minutes;
+  };
+
+  const hasTimeConflict = (dateStr: string, timeStr: string) => {
+    if (!dateStr || !timeStr) return false;
+
+    const requestedStart = parseTimeToMinutes(timeStr);
+    const requestedEnd = requestedStart + 60;
+
+    return sameDayAppointments.some((app) => {
+      const appointmentStart = new Date(app.date);
+      const appointmentEnd = app.end_time
+        ? new Date(app.end_time)
+        : new Date(appointmentStart.getTime() + 60 * 60 * 1000);
+
+      const startMinutes = appointmentStart.getHours() * 60 + appointmentStart.getMinutes();
+      const endMinutes = appointmentEnd.getHours() * 60 + appointmentEnd.getMinutes();
+
+      return requestedStart < endMinutes && requestedEnd > startMinutes;
+    });
+  };
+
   const handleBook = async () => {
     if (!userId) {
-      alert('User not authenticated');
+      setModalConfig({ type: 'error', title: 'Authentication Error', message: 'User not authenticated' });
       return;
     }
 
     if (!form.date || !form.time) {
-      alert('Please select a date and time.');
+      setModalConfig({ type: 'error', title: 'Missing Information', message: 'Please select a date and time.' });
       return;
     }
 
     if (isDateBlocked(form.date)) {
-      alert('Selected date is unavailable. Please pick another day.');
+      setModalConfig({ type: 'error', title: 'Date Unavailable', message: 'Selected date is unavailable. Please pick another day.' });
       return;
     }
 
-    if (conflicts[form.time]) {
-      alert('That time slot is already taken. Please choose another time.');
+    if (hasTimeConflict(form.date, form.time)) {
+      setModalConfig({ type: 'error', title: 'Time Conflict', message: 'That time slot is already taken. Please choose another time.' });
       return;
     }
 
@@ -175,10 +192,11 @@ export default function UserAppointmentDashboard() {
       if(res.ok) {
         setShowModal(false);
         setForm({ department: '', date: '', time: '', purpose: '' });
-        setConflicts({});
+        setSameDayAppointments([]);
+        setTimeConflict(false);
         fetchAppointments();
       } else {
-        alert('Failed to create appointment');
+        setModalConfig({ type: 'error', title: 'Booking Failed', message: 'Failed to create appointment' });
       }
     } catch (e) {
       console.error(e);
@@ -275,7 +293,8 @@ export default function UserAppointmentDashboard() {
                 onChange={(e) => {
                   const nextDate = e.target.value;
                   setForm({ ...form, date: nextDate, time: '' });
-                  setConflicts({});
+                  setSameDayAppointments([]);
+                  setTimeConflict(false);
                   loadConflictsForDate(nextDate);
                 }}
                 className="w-full px-4 py-2 border rounded-md"
@@ -284,21 +303,26 @@ export default function UserAppointmentDashboard() {
               {form.date && isDateBlocked(form.date) && (
                 <p className="text-sm text-red-600">This date is unavailable (Sunday or blocked by admin).</p>
               )}
-              <select
+              <input
+                type="time"
+                step={60}
                 value={form.time}
-                onChange={(e) => setForm({ ...form, time: e.target.value })}
+                onChange={(e) => {
+                  const nextTime = e.target.value;
+                  setForm({ ...form, time: nextTime });
+                  setTimeConflict(hasTimeConflict(form.date, nextTime));
+                }}
                 className="w-full px-4 py-2 border rounded-md"
                 disabled={!form.date || isDateBlocked(form.date) || checkingAvailability}
-              >
-                <option value="">Select a time</option>
-                {timeSlots.map((slot) => (
-                  <option key={slot} value={slot} disabled={!!conflicts[slot]}>
-                    {formatSlot(slot)} {conflicts[slot] ? '(Unavailable)' : ''}
-                  </option>
-                ))}
-              </select>
+              />
               {checkingAvailability && (
                 <p className="text-sm text-gray-500">Checking availability…</p>
+              )}
+              {!checkingAvailability && form.time && timeConflict && (
+                <p className="text-sm text-red-600">This time overlaps with an existing appointment. Choose another time.</p>
+              )}
+              {!checkingAvailability && form.time && !timeConflict && (
+                <p className="text-sm text-green-600">Selected time is available.</p>
               )}
               <textarea
                 placeholder="Purpose of visit"
@@ -324,6 +348,17 @@ export default function UserAppointmentDashboard() {
             </div>
           </div>
         </div>
+      )}
+      {/* Modal */}
+      {modalConfig && (
+        <Modal
+          isOpen={true}
+          type={modalConfig.type}
+          title={modalConfig.title}
+          message={modalConfig.message}
+          onClose={() => setModalConfig(null)}
+          autoCloseMs={modalConfig.type === 'success' ? 3000 : 0}
+        />
       )}
     </div>
   );

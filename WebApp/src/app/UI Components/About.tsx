@@ -2,7 +2,12 @@
 import { motion } from "framer-motion";
 import Image from "next/image";
 
-export default function AboutUs() {
+type AboutUsProps = {
+  totalSpecimens?: number;
+  carolinianCount?: number;
+};
+
+export default function AboutUs({ totalSpecimens = 0, carolinianCount = 0 }: AboutUsProps) {
     return (
       <motion.section 
       initial={{ opacity: 0, y: 20 }}
@@ -19,22 +24,19 @@ export default function AboutUs() {
           <div className="grid md:grid-cols-2 gap-12 items-center">
             <div className="space-y-6">
               <p className="text-lg text-gray-700 leading-relaxed">
-                We are passionate researchers and scientists dedicated to exploring the fascinating world of
-                microorganisms. Our mission is to unlock the potential of these microscopic life forms to solve real-world
-                challenges.
+              The Functional Microbiology Laboratory is a team of dedicated researchers and scientists committed to exploring the vast potential of the microbial world. Our mission is to bridge the gap between fundamental research and practical application by translating laboratory findings into effective solutions for global challenges. We specialize in bioprospecting and isolating functional microorganisms such as actinomycetes and yeasts from diverse ecosystems, including marine environments and other unique habitats.
               </p>
               <p className="text-gray-600">
-                From beneficial bacteria that support human health to innovative applications in biotechnology, we study
-                how microorganisms can contribute to a sustainable future for our planet.
+              By characterizing the natural products and bioactive compounds these microbes produce, we aim to drive innovation in fields such as medicine, agriculture, and biotechnology. Through our work, we transform microscopic discoveries into impactful, real-world results for a more sustainable future.
               </p>
   
               <div className="grid grid-cols-2 gap-4 pt-4">
                 <div className="text-center p-4 bg-white rounded-lg shadow-sm">
-                  <div className="text-2xl font-bold text-[#113F67]">500+</div>
+                  <div className="text-2xl font-bold text-[#113F67]">{totalSpecimens.toLocaleString()}</div>
                   <div className="text-sm text-gray-600">Specimen Studied</div>
                 </div>
                 <div className="text-center p-4 bg-white rounded-lg shadow-sm">
-                  <div className="text-2xl font-bold text-green-600">15+</div>
+                  <div className="text-2xl font-bold text-green-600">{carolinianCount.toLocaleString()}</div>
                   <div className="text-sm text-gray-600">Carolinians</div>
                 </div>
               </div>

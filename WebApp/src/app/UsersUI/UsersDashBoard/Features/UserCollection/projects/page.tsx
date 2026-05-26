@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { API_URL } from "@/config/api";
 import { Plus, Edit, Trash2, Eye, FolderOpen } from "lucide-react";
 import ProjectModal from "../ProjectModal";
+import Modal from "@/app/components/Modal";
 
 interface Project {
   _id: string;
@@ -21,6 +22,7 @@ export default function ProjectsPage() {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [specimenCounts, setSpecimenCounts] = useState<Record<string, number>>({});
+  const [modalConfig, setModalConfig] = useState<{ type: "success" | "error" | "info"; title: string; message: string } | null>(null);
 
   useEffect(() => {
     fetchProjects();
@@ -46,7 +48,10 @@ export default function ProjectsPage() {
     try {
       const response = await fetch(`${API_URL}/microbials`);
       if (response.ok) {
-        const specimens = await response.json();
+        const specimensRaw = await response.json();
+        const specimens = Array.isArray(specimensRaw)
+          ? specimensRaw.filter((specimen: any) => String(specimen?.publish_status || "published").trim().toLowerCase() === "published")
+          : [];
         const counts: Record<string, number> = {};
         
         specimens.forEach((specimen: any) => {
@@ -79,14 +84,14 @@ export default function ProjectsPage() {
         await fetchProjects();
         setIsModalOpen(false);
         setSelectedProject(null);
-        alert(selectedProject ? "Project updated successfully!" : "Project created successfully!");
+        setModalConfig({ type: 'success', title: 'Project Saved', message: selectedProject ? 'Project updated successfully!' : 'Project created successfully!' });
       } else {
         const error = await response.json();
-        alert(`Error: ${error.message || "Failed to save project"}`);
+        setModalConfig({ type: 'error', title: 'Error', message: `Error: ${error.message || 'Failed to save project'}` });
       }
     } catch (error) {
       console.error("Error saving project:", error);
-      alert("Error saving project");
+      setModalConfig({ type: 'error', title: 'Error', message: 'Error saving project' });
     }
   };
 
@@ -111,13 +116,13 @@ export default function ProjectsPage() {
       if (response.ok) {
         await fetchProjects();
         await fetchSpecimenCounts();
-        alert("Project deleted successfully!");
+        setModalConfig({ type: 'success', title: 'Project Deleted', message: 'Project deleted successfully!' });
       } else {
-        alert("Failed to delete project");
+        setModalConfig({ type: 'error', title: 'Error', message: 'Failed to delete project' });
       }
     } catch (error) {
       console.error("Error deleting project:", error);
-      alert("Error deleting project");
+      setModalConfig({ type: 'error', title: 'Error', message: 'Error deleting project' });
     }
   };
 
@@ -270,6 +275,18 @@ export default function ProjectsPage() {
         onSave={handleSaveProject}
         project={selectedProject}
       />
+
+      {/* Modal */}
+      {modalConfig && (
+        <Modal
+          isOpen={true}
+          type={modalConfig.type}
+          title={modalConfig.title}
+          message={modalConfig.message}
+          onClose={() => setModalConfig(null)}
+          autoCloseMs={modalConfig.type === 'success' ? 3000 : 0}
+        />
+      )}
     </div>
   );
 }

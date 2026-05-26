@@ -4,6 +4,9 @@ const appointmentController = require("../controllers/appointmentController");
 
 router.post("/", appointmentController.create);
 router.get("/", appointmentController.getAll);
+router.get("/unavailable-dates", appointmentController.getUnavailableDates);
+router.post("/unavailable-dates", appointmentController.markDateUnavailable);
+router.delete("/unavailable-dates/:date", appointmentController.removeUnavailableDate);
 router.get("/availability/date", appointmentController.getAvailability);  // Must be before /:id
 router.get("/calendar/overview", appointmentController.getCalendarOverview);  // Must be before /:id
 router.get("/status/:status", appointmentController.getByStatus);

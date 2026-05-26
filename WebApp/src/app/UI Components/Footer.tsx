@@ -11,7 +11,7 @@ export default function Footer() {
       transition={{ duration: 0.5 }}
       viewport={{ once: false }}
       id="contact"
-      className="bg-gray-800 text-white py-6 mt-10"
+      className="bg-[#113F67] text-white py-6 mt-10"
     >
       <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center">
        
@@ -42,7 +42,7 @@ export default function Footer() {
           <span>+639 664 288 917</span>
         </a>
 
-        <a href="#" className="flex items-center space-x-2">
+        <a href="https://www.facebook.com/USCBioDept" target="_blank" className="flex items-center space-x-2">
           <Facebook size={18} />
           <span>USC Biology</span>
         </a>

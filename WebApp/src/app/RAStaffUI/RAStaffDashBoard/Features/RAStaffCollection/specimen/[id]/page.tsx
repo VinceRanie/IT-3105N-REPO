@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Edit, QrCode, Plus, Download, ChevronDown, ChevronUp, ExternalLink, Loader2 } from "lucide-react";
 import Image from "next/image";
 import jsPDF from "jspdf";
+import SpecimenModal from "../../SpecimenModal";
 import { useProtectedRoute } from "@/app/hooks/useProtectedRoute";
 import { getAuthHeader } from "@/app/utils/authUtil";
 
@@ -15,12 +16,117 @@ interface SpecimenDetailProps {
   }>;
 }
 
+type NormalizedCustomField = {
+  id: string;
+  label: string;
+  section: string;
+  type: string;
+  value: string;
+  rawValue?: any;
+};
+
+const normalizeCustomImageDescriptionValue = (value: any) => {
+  try {
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+
+      // Try parsing JSON string values
+      if ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            return {
+              image_url: String(parsed.image_url || parsed.imageUrl || parsed.image || ""),
+              description: String(parsed.description || parsed.Description || ""),
+            };
+          }
+        } catch {
+          // fall through
+        }
+      }
+
+      // If string looks like an image URL/path, treat as image_url
+      if (trimmed.includes('/uploads/specimens/') || trimmed.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+        return { image_url: trimmed, description: "" };
+      }
+
+      // Otherwise treat the string as a description
+      return { image_url: "", description: trimmed };
+    }
+
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      return {
+        image_url: String(value.image_url || value.imageUrl || value.image || ""),
+        description: String(value.description || value.Description || ""),
+      };
+    }
+
+    return { image_url: "", description: String(value || "") };
+  } catch (e) {
+    return { image_url: "", description: String(value || "") };
+  }
+};
+
+const CUSTOM_SECTION_LABELS: Record<string, string> = {
+  basic: "Required Information",
+  molecular: "Molecular & Genetic Data",
+  biochemical: "Biochemical Tests & Microbial Properties",
+  morphology: "Cell & Colony Morphology",
+  culture: "Culture Requirements",
+};
+
+const CUSTOM_SECTION_ORDER = ["basic", "molecular", "biochemical", "morphology", "culture"];
+
+const normalizeCustomFields = (customFields: any): NormalizedCustomField[] => {
+  if (!customFields || typeof customFields !== "object") return [];
+
+  return Object.entries(customFields).map(([key, value]) => {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      const raw = value as any;
+      return {
+        id: key,
+        label: String(raw.label || key).trim() || key,
+        section: String(raw.section || "basic").trim().toLowerCase(),
+        type: String(raw.type || "text").trim().toLowerCase(),
+        value: String(raw.value || ""),
+        rawValue: raw.value,
+      };
+    }
+
+    return {
+      id: key,
+      label: key.replace(/_/g, " "),
+      section: "basic",
+      type: "text",
+      value: String(value || ""),
+      rawValue: value,
+    };
+  });
+};
+
+const groupCustomFieldsBySection = (customFields: any) => {
+  const normalized = normalizeCustomFields(customFields);
+  const bySection = new Map<string, NormalizedCustomField[]>();
+
+  normalized.forEach((field) => {
+    const section = CUSTOM_SECTION_ORDER.includes(field.section) ? field.section : "basic";
+    const current = bySection.get(section) || [];
+    current.push(field);
+    bySection.set(section, current);
+  });
+
+  return CUSTOM_SECTION_ORDER
+    .map((section) => ({ section, fields: bySection.get(section) || [] }))
+    .filter((entry) => entry.fields.length > 0);
+};
+
 export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProps) {
   // Protect route
   useProtectedRoute({ requiredRole: "staff" });
 
   const resolvedParams = use(params);
   const [specimen, setSpecimen] = useState<any>(null);
+  const [projects, setProjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [generatingPDF, setGeneratingPDF] = useState(false);
   const [activeTab, setActiveTab] = useState("info");
@@ -28,6 +134,8 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
   const [blastLoading, setBlastLoading] = useState(false);
   const [blastPolling, setBlastPolling] = useState(false);
   const [blastExpired, setBlastExpired] = useState(false);
+  const [isSpecimenModalOpen, setIsSpecimenModalOpen] = useState(false);
+  const [selectedSpecimen, setSelectedSpecimen] = useState<any | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -39,23 +147,64 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
     fetchSpecimenDetails();
   }, [resolvedParams.id]);
 
+  useEffect(() => {
+    fetchProjects();
+  }, []);
+
   const fetchSpecimenDetails = async () => {
     try {
       setLoading(true);
       console.log("Fetching specimen with ID:", resolvedParams.id);
-      const response = await fetch(`${API_URL}/microbials/${resolvedParams.id}`, {
+      const roleResponse = await fetch(`${API_URL}/microbials/${resolvedParams.id}?role=staff`, {
         headers: getAuthHeader(),
       });
-      if (response.ok) {
-        const data = await response.json();
+      if (roleResponse.ok) {
+        const data = await roleResponse.json();
         setSpecimen(data);
       } else {
-        console.error("Failed to fetch specimen:", response.status, response.statusText);
+        console.error("Failed to fetch specimen:", roleResponse.status, roleResponse.statusText);
       }
     } catch (error) {
       console.error("Error fetching specimen details:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchProjects = async () => {
+    try {
+      const response = await fetch(`${API_URL}/projects`, {
+        headers: getAuthHeader(),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setProjects(data);
+      }
+    } catch (error) {
+      console.error("Error fetching projects:", error);
+    }
+  };
+
+  const handleSaveSpecimen = async (specimenData: FormData) => {
+    try {
+      const response = await fetch(`${API_URL}/microbials/${resolvedParams.id}`, {
+        method: "PUT",
+        headers: getAuthHeader(),
+        body: specimenData,
+      });
+
+      if (response.ok) {
+        await fetchSpecimenDetails();
+        setIsSpecimenModalOpen(false);
+        setSelectedSpecimen(null);
+        alert("Specimen updated successfully!");
+      } else {
+        const error = await response.json();
+        alert(`Error: ${error.error || "Failed to save specimen"}`);
+      }
+    } catch (error) {
+      console.error("Error saving specimen:", error);
+      alert("Error saving specimen");
     }
   };
 
@@ -104,7 +253,7 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
 
       if (response.ok) {
         const data = await response.json();
-        alert(`BLAST submitted successfully! RID: ${data.rid}\n\nResults will be available in ${data.estimatedTime}`);
+        alert(`BLAST submitted successfully! RID: ${data.rid}\n\nNCBI BLAST usually takes 2-10 minutes, but can take longer during peak hours.`);
         await fetchSpecimenDetails();
         startBlastPolling();
       } else {
@@ -190,7 +339,7 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
       if (!isComplete) {
         setTimeout(() => {
           if (!specimen.blast_results) {
-            alert(`BLAST search is still processing. RID: ${specimen.blast_rid}\n\nThis can take 1-2 minutes. The page will auto-refresh when results are ready.`);
+            alert(`BLAST search is still processing. RID: ${specimen.blast_rid}\n\nThis often takes 2-10 minutes and may exceed 10 minutes. The page will auto-refresh when results are ready.`);
           }
           setBlastPolling(false);
         }, 2000);
@@ -205,7 +354,7 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
     setBlastPolling(true);
     
     let pollCount = 0;
-    const maxPolls = 30;
+    const maxPolls = 90;
     
     const pollInterval = setInterval(async () => {
       pollCount++;
@@ -216,7 +365,7 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
       } else if (pollCount >= maxPolls) {
         clearInterval(pollInterval);
         setBlastPolling(false);
-        console.log("BLAST polling stopped after 5 minutes");
+        console.log("BLAST polling stopped after 15 minutes");
       }
     }, 10000);
   };
@@ -274,15 +423,22 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
         }
       };
 
+      const headerLogoData = await getImageBase64('/UI/img/logo-biocella.png');
+
+      // Header
+      if (headerLogoData) {
+        doc.addImage(headerLogoData, 'PNG', margin, yPos - 4, 12, 12);
+      }
+
       doc.setFontSize(18);
       doc.setFont("helvetica", "bold");
-      doc.text("Specimen Information Report", margin, yPos);
-      yPos += 10;
+      doc.text("BIOCELLA Specimen Overview", headerLogoData ? margin + 16 : margin, yPos + 4);
+      yPos += 12;
 
       doc.setDrawColor(17, 63, 103);
       doc.setLineWidth(0.5);
       doc.line(margin, yPos, pageWidth - margin, yPos);
-      yPos += 10;
+      yPos += 8;
 
       let imageHeight = 0;
       if (specimen.image_url) {
@@ -418,6 +574,49 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
         }
       }
 
+        // Cell and Colony Morphology
+        const morphologyEntries: Array<[string, any]> = [];
+        if (specimen.morphology) {
+          morphologyEntries.push(
+            ["Shape", specimen.morphology.shape],
+            ["Cell Size", specimen.morphology.cell_size],
+            ["Colony Size", specimen.morphology.colony_size],
+            ["Pigmentation", specimen.morphology.pigmentation],
+            ["Form", specimen.morphology.form],
+            ["Elevation", specimen.morphology.elevation],
+            ["Margin", specimen.morphology.margin],
+            ["Colony Surface", specimen.morphology.colony_surface],
+            ["Opacity", specimen.morphology.opacity],
+            ["Texture", specimen.morphology.texture],
+            ["Spore Formation", specimen.morphology.spore_formation],
+            ["Mycelium Formation", specimen.morphology.mycelium_formation],
+            ["Description", specimen.morphology.description],
+          );
+        }
+        const filledMorphologyEntries = morphologyEntries.filter(
+          ([_, value]) => value && String(value).trim() !== ""
+        );
+
+        if (filledMorphologyEntries.length > 0) {
+          yPos += 5;
+          checkPageBreak(20);
+          doc.setFontSize(14);
+          doc.setFont("helvetica", "bold");
+          doc.text("Cell and Colony Morphology", margin, yPos);
+          yPos += lineHeight;
+
+          doc.setFontSize(10);
+          filledMorphologyEntries.forEach(([label, value]) => {
+            checkPageBreak();
+            doc.setFont("helvetica", "bold");
+            doc.text(`${label}:`, margin, yPos);
+            doc.setFont("helvetica", "normal");
+            const wrappedValue = doc.splitTextToSize(String(value), contentWidth - 52);
+            doc.text(wrappedValue, margin + 52, yPos);
+            yPos += lineHeight * Math.max(1, wrappedValue.length);
+          });
+        }
+
       if (specimen.activity || specimen.result) {
         yPos += 5;
         checkPageBreak(15);
@@ -487,38 +686,69 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
         doc.setFont("helvetica", "bold");
         doc.text("Additional Information", margin, yPos);
         yPos += lineHeight;
-        
+
+        const groupedCustomFields = groupCustomFieldsBySection(specimen.custom_fields);
         doc.setFontSize(10);
-        doc.setFont("helvetica", "normal");
-        
-        Object.entries(specimen.custom_fields).forEach(([key, value]) => {
-          checkPageBreak();
+
+        for (const group of groupedCustomFields) {
+          checkPageBreak(10);
           doc.setFont("helvetica", "bold");
-          doc.text(`${key.replace(/_/g, ' ')}:`, margin, yPos);
-          doc.setFont("helvetica", "normal");
-          doc.text(String(value), margin + 50, yPos);
+          doc.text(CUSTOM_SECTION_LABELS[group.section] || group.section, margin, yPos);
           yPos += lineHeight;
-        });
+
+          for (const field of group.fields) {
+            checkPageBreak(10);
+            doc.setFont("helvetica", "bold");
+            doc.text(`${field.label}:`, margin, yPos);
+            doc.setFont("helvetica", "normal");
+            
+            // Handle image_description-like fields specially (support string/JSON/object)
+            if (field.type === "image_description") {
+              const normalized = normalizeCustomImageDescriptionValue(field.rawValue ?? field.value);
+              const imageUrl = normalized.image_url;
+              const description = normalized.description;
+
+              if (imageUrl) {
+                try {
+                  const absoluteImageUrl = imageUrl.startsWith('http') ? imageUrl : `${API_URL}${imageUrl}`;
+                  const imageData = await getImageBase64(absoluteImageUrl);
+                  if (imageData) {
+                    const imgWidth = 60;
+                    const imgHeight = 60;
+                    doc.addImage(imageData, 'JPEG', margin + 55, yPos, imgWidth, imgHeight);
+                    yPos += imgHeight + 3;
+                  }
+                } catch (error) {
+                  console.error(`Error adding image for field ${field.label}:`, error);
+                }
+              }
+
+              if (description) {
+                checkPageBreak(5);
+                const descText = doc.splitTextToSize(`Description: ${description}`, contentWidth - 55);
+                doc.text(descText, margin + 55, yPos);
+                yPos += lineHeight * Math.max(1, descText.length);
+              } else if (!imageUrl) {
+                doc.text("N/A", margin + 55, yPos);
+                yPos += lineHeight;
+              }
+            } else {
+              // Regular fields - render as text
+              const valueText = doc.splitTextToSize(field.value || "N/A", contentWidth - 55);
+              doc.text(valueText, margin + 55, yPos);
+              yPos += Math.max(lineHeight, valueText.length * 5);
+            }
+          }
+
+          yPos += 2;
+        }
       }
 
-      // Footer with logo on first page and branding
-      const logoUrl = '/UI/img/BiocellaLogo.png';
-      const logoData = await getImageBase64(logoUrl);
+      // Footer branding
       
       const pageCount = doc.getNumberOfPages();
       for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
-        
-        // Add logo to top right corner on first page only
-        if (i === 1 && logoData) {
-          try {
-            const logoWidth = 30;
-            const logoHeight = 20;
-            doc.addImage(logoData, 'PNG', pageWidth - margin - logoWidth, 8, logoWidth, logoHeight);
-          } catch (error) {
-            console.error("Error adding logo to PDF:", error);
-          }
-        }
         
         // Add footer text
         doc.setFontSize(8);
@@ -609,7 +839,10 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
               )}
             </button>
             <button
-              onClick={() => router.push(`/RAStaffUI/RAStaffDashBoard/Features/RAStaffCollection?edit=${resolvedParams.id}`)}
+              onClick={() => {
+                setSelectedSpecimen(specimen);
+                setIsSpecimenModalOpen(true);
+              }}
               className="flex items-center gap-2 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600"
             >
               <Edit className="w-4 h-4" />
@@ -621,7 +854,7 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
         {/* Tabs */}
         <div className="mb-6 border-b border-gray-200">
           <div className="flex gap-4">
-            {["info", "bioactivity", "biochemical", "genome"].map((tab) => (
+            {["info", "bioactivity", "biochemical", "morphology", "genome"].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -726,9 +959,48 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
                 {specimen.custom_fields && Object.keys(specimen.custom_fields).length > 0 && (
                   <div className="bg-white shadow rounded-xl p-6">
                     <h2 className="text-lg font-semibold mb-4">Additional Information</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {Object.entries(specimen.custom_fields).map(([key, value]: [string, any]) => (
-                        <InfoItem key={key} label={key.replace(/_/g, " ")} value={value || "N/A"} />
+                    <div className="space-y-6">
+                      {groupCustomFieldsBySection(specimen.custom_fields).map((group) => (
+                        <div key={group.section}>
+                          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">
+                            {CUSTOM_SECTION_LABELS[group.section] || group.section}
+                          </h3>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {group.fields.map((field) => (
+                              field.type === "image_description" ? (
+                                <div key={field.id} className="md:col-span-2 rounded-lg border border-gray-200 p-4">
+                                  <h4 className="text-sm font-semibold text-gray-700">{field.label}</h4>
+                                  <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                                    <div>
+                                      {normalizeCustomImageDescriptionValue(field.rawValue).image_url ? (
+                                        <div className="relative h-48 w-full overflow-hidden rounded-lg border border-gray-200">
+                                          <Image
+                                            src={`${API_URL}${normalizeCustomImageDescriptionValue(field.rawValue).image_url}`}
+                                            alt={field.label}
+                                            fill
+                                            className="object-cover"
+                                          />
+                                        </div>
+                                      ) : (
+                                        <div className="flex h-48 items-center justify-center rounded-lg border border-dashed border-gray-300 text-sm text-gray-400">
+                                          No image uploaded
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div>
+                                      <p className="text-xs font-medium uppercase text-gray-500">Description</p>
+                                      <p className="mt-1 text-sm text-gray-800 whitespace-pre-wrap">
+                                        {normalizeCustomImageDescriptionValue(field.rawValue).description || "N/A"}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : (
+                                <InfoItem key={field.id} label={field.label} value={field.value || "N/A"} />
+                              )
+                            ))}
+                          </div>
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -799,6 +1071,33 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
               </div>
             )}
 
+            {activeTab === "morphology" && (
+              <div className="bg-white shadow rounded-xl p-6">
+                <h2 className="text-lg font-semibold mb-4">Cell and Colony Morphology</h2>
+                {specimen.morphology ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <InfoItem label="Shape" value={specimen.morphology.shape || "N/A"} />
+                    <InfoItem label="Cell Size" value={specimen.morphology.cell_size || "N/A"} />
+                    <InfoItem label="Colony Size" value={specimen.morphology.colony_size || "N/A"} />
+                    <InfoItem label="Pigmentation" value={specimen.morphology.pigmentation || "N/A"} />
+                    <InfoItem label="Form" value={specimen.morphology.form || "N/A"} />
+                    <InfoItem label="Elevation" value={specimen.morphology.elevation || "N/A"} />
+                    <InfoItem label="Margin" value={specimen.morphology.margin || "N/A"} />
+                    <InfoItem label="Colony Surface" value={specimen.morphology.colony_surface || "N/A"} />
+                    <InfoItem label="Opacity" value={specimen.morphology.opacity || "N/A"} />
+                    <InfoItem label="Texture" value={specimen.morphology.texture || "N/A"} />
+                    <InfoItem label="Spore Formation" value={specimen.morphology.spore_formation || "N/A"} />
+                    <InfoItem label="Mycelium Formation" value={specimen.morphology.mycelium_formation || "N/A"} />
+                    <div className="md:col-span-2">
+                      <InfoItem label="Description" value={specimen.morphology.description || "N/A"} />
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-gray-500 text-sm">No morphology data available yet.</p>
+                )}
+              </div>
+            )}
+
             {activeTab === "genome" && (
               <div className="bg-white shadow rounded-xl p-6">
                 <div className="flex items-center justify-between mb-4">
@@ -852,7 +1151,7 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
                         </div>
                         {!specimen.blast_results && (
                           <p className="text-xs text-blue-600 mt-2">
-                            BLAST analysis in progress. Results typically available in 30-60 seconds.
+                            BLAST analysis in progress. Results usually take 2-10 minutes and can occasionally take longer.
                           </p>
                         )}
                       </div>
@@ -1025,7 +1324,7 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
                                 </p>
                               )}
                               <p className="text-xs text-gray-500">
-                                Results typically available in 30-60 seconds after submission
+                                Results usually take 2-10 minutes after submission and can occasionally take longer
                               </p>
                             </>
                           ) : blastExpired || isBlastRidExpired() ? (
@@ -1075,7 +1374,7 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
                                 Check Results Now
                               </button>
                               <p className="text-xs text-gray-500 mt-2">
-                                Results typically take 1-2 minutes to process
+                                Results usually take 2-10 minutes to process
                               </p>
                               <a
                                 href={`https://blast.ncbi.nlm.nih.gov/Blast.cgi?CMD=Get&RID=${specimen.blast_rid}`}
@@ -1100,6 +1399,17 @@ export default function RAStaffSpecimenDetailPage({ params }: SpecimenDetailProp
           </div>
         </div>
       </div>
+
+      <SpecimenModal
+        isOpen={isSpecimenModalOpen}
+        onClose={() => {
+          setIsSpecimenModalOpen(false);
+          setSelectedSpecimen(null);
+        }}
+        onSave={handleSaveSpecimen}
+        specimen={selectedSpecimen}
+        projects={projects}
+      />
     </div>
   );
 }

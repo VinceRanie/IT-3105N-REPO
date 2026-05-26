@@ -166,7 +166,7 @@ export default function ProjectsPage() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search projects..."
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67]"
+            className="px-4 py-2  rounded-lg focus:outline-none focus:ring-2 focus:ring-[#113F67] border border-[#113F67]"
           />
           <button
             onClick={() => {

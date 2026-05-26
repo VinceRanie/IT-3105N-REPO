@@ -7,27 +7,44 @@ import { Check, X, QrCode, Search } from 'lucide-react';
 
 interface Appointment {
   appointment_id: number;
-  student_id: string;
+  user_id?: number | null;
+  student_id: string | null;
   department: string;
   purpose: string;
   date: string;
   end_time: string;
-  status: 'pending' | 'approved' | 'denied' | 'ongoing' | 'visited';
+  appointment_source?: 'internal' | 'outsider';
+  requester_name?: string | null;
+  requester_email?: string | null;
+  user_email?: string | null;
+  user_first_name?: string | null;
+  user_last_name?: string | null;
+  user_role?: string | null;
+  user_department?: string | null;
+  status: 'pending' | 'approved' | 'denied' | 'ongoing' | 'visited' | 'no_show';
   qr_code: string | null;
   admin_remarks: string | null;
   denial_reason?: string | null;
 }
 
-type TabType = 'pending' | 'ongoing' | 'visited' | 'denied';
+interface UnavailableDate {
+  unavailable_id: number;
+  unavailable_date: string;
+  reason: string;
+}
+
+type TabType = 'pending' | 'ongoing' | 'visited' | 'denied' | 'no_show';
+type AudienceFilter = 'all' | 'internal' | 'outsider';
 
 export default function RAStaffAppointmentDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('pending');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
-  const [statusCounts, setStatusCounts] = useState({ pending: 0, ongoing: 0, visited: 0, denied: 0 });
+  const [statusCounts, setStatusCounts] = useState({ pending: 0, ongoing: 0, visited: 0, denied: 0, no_show: 0 });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [audienceFilter, setAudienceFilter] = useState<AudienceFilter>('all');
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState<'approve' | 'deny' | 'scan'>('approve');
@@ -38,6 +55,11 @@ export default function RAStaffAppointmentDashboard() {
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [cameraFacingMode, setCameraFacingMode] = useState<'environment' | 'user'>('environment');
+  const [unavailableDate, setUnavailableDate] = useState('');
+  const [unavailableReason, setUnavailableReason] = useState('');
+  const [unavailableDates, setUnavailableDates] = useState<UnavailableDate[]>([]);
+  const [savingUnavailable, setSavingUnavailable] = useState(false);
+  const [showUnavailablePanel, setShowUnavailablePanel] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -46,6 +68,7 @@ export default function RAStaffAppointmentDashboard() {
     { key: 'ongoing', label: 'Ongoing', color: 'blue' },
     { key: 'visited', label: 'Visited', color: 'green' },
     { key: 'denied', label: 'Denied', color: 'red' },
+    { key: 'no_show', label: 'No-Show', color: 'gray' },
   ];
 
   // Handle camera stream when available
@@ -97,7 +120,154 @@ export default function RAStaffAppointmentDashboard() {
 
   useEffect(() => {
     fetchAllAppointmentsAndCount();
+    fetchUnavailableDates();
   }, []);
+
+  const getAppointmentDisplay = (appointment: Appointment) => {
+    const source = String(appointment.appointment_source || 'internal').toLowerCase();
+    if (source === 'outsider') {
+      const name =
+        String(appointment.requester_name || '').trim() ||
+        String(appointment.requester_email || '').trim() ||
+        'External Visitor';
+      return { primaryLabel: 'name', primaryValue: name };
+    }
+
+    const userRole = String(appointment.user_role || '').toLowerCase();
+    const userName = `${appointment.user_first_name || ''} ${appointment.user_last_name || ''}`.trim();
+
+    if (userRole === 'faculty') {
+      return {
+        primaryLabel: 'faculty email',
+        primaryValue: appointment.user_email || 'N/A',
+        secondaryLabel: 'name',
+        secondaryValue: userName || 'N/A',
+      };
+    }
+
+    return {
+      primaryLabel: 'Student ID',
+      primaryValue: appointment.student_id || 'N/A',
+      secondaryLabel: 'Name',
+      secondaryValue: userName || 'N/A',
+    };
+  };
+
+  const getAppointmentName = (appointment: Appointment) => {
+    const userName = `${appointment.user_first_name || ''} ${appointment.user_last_name || ''}`.trim();
+    if (userName) {
+      return userName;
+    }
+
+    const requesterName = String(appointment.requester_name || '').trim();
+    if (requesterName) {
+      return requesterName;
+    }
+
+    const requesterEmail = String(appointment.requester_email || '').trim();
+    return requesterEmail || 'N/A';
+  };
+
+  const getAppointmentDepartment = (appointment: Appointment) => {
+    return appointment.department || appointment.user_department || 'N/A';
+  };
+
+  const fetchUnavailableDates = async () => {
+    try {
+      const res = await fetch('/API/appointments/unavailable-dates');
+      if (!res.ok) {
+        throw new Error('Failed to fetch unavailable dates');
+      }
+      const data = await res.json();
+      setUnavailableDates(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Error fetching unavailable dates:', err);
+    }
+  };
+
+  const getCurrentUserId = (): number | null => {
+    try {
+      const fromUserData = localStorage.getItem('userData');
+      const fromUser = localStorage.getItem('user');
+      const raw = fromUserData || fromUser;
+      if (!raw) return null;
+
+      const parsed = JSON.parse(raw);
+      const id = Number(parsed.userId ?? parsed.user_id ?? parsed.id);
+      return Number.isFinite(id) ? id : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const handleSetUnavailableDate = async () => {
+    if (!unavailableDate || !unavailableReason.trim()) {
+      alert('Please select a date and provide a reason.');
+      return;
+    }
+
+    try {
+      setSavingUnavailable(true);
+      const response = await fetch('/API/appointments/unavailable-dates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date: unavailableDate,
+          reason: unavailableReason.trim(),
+          created_by_role: 'ra',
+          created_by_user_id: getCurrentUserId()
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || data.error || 'Failed to mark date unavailable');
+      }
+
+      // Build a helpful message including API results when available
+      try {
+        let msg = 'Date marked unavailable.';
+        if (data?.affectedAppointments) {
+          msg += `\n\nAffected appointments:\nDenied: ${data.affectedAppointments.denied}`;
+          if (data.affectedAppointments.deniedIds?.length) msg += ` (IDs: ${data.affectedAppointments.deniedIds.join(', ')})`;
+          msg += `\nCancelled: ${data.affectedAppointments.cancelled}`;
+          if (data.affectedAppointments.cancelledIds?.length) msg += ` (IDs: ${data.affectedAppointments.cancelledIds.join(', ')})`;
+        }
+        if (data?.emailErrors && data.emailErrors.length) {
+          msg += '\n\nEmail errors:' + data.emailErrors.map((e: any) => `\nID ${e.appointmentId}: ${e.error}`).join('');
+        }
+        alert(msg);
+      } catch (e) {
+        alert('Date marked unavailable.');
+      }
+      setUnavailableDate('');
+      setUnavailableReason('');
+      fetchUnavailableDates();
+    } catch (err) {
+      console.error('Error marking date unavailable:', err);
+      alert(err instanceof Error ? err.message : 'Failed to mark date unavailable');
+    } finally {
+      setSavingUnavailable(false);
+    }
+  };
+
+  const handleRemoveUnavailableDate = async (date: string) => {
+    try {
+      const response = await fetch(`/API/appointments/unavailable-dates/${encodeURIComponent(date)}`, {
+        method: 'DELETE'
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || data.error || 'Failed to remove unavailable date');
+      }
+
+      fetchUnavailableDates();
+    } catch (err) {
+      console.error('Error removing unavailable date:', err);
+      alert(err instanceof Error ? err.message : 'Failed to remove unavailable date');
+    }
+  };
 
   // Auto-verify when valid appointment QR is detected
   useEffect(() => {
@@ -105,7 +275,7 @@ export default function RAStaffAppointmentDashboard() {
       return;
     }
 
-    if (qrInput.includes('/verify-appointment?')) {
+    if (qrInput.includes('/verify-appointment?') || qrInput.includes('/scan/appointment?')) {
       try {
         const url = new URL(qrInput);
         const token = url.searchParams.get('token');
@@ -124,11 +294,14 @@ export default function RAStaffAppointmentDashboard() {
 
   useEffect(() => {
     if (allAppointments.length > 0) {
-      const tabAppointments = allAppointments.filter((app: Appointment) => app.status === activeTab);
+      const tabAppointments = allAppointments.filter((app: Appointment) => {
+        const source = app.appointment_source || 'internal';
+        return app.status === activeTab && (audienceFilter === 'all' || source === audienceFilter);
+      });
       setAppointments(tabAppointments);
       setError(null);
     }
-  }, [activeTab, allAppointments]);
+  }, [activeTab, allAppointments, audienceFilter]);
 
   const fetchAllAppointmentsAndCount = async (retries = 3) => {
     if (retries === 0) {
@@ -146,7 +319,7 @@ export default function RAStaffAppointmentDashboard() {
       const data = await res.json();
       setAllAppointments(data);
 
-      const counts = { pending: 0, ongoing: 0, visited: 0, denied: 0 };
+      const counts = { pending: 0, ongoing: 0, visited: 0, denied: 0, no_show: 0 };
       data.forEach((apt: Appointment) => {
         if (apt.status in counts) {
           counts[apt.status as keyof typeof counts]++;
@@ -335,10 +508,13 @@ export default function RAStaffAppointmentDashboard() {
     let filtered = appointments;
 
     if (searchTerm) {
+      const lower = searchTerm.toLowerCase();
       filtered = filtered.filter(
         (a) =>
-          a.student_id.includes(searchTerm) ||
-          a.purpose.toLowerCase().includes(searchTerm.toLowerCase())
+          String(a.student_id || '').toLowerCase().includes(lower) ||
+          String(a.requester_name || '').toLowerCase().includes(lower) ||
+          String(a.requester_email || '').toLowerCase().includes(lower) ||
+          a.purpose.toLowerCase().includes(lower)
       );
     }
 
@@ -352,6 +528,7 @@ export default function RAStaffAppointmentDashboard() {
       denied: 'bg-red-100 text-red-800',
       ongoing: 'bg-blue-100 text-blue-800',
       visited: 'bg-purple-100 text-purple-800',
+      no_show: 'bg-gray-200 text-gray-700',
     };
     
     return (
@@ -380,6 +557,68 @@ export default function RAStaffAppointmentDashboard() {
         </button>
       </div>
 
+      <div className="mb-6 rounded-lg border border-orange-200 bg-orange-50 p-4">
+        <button
+          type="button"
+          onClick={() => setShowUnavailablePanel((prev) => !prev)}
+          className="w-full flex items-center justify-between text-left"
+        >
+          <h2 className="text-lg font-semibold text-orange-900">Set Date Unavailable</h2>
+          <span className="text-sm font-semibold text-orange-800">
+            {showUnavailablePanel ? 'Hide' : 'Show'} {showUnavailablePanel ? '▲' : '▼'}
+          </span>
+        </button>
+
+        {showUnavailablePanel && (
+          <>
+            <p className="text-sm text-orange-800 mb-4 mt-3">This blocks booking for students/faculty and prepares data for the upcoming notification system.</p>
+            <div className="grid gap-3 md:grid-cols-3">
+              <input
+                type="date"
+                value={unavailableDate}
+                onChange={(e) => setUnavailableDate(e.target.value)}
+                className="rounded-md border border-orange-300 px-3 py-2"
+              />
+              <input
+                type="text"
+                value={unavailableReason}
+                onChange={(e) => setUnavailableReason(e.target.value)}
+                placeholder="Reason (e.g. lab maintenance)"
+                className="rounded-md border border-orange-300 px-3 py-2 md:col-span-2"
+              />
+            </div>
+            <div className="mt-3 flex items-center gap-3">
+              <button
+                onClick={handleSetUnavailableDate}
+                disabled={savingUnavailable}
+                className="rounded-md bg-orange-600 px-4 py-2 text-white hover:bg-orange-700 disabled:opacity-60"
+              >
+                {savingUnavailable ? 'Saving...' : 'Mark Unavailable'}
+              </button>
+            </div>
+            <div className="mt-4 space-y-2">
+              {unavailableDates.length === 0 ? (
+                <p className="text-sm text-orange-700">No blocked dates yet.</p>
+              ) : (
+                unavailableDates.slice(0, 8).map((item) => (
+                  <div key={item.unavailable_id} className="flex items-center justify-between rounded-md bg-white px-3 py-2 text-sm border border-orange-100">
+                    <span>
+                      {format(new Date(`${item.unavailable_date}T00:00:00`), 'MMM dd, yyyy')} - {item.reason}
+                    </span>
+                    <button
+                      onClick={() => handleRemoveUnavailableDate(item.unavailable_date)}
+                      className="text-red-600 hover:text-red-700 font-semibold"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
       {/* Tabs */}
       <div className="flex space-x-2 mb-6 border-b border-gray-200">
         {tabs.map((tab) => (
@@ -402,6 +641,27 @@ export default function RAStaffAppointmentDashboard() {
             </span>
           </button>
         ))}
+      </div>
+
+      <div className="mb-4 flex flex-wrap gap-2">
+        <button
+          onClick={() => setAudienceFilter('all')}
+          className={`px-3 py-1.5 rounded-md text-sm font-medium ${audienceFilter === 'all' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-700'}`}
+        >
+          All Audiences
+        </button>
+        <button
+          onClick={() => setAudienceFilter('internal')}
+          className={`px-3 py-1.5 rounded-md text-sm font-medium ${audienceFilter === 'internal' ? 'bg-blue-700 text-white' : 'bg-blue-50 text-blue-700'}`}
+        >
+          Internal (Student/Faculty)
+        </button>
+        <button
+          onClick={() => setAudienceFilter('outsider')}
+          className={`px-3 py-1.5 rounded-md text-sm font-medium ${audienceFilter === 'outsider' ? 'bg-emerald-700 text-white' : 'bg-emerald-50 text-emerald-700'}`}
+        >
+          Outsider
+        </button>
       </div>
 
       {/* Error Alert */}
@@ -463,19 +723,43 @@ export default function RAStaffAppointmentDashboard() {
               <div className="flex justify-between items-start">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
-                    <h3 className="text-lg font-semibold text-gray-800">
-                      Student ID: {appointment.student_id}
-                    </h3>
+                    {(() => {
+                      const display = getAppointmentDisplay(appointment);
+                      return (
+                        <h3 className="text-lg font-semibold text-gray-800">
+                          {display.primaryLabel}: {display.primaryValue}
+                        </h3>
+                      );
+                    })()}
                     {getStatusBadge(appointment.status)}
+                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${appointment.appointment_source === 'outsider' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'}`}>
+                      {(appointment.appointment_source || 'internal').toUpperCase()}
+                    </span>
                   </div>
                   
                   <div className="grid grid-cols-2 gap-4 text-sm text-gray-600 mb-3">
+                    {(() => {
+                      const display = getAppointmentDisplay(appointment);
+                      if (!display.secondaryLabel || !display.secondaryValue) {
+                        return null;
+                      }
+                      return (
+                        <div>
+                          <span className="font-medium">{display.secondaryLabel}:</span> {display.secondaryValue}
+                        </div>
+                      );
+                    })()}
                     <div>
-                      <span className="font-medium">Department:</span> {appointment.department}
+                      <span className="font-medium">Department:</span> {getAppointmentDepartment(appointment)}
                     </div>
                     <div>
                       <span className="font-medium">Purpose:</span> {appointment.purpose}
                     </div>
+                    {appointment.requester_email && (
+                      <div className="col-span-2">
+                        <span className="font-medium">Contact:</span> {appointment.requester_email}
+                      </div>
+                    )}
                   </div>
 
                   <div className="text-sm text-gray-600">
@@ -555,8 +839,10 @@ export default function RAStaffAppointmentDashboard() {
               <>
                 <h2 className="text-2xl font-bold mb-4 text-gray-800">Approve Appointment</h2>
                 <div className="mb-4 p-4 bg-gray-50 rounded-md text-sm">
-                  <p><strong>Student:</strong> {selectedAppointment.student_id}</p>
-                  <p><strong>Date:</strong> {format(new Date(selectedAppointment.date), 'MMM dd, yyyy hh:mm a')}</p>
+                  <p><strong>Student ID:</strong> {selectedAppointment.student_id || 'N/A'}</p>
+                  <p><strong>Name:</strong> {getAppointmentName(selectedAppointment)}</p>
+                  <p><strong>Scheduled Date:</strong> {format(new Date(selectedAppointment.date), 'MMM dd, yyyy hh:mm a')}</p>
+                  <p><strong>Purpose:</strong> {selectedAppointment.purpose || 'N/A'}</p>
                 </div>
                 
                 <textarea
@@ -588,8 +874,10 @@ export default function RAStaffAppointmentDashboard() {
               <>
                 <h2 className="text-2xl font-bold mb-4 text-gray-800">Deny Appointment</h2>
                 <div className="mb-4 p-4 bg-gray-50 rounded-md text-sm">
-                  <p><strong>Student:</strong> {selectedAppointment.student_id}</p>
-                  <p><strong>Date:</strong> {format(new Date(selectedAppointment.date), 'MMM dd, yyyy hh:mm a')}</p>
+                  <p><strong>Student ID:</strong> {selectedAppointment.student_id || 'N/A'}</p>
+                  <p><strong>Name:</strong> {getAppointmentName(selectedAppointment)}</p>
+                  <p><strong>Scheduled Date:</strong> {format(new Date(selectedAppointment.date), 'MMM dd, yyyy hh:mm a')}</p>
+                  <p><strong>Purpose:</strong> {selectedAppointment.purpose || 'N/A'}</p>
                 </div>
                 
                 <textarea

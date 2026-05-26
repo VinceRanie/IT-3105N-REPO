@@ -17,6 +17,7 @@ export interface ChemicalFormData {
   // Batch info when adding
   expiration_date: string;
   location: string;
+  lot_number: string;
 }
 
 export interface Batch {
@@ -28,6 +29,7 @@ export interface Batch {
   date_received: string;
   expiration_date: string;
   location: string;
+  lot_number?: string | null;
   qr_code: string | null;
 }
 
@@ -36,4 +38,5 @@ export interface BatchFormData {
   quantity: number;
   expiration_date: string;
   location: string;
+  lot_number: string;
 }

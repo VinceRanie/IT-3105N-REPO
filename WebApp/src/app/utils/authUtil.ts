@@ -102,14 +102,15 @@ export const getAuthHeader = (): { Authorization: string } | {} => {
  */
 export const redirectByRole = (router: any, role: string | null = null): void => {
   const userRole = role || getUserRole();
+  const normalizedRole = (userRole || '').toString().trim().toLowerCase();
   
-  if (userRole === 'admin') {
+  if (normalizedRole === 'admin') {
     router.push('/AdminUI/AdminDashBoard');
-  } else if (userRole === 'ra' || userRole === 'RA') {
-    router.push('/UsersUI/UsersDashBoard');
+  } else if (normalizedRole === 'ra' || normalizedRole === 'staff') {
+    router.push('/RAStaffUI/RAStaffDashBoard');
   } else {
-    // Default to student dashboard
-    router.push('/UsersUI/UsersDashBoard');
+    // Default student/faculty path goes directly to collections.
+    router.push('/UsersUI/UsersDashBoard/Features/UserCollection');
   }
 };
 
