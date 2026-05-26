@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, FolderPlus } from "lucide-react";
+import { Plus, FolderPlus, FileSpreadsheet } from "lucide-react";
 
 interface AdminControlsProps {
   onAddProject: () => void;
   onAddSpecimen: () => void;
+  onImportSpecimens: () => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
   statusFilter: "all" | "unpublished" | "published";
@@ -15,6 +16,7 @@ interface AdminControlsProps {
 export default function AdminControls({
   onAddProject,
   onAddSpecimen,
+  onImportSpecimens,
   searchQuery,
   onSearchChange,
   statusFilter,
@@ -46,6 +48,14 @@ export default function AdminControls({
           >
             <Plus className="w-4 h-4" />
             New Specimen
+          </button>
+
+          <button
+            onClick={onImportSpecimens}
+            className="flex items-center gap-2 h-9 px-4 py-1 text-sm cursor-pointer bg-slate-700 text-white rounded-lg shadow-md hover:bg-slate-800 transition-colors"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            Import Spreadsheet
           </button>
         </div>
 

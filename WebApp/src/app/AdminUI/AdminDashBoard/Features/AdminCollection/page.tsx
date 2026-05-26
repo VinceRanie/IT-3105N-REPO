@@ -6,6 +6,7 @@ import AdminCollection from "./AdminCollection";
 import AdminControls from "./AdminControls";
 import ProjectModal from "./ProjectModal";
 import SpecimenModal from "./SpecimenModal";
+import CollectionImportModal, { NormalizedSpecimenRow } from "@/app/components/CollectionImportModal";
 import { useRouter } from "next/navigation";
 import AlertModal from "./AlertModal";
 import { getUserData } from "@/app/utils/authUtil";
@@ -23,6 +24,7 @@ interface Project {
 interface Specimen {
   _id: string;
   publish_status?: 'published' | 'unpublished';
+  created_by?: string;
   code_name: string;
   classification: string;
   source: string;
@@ -84,6 +86,7 @@ export default function AdminCollectionPage() {
   // Modal states
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
   const [isSpecimenModalOpen, setIsSpecimenModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [selectedSpecimen, setSelectedSpecimen] = useState<Specimen | null>(null);
   const [alertModal, setAlertModal] = useState<{
@@ -120,6 +123,28 @@ export default function AdminCollectionPage() {
   const getCurrentUserId = () => {
     const user = getUserData();
     return user?.userId ?? null;
+  };
+
+  const normalizeCodeValue = (value: string) => String(value || "").trim().toLowerCase();
+
+  const hasDuplicateProjectCode = (code: string, excludeId?: string | null) => {
+    const normalized = normalizeCodeValue(code);
+    if (!normalized) return false;
+
+    return projects.some((project) => {
+      if (excludeId && project._id === excludeId) return false;
+      return normalizeCodeValue(project.code) === normalized;
+    });
+  };
+
+  const hasDuplicateSpecimenCode = (code: string, excludeId?: string | null) => {
+    const normalized = normalizeCodeValue(code);
+    if (!normalized) return false;
+
+    return specimens.some((specimen) => {
+      if (excludeId && specimen._id === excludeId) return false;
+      return normalizeCodeValue(specimen.code_name) === normalized;
+    });
   };
 
   // Fetch projects
@@ -202,6 +227,11 @@ export default function AdminCollectionPage() {
   // Project handlers
   const handleSaveProject = async (projectData: any) => {
     try {
+      if (hasDuplicateProjectCode(projectData.code, selectedProject?._id || null)) {
+        showAlert("Error", "Project code already exists. Use a unique project code.");
+        return;
+      }
+
       const method = selectedProject ? "PUT" : "POST";
       const url = selectedProject
         ? `${API_URL}/projects/${selectedProject._id}`
@@ -237,6 +267,12 @@ export default function AdminCollectionPage() {
   // Specimen handlers
   const handleSaveSpecimen = async (specimenData: FormData) => {
     try {
+      const nextCodeName = String(specimenData.get("code_name") || "").trim();
+      if (hasDuplicateSpecimenCode(nextCodeName, selectedSpecimen?._id || null)) {
+        showAlert("Error", "Specimen code already exists. Use a unique specimen code.");
+        return;
+      }
+
       const method = selectedSpecimen ? "PUT" : "POST";
       const url = selectedSpecimen
         ? `${API_URL}/microbials/${selectedSpecimen._id}`
@@ -253,6 +289,13 @@ export default function AdminCollectionPage() {
       const userId = getCurrentUserId();
       if (userId) {
         specimenData.set("user_id", String(userId));
+      }
+
+      if (!selectedSpecimen) {
+        const createdBy = getCurrentUserDisplayName();
+        if (createdBy) {
+          specimenData.set("created_by", createdBy);
+        }
       }
 
       const response = await fetch(url, {
@@ -339,6 +382,59 @@ export default function AdminCollectionPage() {
     }
   };
 
+  const handleImportSpecimens = async (rows: NormalizedSpecimenRow[], options?: { overwrite?: boolean }) => {
+    const displayName = getCurrentUserDisplayName();
+    const userId = getCurrentUserId();
+    const role = getUserData()?.role || "admin";
+    const basePayload = {
+      source_file_name: "Spreadsheet import",
+      role,
+      created_by: displayName,
+      reviewed_by: displayName,
+      approved_by: displayName,
+      user_id: userId,
+      rows,
+    };
+
+    const createResponse = await fetch(`${API_URL}/microbials/import-batches`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(basePayload),
+    });
+
+    if (!createResponse.ok) {
+      const error = await createResponse.json().catch(() => ({}));
+      throw new Error(error.error || "Failed to stage import batch");
+    }
+
+    const createdBatch = await createResponse.json();
+
+    const approveResponse = await fetch(`${API_URL}/microbials/import-batches/${createdBatch._id}/approve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        approved_by: displayName,
+        user_id: userId,
+        role,
+        overwrite: Boolean(options?.overwrite === true),
+      }),
+    });
+
+    if (!approveResponse.ok) {
+      const error = await approveResponse.json().catch(() => ({}));
+      throw new Error(error.error || "Failed to approve staged import batch");
+    }
+
+    const result = await approveResponse.json();
+    await fetchSpecimens();
+    showAlert(
+      "Import complete",
+      `Created ${result.created} specimen${result.created === 1 ? "" : "s"} from batch ${createdBatch._id}. ${result.failed > 0 ? `${result.failed} row${result.failed === 1 ? " was" : "s were"} skipped.` : ""}`.trim()
+    );
+
+    return { created: result.created || 0, failed: result.failed || 0, report: createdBatch.report || result.batch?.report };
+  };
+
   const handleViewSpecimen = (specimen: any) => {
     console.log("View specimen:", specimen);
     if (!specimen._id) {
@@ -403,6 +499,7 @@ export default function AdminCollectionPage() {
           setSelectedSpecimen(null);
           setIsSpecimenModalOpen(true);
         }}
+        onImportSpecimens={() => setIsImportModalOpen(true)}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         statusFilter={statusFilter}
@@ -436,6 +533,14 @@ export default function AdminCollectionPage() {
         onSave={handleSaveSpecimen}
         specimen={selectedSpecimen}
         projects={projects}
+      />
+
+      <CollectionImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        projects={projects}
+        onImport={handleImportSpecimens}
+        roleLabel="admin"
       />
 
     <AlertModal

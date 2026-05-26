@@ -1,10 +1,36 @@
 const Project = require('../models/Project');
 const mysql = require('../config/mysql'); // connection pool
 
+const normalizeCodeValue = (value) => String(value || '').trim().toLowerCase();
+
+const findProjectDuplicate = async (code, excludeId = null) => {
+  const normalizedCode = normalizeCodeValue(code);
+  if (!normalizedCode) return null;
+
+  const filter = {
+    code: new RegExp(`^${normalizedCode.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'),
+  };
+
+  if (excludeId) {
+    filter._id = { $ne: excludeId };
+  }
+
+  return Project.findOne(filter).lean();
+};
+
 // CREATE
 exports.createProject = async (req, res) => {
   try {
     const { title, code, classification, user_id } = req.body;
+
+    if (!String(code || '').trim()) {
+      return res.status(400).json({ message: 'Project code is required.' });
+    }
+
+    const duplicate = await findProjectDuplicate(code);
+    if (duplicate) {
+      return res.status(409).json({ message: 'Project code already exists. Use a unique project code.' });
+    }
 
     // Check if user_id exists in SQL
     // const [rows] = await mysql.execute('SELECT * FROM User WHERE user_id = ?', [user_id]);
@@ -47,6 +73,15 @@ exports.getProjectById = async (req, res) => {
 exports.updateProject = async (req, res) => {
   try {
     const { title, code, classification, user_id } = req.body;
+
+    if (!String(code || '').trim()) {
+      return res.status(400).json({ message: 'Project code is required.' });
+    }
+
+    const duplicate = await findProjectDuplicate(code, req.params.id);
+    if (duplicate) {
+      return res.status(409).json({ message: 'Project code already exists. Use a unique project code.' });
+    }
 
     if (user_id) {
       const [rows] = await mysql.execute('SELECT * FROM User WHERE user_id = ?', [user_id]);

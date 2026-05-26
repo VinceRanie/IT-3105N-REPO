@@ -81,6 +81,7 @@ const microbialInfoSchema = new Schema({
   
   // Description/Notes
   description: String,
+  created_by: String,
   update_notes: String,
   updated_by: String,
   

@@ -6,6 +6,7 @@ import RAStaffCollection from "./RAStaffCollection";
 import RAStaffControls from "./RAStaffControls";
 import ProjectModal from "./ProjectModal";
 import SpecimenModal from "./SpecimenModal";
+import CollectionImportModal, { NormalizedSpecimenRow } from "@/app/components/CollectionImportModal";
 import { useRouter } from "next/navigation";
 import { useProtectedRoute } from "@/app/hooks/useProtectedRoute";
 import { getAuthHeader, getUserData } from "@/app/utils/authUtil";
@@ -21,6 +22,7 @@ interface Project {
 interface Specimen {
   _id: string;
   publish_status?: 'published' | 'unpublished';
+  created_by?: string;
   code_name: string;
   classification: string;
   source: string;
@@ -85,6 +87,7 @@ export default function RAStaffCollectionPage() {
   // Modal states
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
   const [isSpecimenModalOpen, setIsSpecimenModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [selectedSpecimen, setSelectedSpecimen] = useState<Specimen | null>(null);
   
@@ -113,6 +116,28 @@ export default function RAStaffCollectionPage() {
   const getCurrentUserId = () => {
     const user = getUserData();
     return user?.userId ?? null;
+  };
+
+  const normalizeCodeValue = (value: string) => String(value || "").trim().toLowerCase();
+
+  const hasDuplicateProjectCode = (code: string, excludeId?: string | null) => {
+    const normalized = normalizeCodeValue(code);
+    if (!normalized) return false;
+
+    return projects.some((project) => {
+      if (excludeId && project._id === excludeId) return false;
+      return normalizeCodeValue(project.code) === normalized;
+    });
+  };
+
+  const hasDuplicateSpecimenCode = (code: string, excludeId?: string | null) => {
+    const normalized = normalizeCodeValue(code);
+    if (!normalized) return false;
+
+    return specimens.some((specimen) => {
+      if (excludeId && specimen._id === excludeId) return false;
+      return normalizeCodeValue(specimen.code_name) === normalized;
+    });
   };
 
   // Fetch projects
@@ -192,6 +217,11 @@ export default function RAStaffCollectionPage() {
   // Project handlers
   const handleSaveProject = async (projectData: any) => {
     try {
+      if (hasDuplicateProjectCode(projectData.code, selectedProject?._id || null)) {
+        alert("Project code already exists. Use a unique project code.");
+        return;
+      }
+
       const method = selectedProject ? "PUT" : "POST";
       const url = selectedProject
         ? `${API_URL}/projects/${selectedProject._id}`
@@ -224,6 +254,12 @@ export default function RAStaffCollectionPage() {
   // Specimen handlers
   const handleSaveSpecimen = async (specimenData: FormData) => {
     try {
+      const nextCodeName = String(specimenData.get("code_name") || "").trim();
+      if (hasDuplicateSpecimenCode(nextCodeName, selectedSpecimen?._id || null)) {
+        alert("Specimen code already exists. Use a unique specimen code.");
+        return;
+      }
+
       const method = selectedSpecimen ? "PUT" : "POST";
       const url = selectedSpecimen
         ? `${API_URL}/microbials/${selectedSpecimen._id}`
@@ -240,6 +276,13 @@ export default function RAStaffCollectionPage() {
       const userId = getCurrentUserId();
       if (userId) {
         specimenData.set("user_id", String(userId));
+      }
+
+      if (!selectedSpecimen) {
+        const createdBy = getCurrentUserDisplayName();
+        if (createdBy) {
+          specimenData.set("created_by", createdBy);
+        }
       }
 
       const response = await fetch(url, {
@@ -309,6 +352,60 @@ export default function RAStaffCollectionPage() {
     }
   };
 
+  const handleImportSpecimens = async (rows: NormalizedSpecimenRow[], options?: { overwrite?: boolean }) => {
+    const displayName = getCurrentUserDisplayName();
+    const userId = getCurrentUserId();
+    const role = getUserData()?.role || "staff";
+    const basePayload = {
+      source_file_name: "Spreadsheet import",
+      role,
+      created_by: displayName,
+      reviewed_by: displayName,
+      approved_by: displayName,
+      user_id: userId,
+      rows,
+    };
+
+    const createResponse = await fetch(`${API_URL}/microbials/import-batches`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...getAuthHeader(),
+      },
+      body: JSON.stringify(basePayload),
+    });
+
+    if (!createResponse.ok) {
+      const error = await createResponse.json().catch(() => ({}));
+      throw new Error(error.error || "Failed to stage import batch");
+    }
+
+    const createdBatch = await createResponse.json();
+
+    const approveResponse = await fetch(`${API_URL}/microbials/import-batches/${createdBatch._id}/approve`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...getAuthHeader(),
+      },
+      body: JSON.stringify({
+        approved_by: displayName,
+        user_id: userId,
+        role,
+        overwrite: Boolean(options?.overwrite === true),
+      }),
+    });
+
+    if (!approveResponse.ok) {
+      const error = await approveResponse.json().catch(() => ({}));
+      throw new Error(error.error || "Failed to approve staged import batch");
+    }
+
+    const result = await approveResponse.json();
+    await fetchSpecimens();
+    return { created: result.created || 0, failed: result.failed || 0, report: createdBatch.report || result.batch?.report };
+  };
+
   // Filter specimens based on search query
   const filteredSpecimens = specimens.filter((specimen: any) => {
     const matchesStatus =
@@ -353,6 +450,7 @@ export default function RAStaffCollectionPage() {
           setSelectedSpecimen(null);
           setIsSpecimenModalOpen(true);
         }}
+        onImportSpecimens={() => setIsImportModalOpen(true)}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         statusFilter={statusFilter}
@@ -385,6 +483,14 @@ export default function RAStaffCollectionPage() {
         onSave={handleSaveSpecimen}
         specimen={selectedSpecimen}
         projects={projects}
+      />
+
+      <CollectionImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        projects={projects}
+        onImport={handleImportSpecimens}
+        roleLabel="staff"
       />
     </>
   );

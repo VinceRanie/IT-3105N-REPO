@@ -8,6 +8,8 @@ import { useRouter } from "next/navigation";
 interface Collection {
   _id: string;
   publish_status?: 'published' | 'unpublished';
+  created_by?: string;
+  updated_by?: string;
   code_name: string;
   classification: string;
   source: string;
@@ -148,6 +150,9 @@ export default function RAStaffCollection({ specimens, onEdit, onView, onToggleP
                 <SortableHeader column="locale" label="Locale" />
                 <SortableHeader column="source" label="Source" />
                 <SortableHeader column="classification" label="Classification" />
+                <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">
+                  Added By
+                </th>
                 <SortableHeader column="publish_status" label="Status" />
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white uppercase">
                   Actions
@@ -157,7 +162,7 @@ export default function RAStaffCollection({ specimens, onEdit, onView, onToggleP
             <tbody className="divide-y divide-gray-200">
               {getSortedData().length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={9} className="px-4 py-8 text-center text-gray-500">
                     No specimens found. Add your first specimen to get started.
                   </td>
                 </tr>
@@ -185,6 +190,9 @@ export default function RAStaffCollection({ specimens, onEdit, onView, onToggleP
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-800">
                         {specimen.classification || (typeof specimen.project_id === 'object' ? specimen.project_id?.classification : "N/A")}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-800">
+                        {specimen.created_by || specimen.updated_by || "N/A"}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-800">
                         <span
@@ -239,7 +247,7 @@ export default function RAStaffCollection({ specimens, onEdit, onView, onToggleP
 
                     {selectedId === specimen._id && (
                       <tr className="bg-gray-50">
-                        <td colSpan={8}>
+                        <td colSpan={9}>
                           <div className="p-4">
                             <h4 className="font-semibold text-gray-700 mb-2">Description:</h4>
                             <p className="text-sm text-gray-600">
