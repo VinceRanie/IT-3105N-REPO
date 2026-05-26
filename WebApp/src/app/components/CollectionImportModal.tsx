@@ -38,6 +38,7 @@ type NormalizedSpecimenRow = {
 
 type PreviewRow = {
   index: number;
+  extractedCode: string;
   values: NormalizedSpecimenRow | null;
   warnings: string[];
   errors: string[];
@@ -160,6 +161,39 @@ const parseDateValue = (value: string) => {
 };
 
 const normalizeCodeValue = (value: string) => normalizeText(value).replace(/\s+/g, "");
+
+const getRowCodeValue = (row: ImportRow) => {
+  const candidateKeys = [
+    "code_name",
+    "code",
+    "code name",
+    "specimen code",
+    "sample code",
+    "specimen id",
+    "sample id",
+    "Code",
+    "Code:",
+    "Specimen Code",
+    "Sample Code",
+  ];
+
+  for (const key of candidateKeys) {
+    const value = String(row[key] ?? "").trim();
+    if (value) return value;
+  }
+
+  const foundKey = Object.keys(row).find((key) => {
+    const normalizedKey = normalizeText(key);
+    return normalizedKey === "code" || normalizedKey === "code name" || normalizedKey === "specimen code" || normalizedKey === "sample code" || normalizedKey === "specimen id" || normalizedKey === "sample id";
+  });
+
+  if (foundKey) {
+    const value = String(row[foundKey] ?? "").trim();
+    if (value) return value;
+  }
+
+  return "";
+};
 
 const resolveProjectId = (value: string, projects: ProjectOption[]) => {
   const normalized = normalizeText(value);
@@ -602,6 +636,7 @@ export default function CollectionImportModal({ isOpen, onClose, projects, onImp
       const patchedValues = applyRowPatch(builtRow.values || ({} as NormalizedSpecimenRow), rowPatches[index]);
       const validation = validateNormalizedRow(patchedValues);
       const sourceSheets = String(row.__source_sheets || "").trim();
+      const extractedCode = getRowCodeValue(row);
 
       if (sourceSheets) {
         validation.warnings.push(`Merged from worksheets: ${sourceSheets}.`);
@@ -609,6 +644,7 @@ export default function CollectionImportModal({ isOpen, onClose, projects, onImp
 
       return {
         index,
+        extractedCode,
         values: patchedValues,
         warnings: builtRow.warnings,
         errors: validation.errors,
@@ -926,6 +962,7 @@ export default function CollectionImportModal({ isOpen, onClose, projects, onImp
                     <tr>
                       <th className="px-4 py-3 text-left font-semibold text-slate-700">Row</th>
                       <th className="px-4 py-3 text-left font-semibold text-slate-700">Code Name</th>
+                      <th className="px-4 py-3 text-left font-semibold text-slate-700">Extracted Code</th>
                       <th className="px-4 py-3 text-left font-semibold text-slate-700">Project</th>
                       <th className="px-4 py-3 text-left font-semibold text-slate-700">Classification</th>
                       <th className="px-4 py-3 text-left font-semibold text-slate-700">Priority</th>
@@ -944,6 +981,14 @@ export default function CollectionImportModal({ isOpen, onClose, projects, onImp
                             className="w-full min-w-[10rem] rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-[#113F67] focus:outline-none focus:ring-2 focus:ring-[#113F67]/20"
                             placeholder="Code name"
                           />
+                        </td>
+                        <td className="px-4 py-3 align-top text-slate-700">
+                          <div className="space-y-1">
+                            <div className="font-medium text-slate-900">{row.extractedCode || "N/A"}</div>
+                            {row.extractedCode && row.values?.code_name && normalizeCodeValue(row.extractedCode) !== normalizeCodeValue(row.values.code_name) && (
+                              <div className="text-xs text-amber-700">Differs from current code name</div>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-3 align-top">
                           <select
@@ -999,7 +1044,7 @@ export default function CollectionImportModal({ isOpen, onClose, projects, onImp
 
                     {visibleRows.map((row) => (
                       <tr key={`edit-${row.index}`} className="bg-slate-50/40">
-                        <td className="px-4 py-4 text-xs text-slate-500" colSpan={7}>
+                        <td className="px-4 py-4 text-xs text-slate-500" colSpan={8}>
                           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                             {EDITABLE_FIELDS.map((fieldConfig) => {
                               const value = row.values?.[fieldConfig.field] || "";

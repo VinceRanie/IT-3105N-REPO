@@ -102,15 +102,37 @@ const resolveProject = async (projectValue) => {
   });
 };
 
+const resolveOrCreateProject = async (rawRow) => {
+  const projectValue = normalizeString(rawRow.project_id || rawRow.project || rawRow.project_code || rawRow.project_title || rawRow.project_name);
+  if (!projectValue) return { project: null, created: false };
+
+  const existing = await resolveProject(projectValue);
+  if (existing) return { project: existing, created: false };
+
+  const title = normalizeString(rawRow.project_title || rawRow.project_name || rawRow.project || projectValue);
+  const code = normalizeString(rawRow.project_code || rawRow.project_id || rawRow.project || projectValue);
+  const classification = normalizeString(rawRow.project_classification || rawRow.project_type || rawRow.project_group || rawRow.project_category || '');
+
+  const createdProject = await Project.create({
+    title: title || code || projectValue,
+    code: code || title || projectValue,
+    classification,
+  });
+
+  return { project: createdProject, created: true };
+};
+
 const normalizeImportRow = async (row, rowNumber) => {
   const errors = [];
   const warnings = [];
   const rawRow = row && typeof row === 'object' ? row : {};
 
+  const { project, created } = await resolveOrCreateProject(rawRow);
   const projectValue = rawRow.project_id || rawRow.project || rawRow.project_code || rawRow.project_title || rawRow.project_name;
-  const project = await resolveProject(projectValue);
   if (!project) {
     errors.push(`Row ${rowNumber}: project not found`);
+  } else if (created) {
+    warnings.push(`Row ${rowNumber}: created project "${project.code || project.title}" because it did not exist.`);
   }
 
   const codeName = normalizeString(rawRow.code_name || rawRow.code || rawRow.sheet_name || rawRow.sheetName);
