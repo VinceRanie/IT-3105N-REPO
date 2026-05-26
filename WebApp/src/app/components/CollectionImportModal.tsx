@@ -324,39 +324,6 @@ const getProjectLabel = (projectId: string, projects: ProjectOption[]) => {
 
 const normalizeCodeKey = (value: string) => normalizeCodeValue(value || "");
 
-const getRowCodeValue = (row: ImportRow) => {
-  const candidateKeys = [
-    "code_name",
-    "code",
-    "code name",
-    "specimen code",
-    "sample code",
-    "specimen id",
-    "sample id",
-    "Code",
-    "Code:",
-    "Specimen Code",
-    "Sample Code",
-  ];
-
-  for (const key of candidateKeys) {
-    const value = String(row[key] ?? "").trim();
-    if (value) return value;
-  }
-
-  const foundKey = Object.keys(row).find((key) => {
-    const normalizedKey = normalizeText(key);
-    return normalizedKey === "code" || normalizedKey === "code name" || normalizedKey === "specimen code" || normalizedKey === "sample code" || normalizedKey === "specimen id" || normalizedKey === "sample id";
-  });
-
-  if (foundKey) {
-    const value = String(row[foundKey] ?? "").trim();
-    if (value) return value;
-  }
-
-  return "";
-};
-
 const mergeRowIntoBucket = (bucket: ImportRow, incoming: ImportRow) => {
   Object.entries(incoming).forEach(([field, value]) => {
     const trimmed = String(value ?? "").trim();
