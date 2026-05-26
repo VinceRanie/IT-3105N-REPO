@@ -97,7 +97,7 @@ export async function GET(request: NextRequest) {
       return errorRedirect(parsed?.message || "Invalid or expired registration link.");
     }
 
-    if (user.is_setup_complete === 1) {
+    if (Number(user.is_setup_complete) === 1) {
       return errorRedirect("Account setup is already complete. Please log in.");
     }
 

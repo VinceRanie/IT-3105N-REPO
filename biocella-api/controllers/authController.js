@@ -1088,6 +1088,13 @@ exports.getUserByToken = async (req, res) => {
       });
     }
 
+    if (Number(user.is_setup_complete) === 1) {
+      return res.status(HttpStatus.CONFLICT).json({
+        message: "Account setup is already complete. Please log in.",
+        statusCode: HttpStatus.CONFLICT,
+      });
+    }
+
     return res.status(HttpStatus.OK).json({
       message: "User data retrieved successfully.",
       user: {
