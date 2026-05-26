@@ -43,6 +43,16 @@ type PreviewRow = {
   errors: string[];
 };
 
+type RowFieldPatch = Partial<Pick<NormalizedSpecimenRow, "project_id" | "code_name" | "classification" | "source" | "date_accessed" | "publish_status" | "locale" | "project_fund" | "accession_no" | "similarity_percent" | "description" | "created_by" | "updated_by" | "update_notes" | "image_url" | "fasta_file" | "fasta_sequence">>;
+
+type EditableFieldKey = keyof RowFieldPatch;
+
+type EditableFieldConfig = {
+  field: EditableFieldKey;
+  label: string;
+  type?: "text" | "date" | "number" | "textarea" | "select";
+};
+
 interface CollectionImportModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -157,6 +167,65 @@ const resolveProjectId = (value: string, projects: ProjectOption[]) => {
 
   const exactMatch = projects.find((project) => project._id === value || normalizeText(project.title) === normalized || normalizeText(project.code) === normalized);
   return exactMatch?._id || "";
+};
+
+const getIssuePriority = (message: string) => {
+  if (message.startsWith("Missing project match")) return 1;
+  if (message.startsWith("Missing code name")) return 2;
+  if (message.startsWith("Missing classification")) return 3;
+  if (message.startsWith("Duplicate code_name")) return 4;
+  return 5;
+};
+
+const sortIssuesByPriority = (messages: string[]) =>
+  [...messages].sort((left, right) => {
+    const priorityDelta = getIssuePriority(left) - getIssuePriority(right);
+    if (priorityDelta !== 0) return priorityDelta;
+    return left.localeCompare(right);
+  });
+
+const getRowPriority = (row: PreviewRow) => {
+  if (row.errors.length === 0) return 999;
+  return Math.min(...row.errors.map(getIssuePriority));
+};
+
+const EDITABLE_FIELDS: EditableFieldConfig[] = [
+  { field: "source", label: "Source" },
+  { field: "date_accessed", label: "Date Accessed", type: "date" },
+  { field: "publish_status", label: "Publish Status", type: "select" },
+  { field: "locale", label: "Locale" },
+  { field: "project_fund", label: "Project Fund" },
+  { field: "accession_no", label: "Accession No." },
+  { field: "similarity_percent", label: "Similarity %", type: "number" },
+  { field: "description", label: "Description", type: "textarea" },
+  { field: "created_by", label: "Created By" },
+  { field: "updated_by", label: "Updated By" },
+  { field: "update_notes", label: "Update Notes", type: "textarea" },
+  { field: "image_url", label: "Image URL" },
+  { field: "fasta_file", label: "FASTA File Path" },
+  { field: "fasta_sequence", label: "FASTA Sequence", type: "textarea" },
+];
+
+const applyRowPatch = (values: NormalizedSpecimenRow, patch?: RowFieldPatch | null) => ({
+  ...values,
+  ...(patch || {}),
+});
+
+const getProjectLabel = (projectId: string, projects: ProjectOption[]) => {
+  const match = projects.find((project) => project._id === projectId);
+  if (!match) return projectId;
+  return `${match.title} (${match.code})`;
+};
+
+const validateNormalizedRow = (values: NormalizedSpecimenRow) => {
+  const warnings: string[] = [];
+  const errors: string[] = [];
+
+  if (!values.project_id) errors.push("Missing project match.");
+  if (!values.code_name) errors.push("Missing code name.");
+  if (!values.classification) errors.push("Missing classification.");
+
+  return { warnings, errors };
 };
 
 const isNonEmptyCell = (value: unknown) => String(value ?? "").trim().length > 0;
@@ -353,9 +422,9 @@ const buildRow = (row: ImportRow, headers: string[], mapping: Record<string, str
     };
   });
 
-  if (!values.project_id) errors.push("Missing project match.");
-  if (!values.code_name) errors.push("Missing code name.");
-  if (!values.classification) errors.push("Missing classification.");
+  const validation = validateNormalizedRow(values);
+  warnings.push(...validation.warnings);
+  errors.push(...validation.errors);
 
   return { index: 0, values, warnings, errors };
 };
@@ -365,6 +434,8 @@ export default function CollectionImportModal({ isOpen, onClose, projects, onImp
   const [headers, setHeaders] = useState<string[]>([]);
   const [rows, setRows] = useState<ImportRow[]>([]);
   const [columnMapping, setColumnMapping] = useState<Record<string, string>>({});
+  const [rowPatches, setRowPatches] = useState<Record<number, RowFieldPatch>>({});
+  const [previewFilter, setPreviewFilter] = useState<"all" | "needs_fix" | "priority_1" | "ready">("all");
   const [isParsing, setIsParsing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [parseError, setParseError] = useState("");
@@ -376,6 +447,8 @@ export default function CollectionImportModal({ isOpen, onClose, projects, onImp
       setHeaders([]);
       setRows([]);
       setColumnMapping({});
+      setRowPatches({});
+      setPreviewFilter("all");
       setParseError("");
       setImportSummary(null);
       setIsParsing(false);
@@ -385,7 +458,18 @@ export default function CollectionImportModal({ isOpen, onClose, projects, onImp
 
   const previewRows = useMemo(() => {
     if (!headers.length || !rows.length) return [];
-    const baseRows = rows.map((row, index) => ({ ...buildRow(row, headers, columnMapping, projects), index }));
+    const baseRows = rows.map((row, index) => {
+      const builtRow = buildRow(row, headers, columnMapping, projects);
+      const patchedValues = applyRowPatch(builtRow.values || ({} as NormalizedSpecimenRow), rowPatches[index]);
+      const validation = validateNormalizedRow(patchedValues);
+
+      return {
+        index,
+        values: patchedValues,
+        warnings: builtRow.warnings,
+        errors: validation.errors,
+      };
+    });
     const duplicateCounts = new Map<string, number>();
     baseRows.forEach((row) => {
       const codeKey = normalizeCodeValue(row.values?.code_name || "");
@@ -396,18 +480,29 @@ export default function CollectionImportModal({ isOpen, onClose, projects, onImp
     return baseRows.map((row) => {
       const codeKey = normalizeCodeValue(row.values?.code_name || "");
       if (!codeKey || (duplicateCounts.get(codeKey) || 0) <= 1) {
-        return row;
+        return {
+          ...row,
+          warnings: sortIssuesByPriority(row.warnings),
+          errors: sortIssuesByPriority(row.errors),
+        };
       }
 
       return {
         ...row,
-        errors: [...row.errors, `Duplicate code_name "${row.values?.code_name || codeKey}" found in this file.`],
+        errors: sortIssuesByPriority([...row.errors, `Duplicate code_name "${row.values?.code_name || codeKey}" found in this file.`]),
+        warnings: sortIssuesByPriority(row.warnings),
       };
     });
-  }, [columnMapping, headers, projects, rows]);
+  }, [columnMapping, headers, projects, rowPatches, rows]);
 
   const detectedCount = previewRows.filter((row) => row.errors.length === 0).length;
   const invalidCount = previewRows.length - detectedCount;
+  const visibleRows = previewRows.filter((row) => {
+    if (previewFilter === "all") return true;
+    if (previewFilter === "ready") return row.errors.length === 0;
+    if (previewFilter === "needs_fix") return row.errors.length > 0;
+    return row.errors.length > 0 && getRowPriority(row) === 1;
+  });
 
   const handleFile = async (file: File) => {
     setIsParsing(true);
@@ -469,6 +564,16 @@ export default function CollectionImportModal({ isOpen, onClose, projects, onImp
     } finally {
       setIsImporting(false);
     }
+  };
+
+  const updateRowField = (rowIndex: number, field: keyof RowFieldPatch, value: string) => {
+    setRowPatches((current) => ({
+      ...current,
+      [rowIndex]: {
+        ...(current[rowIndex] || {}),
+        [field]: value,
+      },
+    }));
   };
 
   if (!isOpen) return null;
@@ -645,16 +750,28 @@ export default function CollectionImportModal({ isOpen, onClose, projects, onImp
               <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
                 <div>
                   <p className="text-sm font-semibold text-slate-900">4. Validation preview</p>
-                  <p className="text-sm text-slate-600">Invalid rows are excluded from import until fixed.</p>
+                  <p className="text-sm text-slate-600">Fix rows inline in priority order. Invalid rows stay excluded until every required issue is resolved.</p>
                 </div>
-                <button
-                  onClick={() => void handleImport()}
-                  disabled={isImporting || detectedCount === 0}
-                  className="inline-flex items-center gap-2 rounded-lg bg-[#113F67] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#0d2f4d] disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {isImporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                  Approve Import
-                </button>
+                <div className="flex items-center gap-3">
+                  <select
+                    value={previewFilter}
+                    onChange={(event) => setPreviewFilter(event.target.value as typeof previewFilter)}
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-[#113F67] focus:outline-none focus:ring-2 focus:ring-[#113F67]/20"
+                  >
+                    <option value="all">All rows</option>
+                    <option value="priority_1">Highest-priority issues</option>
+                    <option value="needs_fix">Needs fix</option>
+                    <option value="ready">Ready only</option>
+                  </select>
+                  <button
+                    onClick={() => void handleImport()}
+                    disabled={isImporting || detectedCount === 0}
+                    className="inline-flex items-center gap-2 rounded-lg bg-[#113F67] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#0d2f4d] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isImporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                    Approve Import
+                  </button>
+                </div>
               </div>
 
               <div className="overflow-x-auto">
@@ -664,16 +781,56 @@ export default function CollectionImportModal({ isOpen, onClose, projects, onImp
                       <th className="px-4 py-3 text-left font-semibold text-slate-700">Row</th>
                       <th className="px-4 py-3 text-left font-semibold text-slate-700">Code Name</th>
                       <th className="px-4 py-3 text-left font-semibold text-slate-700">Project</th>
+                      <th className="px-4 py-3 text-left font-semibold text-slate-700">Classification</th>
+                      <th className="px-4 py-3 text-left font-semibold text-slate-700">Priority</th>
                       <th className="px-4 py-3 text-left font-semibold text-slate-700">Status</th>
                       <th className="px-4 py-3 text-left font-semibold text-slate-700">Notes</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {previewRows.slice(0, 8).map((row) => (
+                    {visibleRows.map((row) => (
                       <tr key={row.index}>
                         <td className="px-4 py-3 text-slate-600">{row.index + 2}</td>
-                        <td className="px-4 py-3 font-medium text-slate-900">{row.values?.code_name || "N/A"}</td>
-                        <td className="px-4 py-3 text-slate-700">{projects.find((project) => project._id === row.values?.project_id)?.title || row.values?.project_id || "N/A"}</td>
+                        <td className="px-4 py-3 align-top">
+                          <input
+                            value={row.values?.code_name || ""}
+                            onChange={(event) => updateRowField(row.index, "code_name", event.target.value)}
+                            className="w-full min-w-[10rem] rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-[#113F67] focus:outline-none focus:ring-2 focus:ring-[#113F67]/20"
+                            placeholder="Code name"
+                          />
+                        </td>
+                        <td className="px-4 py-3 align-top">
+                          <select
+                            value={row.values?.project_id || ""}
+                            onChange={(event) => updateRowField(row.index, "project_id", event.target.value)}
+                            className="w-full min-w-[16rem] rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-[#113F67] focus:outline-none focus:ring-2 focus:ring-[#113F67]/20"
+                          >
+                            <option value="">Select project</option>
+                            {projects.map((project) => (
+                              <option key={project._id} value={project._id}>
+                                {project.title} ({project.code})
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="px-4 py-3 align-top">
+                          <input
+                            value={row.values?.classification || ""}
+                            onChange={(event) => updateRowField(row.index, "classification", event.target.value)}
+                            className="w-full min-w-[11rem] rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-[#113F67] focus:outline-none focus:ring-2 focus:ring-[#113F67]/20"
+                            placeholder="Classification"
+                          />
+                        </td>
+                        <td className="px-4 py-3 align-top text-slate-700">
+                          {row.errors.length > 0 ? (
+                            <div className="space-y-1">
+                              <div className="inline-flex rounded-full bg-rose-100 px-2 py-1 text-xs font-semibold text-rose-700">Priority {getIssuePriority(row.errors[0])}</div>
+                              <div className="text-xs text-slate-600">{row.errors[0]}</div>
+                            </div>
+                          ) : (
+                            <span className="inline-flex rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-700">Ready</span>
+                          )}
+                        </td>
                         <td className="px-4 py-3">
                           {row.errors.length > 0 ? (
                             <span className="inline-flex rounded-full bg-rose-100 px-2 py-1 text-xs font-semibold text-rose-700">Needs fix</span>
@@ -681,7 +838,71 @@ export default function CollectionImportModal({ isOpen, onClose, projects, onImp
                             <span className="inline-flex rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-700">Ready</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-slate-600">{[...row.errors, ...row.warnings].join(" • ") || "OK"}</td>
+                        <td className="px-4 py-3 text-slate-600">
+                          <div className="space-y-1">
+                            {sortIssuesByPriority([...row.errors, ...row.warnings]).map((message, messageIndex) => (
+                              <div key={`${row.index}-${message}`} className={messageIndex === 0 ? "font-medium text-slate-700" : "text-slate-600"}>
+                                {messageIndex + 1}. {message}
+                              </div>
+                            ))}
+                            {row.errors.length === 0 && row.warnings.length === 0 && <div>OK</div>}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+
+                    {visibleRows.map((row) => (
+                      <tr key={`edit-${row.index}`} className="bg-slate-50/40">
+                        <td className="px-4 py-4 text-xs text-slate-500" colSpan={7}>
+                          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                            {EDITABLE_FIELDS.map((fieldConfig) => {
+                              const value = row.values?.[fieldConfig.field] || "";
+
+                              if (fieldConfig.type === "select") {
+                                return (
+                                  <label key={fieldConfig.field} className="space-y-1">
+                                    <span className="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">{fieldConfig.label}</span>
+                                    <select
+                                      value={value}
+                                      onChange={(event) => updateRowField(row.index, fieldConfig.field, event.target.value)}
+                                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-[#113F67] focus:outline-none focus:ring-2 focus:ring-[#113F67]/20"
+                                    >
+                                      <option value="">Select status</option>
+                                      <option value="published">Published</option>
+                                      <option value="unpublished">Unpublished</option>
+                                    </select>
+                                  </label>
+                                );
+                              }
+
+                              if (fieldConfig.type === "textarea") {
+                                return (
+                                  <label key={fieldConfig.field} className="space-y-1 md:col-span-2 xl:col-span-3">
+                                    <span className="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">{fieldConfig.label}</span>
+                                    <textarea
+                                      value={value}
+                                      onChange={(event) => updateRowField(row.index, fieldConfig.field, event.target.value)}
+                                      rows={3}
+                                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-[#113F67] focus:outline-none focus:ring-2 focus:ring-[#113F67]/20"
+                                    />
+                                  </label>
+                                );
+                              }
+
+                              return (
+                                <label key={fieldConfig.field} className="space-y-1">
+                                  <span className="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">{fieldConfig.label}</span>
+                                  <input
+                                    type={fieldConfig.type || "text"}
+                                    value={value}
+                                    onChange={(event) => updateRowField(row.index, fieldConfig.field, event.target.value)}
+                                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-[#113F67] focus:outline-none focus:ring-2 focus:ring-[#113F67]/20"
+                                  />
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
