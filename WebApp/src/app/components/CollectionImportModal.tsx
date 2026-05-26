@@ -531,6 +531,7 @@ const buildRow = (row: ImportRow, headers: string[], mapping: Record<string, str
 
   const warnings: string[] = [];
   const errors: string[] = [];
+  const extractedCode = getRowCodeValue(row);
 
   headers.forEach((header) => {
     const rawValue = String(row[header] ?? "").trim();
@@ -559,6 +560,16 @@ const buildRow = (row: ImportRow, headers: string[], mapping: Record<string, str
         values.project_code = rawValue;
         warnings.push(`Project "${rawValue}" will be created if it does not already exist.`);
       }
+      return;
+    }
+
+    if (target === "code_name") {
+      values.code_name = rawValue;
+      return;
+    }
+
+    if (target === "classification") {
+      values.classification = rawValue;
       return;
     }
 
@@ -635,11 +646,15 @@ const buildRow = (row: ImportRow, headers: string[], mapping: Record<string, str
     };
   });
 
+  if (!values.code_name && extractedCode) {
+    values.code_name = extractedCode;
+  }
+
   const validation = validateNormalizedRow(values);
   warnings.push(...validation.warnings);
   errors.push(...validation.errors);
 
-  return { index: 0, extractedCode: getRowCodeValue(row), values, warnings, errors };
+  return { index: 0, extractedCode, values, warnings, errors };
 };
 
 export default function CollectionImportModal({ isOpen, onClose, projects, onImport, roleLabel }: CollectionImportModalProps) {
