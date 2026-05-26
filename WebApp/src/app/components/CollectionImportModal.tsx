@@ -566,7 +566,7 @@ const buildRow = (row: ImportRow, headers: string[], mapping: Record<string, str
   warnings.push(...validation.warnings);
   errors.push(...validation.errors);
 
-  return { index: 0, values, warnings, errors };
+  return { index: 0, extractedCode: getRowCodeValue(row), values, warnings, errors };
 };
 
 export default function CollectionImportModal({ isOpen, onClose, projects, onImport, roleLabel }: CollectionImportModalProps) {
