@@ -655,6 +655,7 @@ exports.adminInvite = async (req, res) => {
       }
 
       // Update the pending user's reset token
+      await authModel.updateUserRole(existingUser.user_id, normalizedRole);
       await authModel.setResetToken(existingUser.user_id, resetToken, tokenExpiry);
 
       return res.status(HttpStatus.OK).json({

@@ -11,7 +11,14 @@ interface FinalizeSignupProps {
   lastName: string;
   photo: string;
   email: string;
+  role: string;
 }
+
+const roleLabels: Record<string, string> = {
+  student: "Student",
+  faculty: "Faculty",
+  staff: "Research Assistant",
+};
 
 export default function FinalizeSignup({
   token,
@@ -19,6 +26,7 @@ export default function FinalizeSignup({
   lastName,
   photo,
   email,
+  role,
 }: FinalizeSignupProps) {
   const [formData, setFormData] = useState({
     department: "",
@@ -35,6 +43,8 @@ export default function FinalizeSignup({
   const hasUppercase = /[A-Z]/.test(formData.password);
   const hasNumber = /\d/.test(formData.password);
   const availablePrograms = getProgramsForDepartment(formData.department);
+  const normalizedRole = String(role || "student").toLowerCase();
+  const roleDisplay = roleLabels[normalizedRole] || normalizedRole;
 
   const handleChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -186,7 +196,7 @@ export default function FinalizeSignup({
               <label className="text-sm text-gray-500">Role</label>
               <input
                 type="text"
-                value="student"
+                value={roleDisplay}
                 readOnly
                 className="w-full border rounded-md px-3 py-2 bg-gray-100 text-gray-500 cursor-not-allowed"
               />
