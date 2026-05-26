@@ -14,6 +14,7 @@ function FinalizeContent() {
   const lastName = searchParams.get("last_name") || "";
   const photo = searchParams.get("photo") || "";
   const email = searchParams.get("email") || "";
+  const role = searchParams.get("role") || "student";
 
   const [status, setStatus] = useState<"loading" | "verified" | "error">("loading");
   const [errorMsg, setErrorMsg] = useState("");
@@ -113,6 +114,7 @@ function FinalizeContent() {
       lastName={lastName}
       photo={photo}
       email={email}
+      role={role}
     />
   );
 }
