@@ -62,7 +62,10 @@ interface CollectionImportModalProps {
   isOpen: boolean;
   onClose: () => void;
   projects: ProjectOption[];
-  onImport: (rows: NormalizedSpecimenRow[]) => Promise<{ created: number; failed: number; report?: ImportReport }> | void;
+  onImport: (
+    rows: NormalizedSpecimenRow[],
+    options?: { overwrite?: boolean }
+  ) => Promise<{ created: number; failed: number; report?: ImportReport }> | void;
   roleLabel: string;
 }
 
@@ -668,6 +671,7 @@ export default function CollectionImportModal({ isOpen, onClose, projects, onImp
   const [previewFilter, setPreviewFilter] = useState<"all" | "needs_fix" | "priority_1" | "ready">("all");
   const [isParsing, setIsParsing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [overwriteMode, setOverwriteMode] = useState<'skip' | 'overwrite'>('skip');
   const [parseError, setParseError] = useState("");
   const [importSummary, setImportSummary] = useState<{ created: number; failed: number } | null>(null);
   const [importReport, setImportReport] = useState<ImportReport | null>(null);
@@ -796,9 +800,19 @@ export default function CollectionImportModal({ isOpen, onClose, projects, onImp
       return;
     }
 
+    if (overwriteMode === 'overwrite') {
+      const confirmed = window.confirm(
+        'Overwrite mode will update existing specimens that match the imported code names. Continue?'
+      );
+
+      if (!confirmed) {
+        return;
+      }
+    }
+
     setIsImporting(true);
     try {
-      const result = await onImport(validRows);
+      const result = await onImport(validRows, { overwrite: overwriteMode === 'overwrite' });
       const summary = result || { created: validRows.length, failed: 0 };
       setImportSummary({ created: summary.created, failed: summary.failed });
       setImportReport((summary as { report?: ImportReport }).report || null);
@@ -1029,6 +1043,15 @@ export default function CollectionImportModal({ isOpen, onClose, projects, onImp
                     <option value="priority_1">Highest-priority issues</option>
                     <option value="needs_fix">Needs fix</option>
                     <option value="ready">Ready only</option>
+                  </select>
+                  <select
+                    value={overwriteMode}
+                    onChange={(e) => setOverwriteMode(e.target.value as 'skip' | 'overwrite')}
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-[#113F67] focus:outline-none focus:ring-2 focus:ring-[#113F67]/20"
+                    title="Choose how to handle existing specimen codes"
+                  >
+                    <option value="skip">Skip existing</option>
+                    <option value="overwrite">Overwrite existing</option>
                   </select>
                   <button
                     onClick={() => void handleImport()}

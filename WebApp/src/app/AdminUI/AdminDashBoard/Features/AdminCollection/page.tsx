@@ -382,7 +382,7 @@ export default function AdminCollectionPage() {
     }
   };
 
-  const handleImportSpecimens = async (rows: NormalizedSpecimenRow[]) => {
+  const handleImportSpecimens = async (rows: NormalizedSpecimenRow[], options?: { overwrite?: boolean }) => {
     const displayName = getCurrentUserDisplayName();
     const userId = getCurrentUserId();
     const role = getUserData()?.role || "admin";
@@ -416,6 +416,7 @@ export default function AdminCollectionPage() {
         approved_by: displayName,
         user_id: userId,
         role,
+        overwrite: Boolean(options?.overwrite === true),
       }),
     });
 

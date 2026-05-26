@@ -86,96 +86,155 @@ const parseMaybeJson = (value) => {
   }
 };
 
-const resolveProject = async (projectValue) => {
-  const normalized = normalizeString(projectValue);
-  if (!normalized) return null;
-
-  const exactIdMatch = await Project.findById(normalized).catch(() => null);
-  if (exactIdMatch) return exactIdMatch;
-
-  const regex = new RegExp(`^${normalized.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
-  return Project.findOne({
-    $or: [
-      { title: regex },
-      { code: regex },
-    ],
-  });
-};
-
-const resolveOrCreateProject = async (rawRow) => {
-  const projectValue = normalizeString(rawRow.project_id || rawRow.project || rawRow.project_code || rawRow.project_title || rawRow.project_name);
-  if (!projectValue) return { project: null, created: false };
-
-  const existing = await resolveProject(projectValue);
-  if (existing) return { project: existing, created: false };
-
-  const title = normalizeString(rawRow.project_title || rawRow.project_name || rawRow.project || projectValue);
-  const code = normalizeString(rawRow.project_code || rawRow.project_id || rawRow.project || projectValue);
-  const classification = normalizeString(rawRow.project_classification || rawRow.project_type || rawRow.project_group || rawRow.project_category || '');
-
-  const createdProject = await Project.create({
-    title: title || code || projectValue,
-    code: code || title || projectValue,
-    classification,
-  });
-
-  return { project: createdProject, created: true };
-};
-
-const normalizeImportRow = async (row, rowNumber) => {
-  const errors = [];
-  const warnings = [];
-  const rawRow = row && typeof row === 'object' ? row : {};
-  const report = {
-    missing_fields: [],
-    created_projects: [],
-    warnings: [],
-  };
-
-  const { project, created } = await resolveOrCreateProject(rawRow);
-  const projectValue = rawRow.project_id || rawRow.project || rawRow.project_code || rawRow.project_title || rawRow.project_name;
-  if (!project) {
-    errors.push(`Row ${rowNumber}: project not found`);
-  } else if (created) {
-    const projectLabel = project.code || project.title;
-    warnings.push(`Row ${rowNumber}: created project "${projectLabel}" because it did not exist.`);
-    report.created_projects.push({
-      row_number: rowNumber,
-      project_id: String(project._id),
-      code: normalizeString(project.code),
-      title: normalizeString(project.title),
-    });
-  }
-
-  const codeName = normalizeString(rawRow.code_name || rawRow.code || rawRow.sheet_name || rawRow.sheetName);
-  if (!codeName) {
-    errors.push(`Row ${rowNumber}: code_name is required`);
-    report.missing_fields.push('code_name');
-  }
-
-  const classification = normalizeString(rawRow.classification);
-  if (!classification) {
-    errors.push(`Row ${rowNumber}: classification is required`);
-    report.missing_fields.push('classification');
-  }
-
-  const source = normalizeString(rawRow.source);
-  const parsedDate = coerceDate(rawRow.date_accessed);
-  if (rawRow.date_accessed && !parsedDate) {
-    errors.push(`Row ${rowNumber}: invalid date_accessed value`);
-    report.missing_fields.push('date_accessed');
-  }
-
-  const similarityValue = rawRow.similarity_percent;
-  let similarityPercent = null;
-  if (similarityValue !== undefined && similarityValue !== null && similarityValue !== '') {
-    const numeric = Number(String(similarityValue).replace(/%/g, '').trim());
-    if (Number.isFinite(numeric)) {
-      similarityPercent = numeric;
-    } else {
-      warnings.push(`Row ${rowNumber}: similarity_percent could not be parsed`);
-      report.warnings.push('similarity_percent could not be parsed');
+exports.approveImportBatch = async (req, res) => {
+  try {
+    if (!canManageImports(req)) {
+      return res.status(403).json({ error: 'Insufficient permissions to approve import batches' });
     }
+
+    const actor = getActor(req);
+    const batch = await ImportBatch.findById(req.params.id);
+    if (!batch) {
+      return res.status(404).json({ error: 'Import batch not found' });
+    }
+
+    if (batch.status === 'approved') {
+      return res.json(batch);
+    }
+
+    const overwrite = Boolean(
+      req.body?.overwrite === true || String(req.body?.overwrite || req.query?.overwrite || '').toLowerCase() === 'true'
+    );
+
+    let approvedCount = 0;
+    let failedCount = 0;
+    let skippedCount = 0;
+    const updatedRows = [];
+    const skippedRows = [];
+
+    for (const row of batch.rows) {
+      if (row.status !== 'ready') continue;
+
+      try {
+        const codeName = row.normalized_row?.code_name;
+        const existing = codeName ? await MicrobialInfo.findOne({ code_name: codeName }) : null;
+
+        if (existing) {
+          if (!overwrite) {
+            row.status = 'skipped';
+            row.error_message = `code_name "${codeName}" already exists; skipped (overwrite disabled)`;
+            skippedCount += 1;
+            skippedRows.push({ row_number: row.row_number || null, specimen_id: String(existing._id), reason: 'exists' });
+            continue;
+          }
+
+          // merge/update existing specimen
+          const updates = buildSpecimenDataFromRow(row, actor);
+          const changedFields = [];
+          Object.keys(updates).forEach((k) => {
+            try {
+              const newVal = updates[k];
+              const oldVal = existing[k];
+              const newStr = JSON.stringify(newVal === undefined ? null : newVal);
+              const oldStr = JSON.stringify(oldVal === undefined ? null : oldVal);
+              if (newStr !== oldStr) changedFields.push(k);
+            } catch (e) {
+              // ignore
+            }
+          });
+
+          const updated = await MicrobialInfo.findByIdAndUpdate(existing._id, { $set: updates }, { new: true, runValidators: true });
+          if (updated) await updated.populate('project_id');
+
+          await logCollectionActivity({
+            req,
+            specimen: updated || existing,
+            action: 'update',
+            status: (updated && updated.publish_status) || existing.publish_status || 'unpublished',
+          });
+
+          row.specimen_id = updated ? updated._id : existing._id;
+          row.status = 'approved';
+          row.approved_at = new Date();
+          row.error_message = '';
+          row.update_action = 'updated';
+          row.updated_fields = changedFields;
+
+          approvedCount += 1;
+          updatedRows.push({ row_number: row.row_number || null, specimen_id: String(row.specimen_id), updated_fields: changedFields });
+          continue;
+        }
+
+        // create new specimen
+        const specimenData = buildSpecimenDataFromRow(row, actor);
+        const microbial = new MicrobialInfo(specimenData);
+        await microbial.save();
+
+        const qrData = await generateSpecimenQRCode(microbial._id);
+        microbial.qr_code = qrData.qrCodeDataUrl;
+        await microbial.save();
+        await microbial.populate('project_id');
+
+        await logCollectionActivity({
+          req,
+          specimen: microbial,
+          action: 'create',
+          status: microbial.publish_status || 'unpublished',
+        });
+
+        row.specimen_id = microbial._id;
+        row.status = 'approved';
+        row.approved_at = new Date();
+        row.error_message = '';
+        approvedCount += 1;
+      } catch (error) {
+        row.status = 'failed';
+        row.error_message = error.message;
+        failedCount += 1;
+      }
+    }
+
+    // update batch summary and report
+    batch.approved_count = approvedCount;
+    batch.failed_count = failedCount;
+    batch.skipped_count = skippedCount;
+    batch.summary.approved_rows = approvedCount;
+    batch.summary.failed_rows = failedCount;
+    batch.summary.skipped_rows = skippedCount;
+    batch.report = batch.report || {};
+    if (updatedRows.length) batch.report.updated_rows = updatedRows;
+    if (skippedRows.length) batch.report.skipped_rows = skippedRows;
+
+    batch.reviewed_by = batch.reviewed_by || actor.user;
+    batch.reviewed_by_user_id = batch.reviewed_by_user_id || actor.userId;
+    batch.approved_by = normalizeString(req.body?.approved_by || actor.user);
+    batch.approved_by_user_id = actor.userId;
+    batch.approved_at = new Date();
+    batch.reviewed_at = batch.reviewed_at || new Date();
+    batch.status = failedCount === 0 ? 'approved' : (approvedCount > 0 ? 'partially_approved' : 'failed');
+    batch.audit_trail.push({
+      action: 'approved',
+      user: normalizeString(req.body?.approved_by || actor.user),
+      user_id: actor.userId,
+      note: `Approved ${approvedCount} row(s); ${failedCount} row(s) failed; ${skippedCount} skipped`,
+    });
+
+    await batch.save();
+    await batch.populate('rows.specimen_id');
+
+    res.json({
+      message: 'Import batch processed',
+      batch,
+      created: approvedCount,
+      failed: failedCount,
+      updated: updatedRows.length,
+      skipped: skippedCount,
+    });
+  } catch (error) {
+    console.error('Failed to approve import batch:', error);
+    res.status(500).json({ error: 'Failed to approve import batch', details: error.message });
+  }
+};
   }
 
   const biochemicalTests = parseMaybeJson(rawRow.biochemical_tests) || {};
@@ -428,39 +487,105 @@ exports.approveImportBatch = async (req, res) => {
     batch.approved_by = normalizeString(req.body?.approved_by || actor.user);
     batch.approved_by_user_id = actor.userId;
     batch.approved_at = new Date();
-    batch.reviewed_at = batch.reviewed_at || new Date();
-    batch.status = failedCount === 0 ? 'approved' : (approvedCount > 0 ? 'partially_approved' : 'failed');
-    batch.audit_trail.push({
-      action: 'approved',
-      user: normalizeString(req.body?.approved_by || actor.user),
-      user_id: actor.userId,
-      note: `Approved ${approvedCount} row(s); ${failedCount} row(s) failed`,
-    });
+            let skippedCount = 0;
+            const updatedRows = [];
+            const skippedRows = [];
 
-    await batch.save();
-    await batch.populate('rows.specimen_id');
+            const overwrite = Boolean(
+              req.body?.overwrite === true ||
+              String(req.body?.overwrite || req.query?.overwrite || '').toLowerCase() === 'true'
+            );
 
-    res.json({
-      message: 'Import batch processed',
-      batch,
-      created: approvedCount,
-      failed: failedCount,
-    });
-  } catch (error) {
-    console.error('Failed to approve import batch:', error);
-    res.status(500).json({ error: 'Failed to approve import batch', details: error.message });
-  }
-};
+            for (const row of batch.rows) {
+              if (row.status !== 'ready') {
+                continue;
+              }
 
-exports.rejectImportBatch = async (req, res) => {
-  try {
-    if (!canManageImports(req)) {
-      return res.status(403).json({ error: 'Insufficient permissions to reject import batches' });
-    }
+              try {
+                const codeName = row.normalized_row?.code_name;
+                const existing = codeName ? await MicrobialInfo.findOne({ code_name: codeName }) : null;
 
-    const actor = getActor(req);
-    const batch = await ImportBatch.findById(req.params.id);
-    if (!batch) {
+                if (existing) {
+                  if (!overwrite) {
+                    // Skip existing rows when overwrite not enabled - count as skipped rather than failed
+                    row.status = 'skipped';
+                    row.error_message = `code_name "${codeName}" already exists; skipped (overwrite disabled)`;
+                    skippedCount += 1;
+                    skippedRows.push({ row_number: row.row_number || null, specimen_id: String(existing._id), reason: 'exists' });
+                    continue;
+                  }
+
+                  // Perform an update/merge of the existing specimen
+                  const updates = buildSpecimenDataFromRow(row, actor);
+                  const changedFields = [];
+                  Object.keys(updates).forEach((k) => {
+                    try {
+                      const newVal = updates[k];
+                      const oldVal = existing[k];
+                      const newStr = JSON.stringify(newVal === undefined ? null : newVal);
+                      const oldStr = JSON.stringify(oldVal === undefined ? null : oldVal);
+                      if (newStr !== oldStr) changedFields.push(k);
+                    } catch (e) {
+                      // ignore comparison errors
+                    }
+                  });
+
+                  const updated = await MicrobialInfo.findByIdAndUpdate(existing._id, { $set: updates }, { new: true, runValidators: true });
+                  if (updated) await updated.populate('project_id');
+
+                  await logCollectionActivity({
+                    req,
+                    specimen: updated || existing,
+                    action: 'update',
+                    status: (updated && updated.publish_status) || existing.publish_status || 'unpublished',
+                  });
+
+                  row.specimen_id = updated ? updated._id : existing._id;
+                  row.status = 'approved';
+                  row.approved_at = new Date();
+                  row.error_message = '';
+                  row.update_action = 'updated';
+                  row.updated_fields = changedFields;
+
+                  approvedCount += 1;
+                  updatedRows.push({ row_number: row.row_number || null, specimen_id: String(row.specimen_id), updated_fields: changedFields });
+                  continue;
+                }
+
+                // No existing specimen -> create new
+                const specimenData = buildSpecimenDataFromRow(row, actor);
+                const microbial = new MicrobialInfo(specimenData);
+                await microbial.save();
+
+                const qrData = await generateSpecimenQRCode(microbial._id);
+                microbial.qr_code = qrData.qrCodeDataUrl;
+                await microbial.save();
+                await microbial.populate('project_id');
+
+                await logCollectionActivity({
+                  req,
+                  specimen: microbial,
+                  action: 'create',
+                  status: microbial.publish_status || 'unpublished',
+                });
+
+                row.specimen_id = microbial._id;
+                row.status = 'approved';
+                row.approved_at = new Date();
+                row.error_message = '';
+                approvedCount += 1;
+              } catch (error) {
+                row.status = 'failed';
+                row.error_message = error.message;
+                failedCount += 1;
+              }
+            }
+
+            // attach update/skip details to batch.report for visibility
+            batch.report = batch.report || {};
+            if (updatedRows.length) batch.report.updated_rows = updatedRows;
+            if (skippedRows.length) batch.report.skipped_rows = skippedRows;
+            batch.skipped_count = skippedCount;
       return res.status(404).json({ error: 'Import batch not found' });
     }
 

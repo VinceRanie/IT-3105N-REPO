@@ -352,7 +352,7 @@ export default function RAStaffCollectionPage() {
     }
   };
 
-  const handleImportSpecimens = async (rows: NormalizedSpecimenRow[]) => {
+  const handleImportSpecimens = async (rows: NormalizedSpecimenRow[], options?: { overwrite?: boolean }) => {
     const displayName = getCurrentUserDisplayName();
     const userId = getCurrentUserId();
     const role = getUserData()?.role || "staff";
@@ -392,6 +392,7 @@ export default function RAStaffCollectionPage() {
         approved_by: displayName,
         user_id: userId,
         role,
+        overwrite: Boolean(options?.overwrite === true),
       }),
     });
 
