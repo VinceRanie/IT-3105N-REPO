@@ -213,7 +213,7 @@ const normalizeImportRow = async (row, rowNumber) => {
     fasta_sequence: fastaSequence,
     biochemical_tests: biochemicalTests,
     morphology,
-    custom_fields,
+    custom_fields: customFields,
   };
 
   if (!normalizedRow.created_by) {
