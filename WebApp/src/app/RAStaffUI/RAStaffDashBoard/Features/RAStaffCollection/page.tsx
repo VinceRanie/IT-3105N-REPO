@@ -400,8 +400,7 @@ export default function RAStaffCollectionPage() {
 
     const result = await approveResponse.json();
     await fetchSpecimens();
-    setIsImportModalOpen(false);
-    return { created: result.created || 0, failed: result.failed || 0 };
+    return { created: result.created || 0, failed: result.failed || 0, report: createdBatch.report || result.batch?.report };
   };
 
   // Filter specimens based on search query

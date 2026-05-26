@@ -15,6 +15,10 @@ type ImportRow = Record<string, string>;
 
 type NormalizedSpecimenRow = {
   project_id: string;
+  project?: string;
+  project_code?: string;
+  project_title?: string;
+  project_name?: string;
   code_name: string;
   classification: string;
   source: string;
@@ -58,9 +62,15 @@ interface CollectionImportModalProps {
   isOpen: boolean;
   onClose: () => void;
   projects: ProjectOption[];
-  onImport: (rows: NormalizedSpecimenRow[]) => Promise<{ created: number; failed: number }> | void;
+  onImport: (rows: NormalizedSpecimenRow[]) => Promise<{ created: number; failed: number; report?: ImportReport }> | void;
   roleLabel: string;
 }
+
+type ImportReport = {
+  created_projects?: Array<{ row_number?: number; project_id?: string; code?: string; title?: string }>;
+  missing_fields?: string[];
+  warnings?: string[];
+};
 
 const BASE_FIELDS = [
   { value: "project_id", label: "Project" },
@@ -368,7 +378,12 @@ const validateNormalizedRow = (values: NormalizedSpecimenRow) => {
   const warnings: string[] = [];
   const errors: string[] = [];
 
-  if (!values.project_id) errors.push("Missing project match.");
+  const projectHint = values.project || values.project_code || values.project_title || values.project_name || "";
+  if (!values.project_id && !projectHint) {
+    errors.push("Missing project match.");
+  } else if (!values.project_id && projectHint) {
+    warnings.push(`Project "${projectHint}" will be created during import if needed.`);
+  }
   if (!values.code_name) errors.push("Missing code name.");
   if (!values.classification) errors.push("Missing classification.");
 
@@ -540,7 +555,9 @@ const buildRow = (row: ImportRow, headers: string[], mapping: Record<string, str
     if (target === "project_id") {
       values.project_id = resolveProjectId(rawValue, projects);
       if (!values.project_id) {
-        warnings.push(`Project "${rawValue}" did not match an existing project.`);
+        values.project = rawValue;
+        values.project_code = rawValue;
+        warnings.push(`Project "${rawValue}" will be created if it does not already exist.`);
       }
       return;
     }
@@ -636,6 +653,7 @@ export default function CollectionImportModal({ isOpen, onClose, projects, onImp
   const [isImporting, setIsImporting] = useState(false);
   const [parseError, setParseError] = useState("");
   const [importSummary, setImportSummary] = useState<{ created: number; failed: number } | null>(null);
+  const [importReport, setImportReport] = useState<ImportReport | null>(null);
 
   useEffect(() => {
     if (!isOpen) {
@@ -647,6 +665,7 @@ export default function CollectionImportModal({ isOpen, onClose, projects, onImp
       setPreviewFilter("all");
       setParseError("");
       setImportSummary(null);
+      setImportReport(null);
       setIsParsing(false);
       setIsImporting(false);
     }
@@ -742,6 +761,7 @@ export default function CollectionImportModal({ isOpen, onClose, projects, onImp
       setHeaders(nextHeaders);
       setRows(nextRows);
       setColumnMapping(nextMapping);
+      setImportReport(null);
     } catch (error) {
       setParseError(error instanceof Error ? error.message : "Failed to parse the spreadsheet.");
     } finally {
@@ -763,7 +783,8 @@ export default function CollectionImportModal({ isOpen, onClose, projects, onImp
     try {
       const result = await onImport(validRows);
       const summary = result || { created: validRows.length, failed: 0 };
-      setImportSummary(summary);
+      setImportSummary({ created: summary.created, failed: summary.failed });
+      setImportReport((summary as { report?: ImportReport }).report || null);
     } catch (error) {
       setParseError(error instanceof Error ? error.message : "Failed to import spreadsheet rows.");
     } finally {
@@ -855,6 +876,30 @@ export default function CollectionImportModal({ isOpen, onClose, projects, onImp
                   <span>
                     Import finished. Created {importSummary.created} row{importSummary.created === 1 ? "" : "s"} and skipped {importSummary.failed} invalid row{importSummary.failed === 1 ? "" : "s"}.
                   </span>
+                </div>
+              )}
+
+              {importReport && (
+                <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 space-y-3">
+                  <div className="font-semibold text-slate-900">Import report</div>
+                  <div>
+                    <div className="font-medium text-slate-800">Created projects</div>
+                    <div>{importReport.created_projects?.length ? importReport.created_projects.map((project) => `${project.code || project.title} (row ${project.row_number ?? "?"})`).join(", ") : "None"}</div>
+                  </div>
+                  <div>
+                    <div className="font-medium text-slate-800">Missing fields</div>
+                    <div>{importReport.missing_fields?.length ? importReport.missing_fields.join(", ") : "None"}</div>
+                  </div>
+                  {importReport.warnings?.length ? (
+                    <div>
+                      <div className="font-medium text-slate-800">Warnings</div>
+                      <div className="space-y-1">
+                        {importReport.warnings.map((warning) => (
+                          <div key={warning}>{warning}</div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               )}
             </div>

@@ -424,13 +424,12 @@ export default function AdminCollectionPage() {
 
     const result = await approveResponse.json();
     await fetchSpecimens();
-    setIsImportModalOpen(false);
     showAlert(
       "Import complete",
       `Created ${result.created} specimen${result.created === 1 ? "" : "s"} from batch ${createdBatch._id}. ${result.failed > 0 ? `${result.failed} row${result.failed === 1 ? " was" : "s were"} skipped.` : ""}`.trim()
     );
 
-    return { created: result.created || 0, failed: result.failed || 0 };
+    return { created: result.created || 0, failed: result.failed || 0, report: createdBatch.report || result.batch?.report };
   };
 
   const handleViewSpecimen = (specimen: any) => {

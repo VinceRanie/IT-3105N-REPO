@@ -126,25 +126,44 @@ const normalizeImportRow = async (row, rowNumber) => {
   const errors = [];
   const warnings = [];
   const rawRow = row && typeof row === 'object' ? row : {};
+  const report = {
+    missing_fields: [],
+    created_projects: [],
+    warnings: [],
+  };
 
   const { project, created } = await resolveOrCreateProject(rawRow);
   const projectValue = rawRow.project_id || rawRow.project || rawRow.project_code || rawRow.project_title || rawRow.project_name;
   if (!project) {
     errors.push(`Row ${rowNumber}: project not found`);
   } else if (created) {
-    warnings.push(`Row ${rowNumber}: created project "${project.code || project.title}" because it did not exist.`);
+    const projectLabel = project.code || project.title;
+    warnings.push(`Row ${rowNumber}: created project "${projectLabel}" because it did not exist.`);
+    report.created_projects.push({
+      row_number: rowNumber,
+      project_id: String(project._id),
+      code: normalizeString(project.code),
+      title: normalizeString(project.title),
+    });
   }
 
   const codeName = normalizeString(rawRow.code_name || rawRow.code || rawRow.sheet_name || rawRow.sheetName);
-  if (!codeName) errors.push(`Row ${rowNumber}: code_name is required`);
+  if (!codeName) {
+    errors.push(`Row ${rowNumber}: code_name is required`);
+    report.missing_fields.push('code_name');
+  }
 
   const classification = normalizeString(rawRow.classification);
-  if (!classification) errors.push(`Row ${rowNumber}: classification is required`);
+  if (!classification) {
+    errors.push(`Row ${rowNumber}: classification is required`);
+    report.missing_fields.push('classification');
+  }
 
   const source = normalizeString(rawRow.source);
   const parsedDate = coerceDate(rawRow.date_accessed);
   if (rawRow.date_accessed && !parsedDate) {
     errors.push(`Row ${rowNumber}: invalid date_accessed value`);
+    report.missing_fields.push('date_accessed');
   }
 
   const similarityValue = rawRow.similarity_percent;
@@ -155,6 +174,7 @@ const normalizeImportRow = async (row, rowNumber) => {
       similarityPercent = numeric;
     } else {
       warnings.push(`Row ${rowNumber}: similarity_percent could not be parsed`);
+      report.warnings.push('similarity_percent could not be parsed');
     }
   }
 
@@ -169,6 +189,7 @@ const normalizeImportRow = async (row, rowNumber) => {
     const existing = await MicrobialInfo.findOne({ code_name: codeName }).lean();
     if (existing) {
       errors.push(`Row ${rowNumber}: code_name already exists in the live collection`);
+      report.warnings.push('code_name already exists in the live collection');
     }
   }
 
@@ -205,6 +226,7 @@ const normalizeImportRow = async (row, rowNumber) => {
     normalized_row: normalizedRow,
     errors,
     warnings,
+    report,
     status: errors.length > 0 ? 'invalid' : 'ready',
   };
 };
@@ -266,6 +288,11 @@ exports.createImportBatch = async (req, res) => {
     const totalRows = normalizedRows.length;
     const readyRows = normalizedRows.filter((row) => row.status === 'ready').length;
     const invalidRows = totalRows - readyRows;
+    const report = {
+      created_projects: normalizedRows.flatMap((row) => row.report?.created_projects || []),
+      missing_fields: Array.from(new Set(normalizedRows.flatMap((row) => row.report?.missing_fields || []))),
+      warnings: normalizedRows.flatMap((row) => row.report?.warnings || []),
+    };
 
     const batch = await ImportBatch.create({
       source_file_name: normalizeString(req.body?.source_file_name || req.body?.file_name || 'Spreadsheet import'),
@@ -284,6 +311,7 @@ exports.createImportBatch = async (req, res) => {
         approved_rows: 0,
         failed_rows: 0,
       },
+      report,
       rows: normalizedRows,
       notes: normalizeString(req.body?.notes),
       audit_trail: [
