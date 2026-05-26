@@ -195,6 +195,21 @@ const getRowCodeValue = (row: ImportRow) => {
   return "";
 };
 
+const countMeaningfulSpecimenFields = (row: ImportRow) => {
+  const ignoredKeys = new Set(["code_name", "code", "Code", "Code:", "specimen code", "sample code", "specimen id", "sample id"]);
+  return Object.entries(row).reduce((count, [key, value]) => {
+    if (ignoredKeys.has(key) || ignoredKeys.has(normalizeText(key))) return count;
+    return String(value ?? "").trim() ? count + 1 : count;
+  }, 0);
+};
+
+const isLikelySpecimenRow = (row: ImportRow) => {
+  const codeValue = getRowCodeValue(row);
+  if (!codeValue) return false;
+
+  return countMeaningfulSpecimenFields(row) >= 2;
+};
+
 const resolveProjectId = (value: string, projects: ProjectOption[]) => {
   const normalized = normalizeText(value);
   if (!normalized) return "";
@@ -267,9 +282,11 @@ const extractFormStyleRows = (sheet: XLSX.WorkSheet, sheetName: string) => {
 
   if (!foundLabel) return [] as ImportRow[];
 
-  if (!entry.code_name && !entry.code && !entry["Code"]) {
-    entry.code_name = sheetName;
-  }
+  const codeValue = getRowCodeValue(entry);
+  if (!codeValue) return [] as ImportRow[];
+  if (!isLikelySpecimenRow(entry)) return [] as ImportRow[];
+
+  entry.code_name = codeValue;
 
   return [entry];
 };
@@ -403,8 +420,13 @@ const buildSheetRows = (sheet: XLSX.WorkSheet, sheetName: string) => {
     headers.forEach((header, index) => {
       entry[header] = String(bodyRow[index] ?? "").trim();
     });
+
+    if (!isLikelySpecimenRow(entry)) {
+      return null;
+    }
+
     return entry;
-  });
+  }).filter((row): row is ImportRow => Boolean(row));
 };
 
 const buildRowsFromWorkbook = (workbook: XLSX.WorkBook) => {
@@ -418,6 +440,7 @@ const buildRowsFromWorkbook = (workbook: XLSX.WorkBook) => {
     const sheetRows = buildSheetRows(sheet, sheetName);
     sheetRows.forEach((row) => {
       const codeValue = getRowCodeValue(row);
+      if (!codeValue) return;
       const codeKey = normalizeCodeKey(codeValue);
       const bucketKey = codeKey || `__row_${rowCounter}`;
       rowCounter += 1;
@@ -425,9 +448,7 @@ const buildRowsFromWorkbook = (workbook: XLSX.WorkBook) => {
       const existing = mergedRows.get(bucketKey);
       if (!existing) {
         const nextRow: ImportRow = { ...row };
-        if (codeValue && !nextRow.code_name) {
-          nextRow.code_name = codeValue;
-        }
+        nextRow.code_name = codeValue;
         nextRow.__source_sheets = sheetName;
         mergedRows.set(bucketKey, nextRow);
         return;
@@ -436,9 +457,7 @@ const buildRowsFromWorkbook = (workbook: XLSX.WorkBook) => {
       mergeRowIntoBucket(existing, row);
       const priorSheets = String(existing.__source_sheets || "").trim();
       existing.__source_sheets = priorSheets ? `${priorSheets}, ${sheetName}` : sheetName;
-      if (!existing.code_name && codeValue) {
-        existing.code_name = codeValue;
-      }
+      existing.code_name = existing.code_name || codeValue;
     });
   });
 
