@@ -86,6 +86,147 @@ const parseMaybeJson = (value) => {
   }
 };
 
+const resolveProject = async (projectValue) => {
+  const normalized = normalizeString(projectValue);
+  if (!normalized) return null;
+
+  const exactIdMatch = await Project.findById(normalized).catch(() => null);
+  if (exactIdMatch) return exactIdMatch;
+
+  const regex = new RegExp(`^${normalized.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+  return Project.findOne({
+    $or: [{ title: regex }, { code: regex }],
+  });
+};
+
+const resolveOrCreateProject = async (rawRow) => {
+  const projectValue = normalizeString(rawRow.project_id || rawRow.project || rawRow.project_code || rawRow.project_title || rawRow.project_name);
+  if (!projectValue) return { project: null, created: false };
+
+  const existing = await resolveProject(projectValue);
+  if (existing) return { project: existing, created: false };
+
+  const title = normalizeString(rawRow.project_title || rawRow.project_name || rawRow.project || projectValue);
+  const code = normalizeString(rawRow.project_code || rawRow.project_id || rawRow.project || projectValue);
+  const classification = normalizeString(rawRow.project_classification || rawRow.project_type || rawRow.project_group || rawRow.project_category || '');
+
+  const createdProject = await Project.create({
+    title: title || code || projectValue,
+    code: code || title || projectValue,
+    classification,
+  });
+
+  return { project: createdProject, created: true };
+};
+
+const normalizeImportRow = async (row, rowNumber) => {
+  const errors = [];
+  const warnings = [];
+  const rawRow = row && typeof row === 'object' ? row : {};
+  const report = {
+    missing_fields: [],
+    created_projects: [],
+    warnings: [],
+  };
+
+  const { project, created } = await resolveOrCreateProject(rawRow);
+  if (!project) {
+    errors.push(`Row ${rowNumber}: project not found`);
+  } else if (created) {
+    const projectLabel = project.code || project.title;
+    warnings.push(`Row ${rowNumber}: created project "${projectLabel}" because it did not exist.`);
+    report.created_projects.push({
+      row_number: rowNumber,
+      project_id: String(project._id),
+      code: normalizeString(project.code),
+      title: normalizeString(project.title),
+    });
+  }
+
+  const codeName = normalizeString(rawRow.code_name || rawRow.code || rawRow.sheet_name || rawRow.sheetName);
+  if (!codeName) {
+    errors.push(`Row ${rowNumber}: code_name is required`);
+    report.missing_fields.push('code_name');
+  }
+
+  const classification = normalizeString(rawRow.classification);
+  if (!classification) {
+    errors.push(`Row ${rowNumber}: classification is required`);
+    report.missing_fields.push('classification');
+  }
+
+  const source = normalizeString(rawRow.source);
+  const parsedDate = coerceDate(rawRow.date_accessed);
+  if (rawRow.date_accessed && !parsedDate) {
+    errors.push(`Row ${rowNumber}: invalid date_accessed value`);
+    report.missing_fields.push('date_accessed');
+  }
+
+  const similarityValue = rawRow.similarity_percent;
+  let similarityPercent = null;
+  if (similarityValue !== undefined && similarityValue !== null && similarityValue !== '') {
+    const numeric = Number(String(similarityValue).replace(/%/g, '').trim());
+    if (Number.isFinite(numeric)) {
+      similarityPercent = numeric;
+    } else {
+      warnings.push(`Row ${rowNumber}: similarity_percent could not be parsed`);
+      report.warnings.push('similarity_percent could not be parsed');
+    }
+  }
+
+  const biochemicalTests = parseMaybeJson(rawRow.biochemical_tests) || {};
+  const morphology = parseMaybeJson(rawRow.morphology) || {};
+  const customFields = parseMaybeJson(rawRow.custom_fields) || {};
+
+  const fastaSequence = normalizeString(rawRow.fasta_sequence);
+  const accessionNo = normalizeString(rawRow.accession_no) || extractAccessionFromFasta(fastaSequence);
+
+  if (codeName) {
+    const existing = await MicrobialInfo.findOne({ code_name: codeName }).lean();
+    if (existing) {
+      errors.push(`Row ${rowNumber}: code_name already exists in the live collection`);
+      report.warnings.push('code_name already exists in the live collection');
+    }
+  }
+
+  const normalizedRow = {
+    project_id: project ? String(project._id) : '',
+    code_name: codeName,
+    classification,
+    source,
+    date_accessed: parsedDate,
+    publish_status: normalizePublishStatus(rawRow.publish_status, 'unpublished'),
+    locale: normalizeString(rawRow.locale),
+    project_fund: normalizeString(rawRow.project_fund),
+    accession_no: accessionNo,
+    similarity_percent: similarityPercent,
+    description: normalizeString(rawRow.description),
+    created_by: normalizeString(rawRow.created_by),
+    updated_by: normalizeString(rawRow.updated_by),
+    update_notes: normalizeString(rawRow.update_notes),
+    image_url: normalizeString(rawRow.image_url),
+    fasta_file: normalizeString(rawRow.fasta_file),
+    fasta_sequence: fastaSequence,
+    biochemical_tests: biochemicalTests,
+    morphology,
+    custom_fields: customFields,
+  };
+
+  if (!normalizedRow.created_by) {
+    normalizedRow.created_by = normalizeString(rawRow.created_by || rawRow.creator);
+  }
+
+  return {
+    row_number: rowNumber,
+    original_row: rawRow,
+    normalized_row: normalizedRow,
+    errors,
+    warnings,
+    report,
+    status: errors.length > 0 ? 'invalid' : 'ready',
+  };
+};
+
 exports.approveImportBatch = async (req, res) => {
   try {
     if (!canManageImports(req)) {
@@ -234,59 +375,6 @@ exports.approveImportBatch = async (req, res) => {
     console.error('Failed to approve import batch:', error);
     res.status(500).json({ error: 'Failed to approve import batch', details: error.message });
   }
-};
-
-  const biochemicalTests = parseMaybeJson(rawRow.biochemical_tests) || {};
-  const morphology = parseMaybeJson(rawRow.morphology) || {};
-  const customFields = parseMaybeJson(rawRow.custom_fields) || {};
-
-  const fastaSequence = normalizeString(rawRow.fasta_sequence);
-  const accessionNo = normalizeString(rawRow.accession_no) || extractAccessionFromFasta(fastaSequence);
-
-  if (codeName) {
-    const existing = await MicrobialInfo.findOne({ code_name: codeName }).lean();
-    if (existing) {
-      errors.push(`Row ${rowNumber}: code_name already exists in the live collection`);
-      report.warnings.push('code_name already exists in the live collection');
-    }
-  }
-
-  const normalizedRow = {
-    project_id: project ? String(project._id) : '',
-    code_name: codeName,
-    classification,
-    source,
-    date_accessed: parsedDate,
-    publish_status: normalizePublishStatus(rawRow.publish_status, 'unpublished'),
-    locale: normalizeString(rawRow.locale),
-    project_fund: normalizeString(rawRow.project_fund),
-    accession_no: accessionNo,
-    similarity_percent: similarityPercent,
-    description: normalizeString(rawRow.description),
-    created_by: normalizeString(rawRow.created_by),
-    updated_by: normalizeString(rawRow.updated_by),
-    update_notes: normalizeString(rawRow.update_notes),
-    image_url: normalizeString(rawRow.image_url),
-    fasta_file: normalizeString(rawRow.fasta_file),
-    fasta_sequence: fastaSequence,
-    biochemical_tests: biochemicalTests,
-    morphology,
-    custom_fields: customFields,
-  };
-
-  if (!normalizedRow.created_by) {
-    normalizedRow.created_by = normalizeString(rawRow.created_by || rawRow.creator);
-  }
-
-  return {
-    row_number: rowNumber,
-    original_row: rawRow,
-    normalized_row: normalizedRow,
-    errors,
-    warnings,
-    report,
-    status: errors.length > 0 ? 'invalid' : 'ready',
-  };
 };
 
 const buildSpecimenDataFromRow = (row, fallbackActor) => {
