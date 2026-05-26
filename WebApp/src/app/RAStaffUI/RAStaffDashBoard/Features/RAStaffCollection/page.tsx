@@ -355,9 +355,10 @@ export default function RAStaffCollectionPage() {
   const handleImportSpecimens = async (rows: NormalizedSpecimenRow[]) => {
     const displayName = getCurrentUserDisplayName();
     const userId = getCurrentUserId();
+    const role = getUserData()?.role || "staff";
     const basePayload = {
       source_file_name: "Spreadsheet import",
-      role: "staff",
+      role,
       created_by: displayName,
       reviewed_by: displayName,
       approved_by: displayName,
@@ -390,6 +391,7 @@ export default function RAStaffCollectionPage() {
       body: JSON.stringify({
         approved_by: displayName,
         user_id: userId,
+        role,
       }),
     });
 
