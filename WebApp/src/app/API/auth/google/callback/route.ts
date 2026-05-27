@@ -75,6 +75,37 @@ export async function GET(request: NextRequest) {
       return errorRedirect("Could not retrieve email from Google.");
     }
 
+    const reverifyState = (() => {
+      if (!state) return null;
+      try {
+        const parsed = JSON.parse(state);
+        return parsed && parsed.purpose === "reverify" ? parsed : null;
+      } catch {
+        return null;
+      }
+    })();
+
+    if (reverifyState) {
+      if (String(reverifyState.email || "").toLowerCase() !== profile.email.toLowerCase()) {
+        return errorRedirect(
+          `Email mismatch. Please sign in with ${reverifyState.email} to complete re-verification.`
+        );
+      }
+
+      const completionResponse = await fetch(`${API_BASE_URL}/auth/complete-reverification`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: reverifyState.email }),
+      });
+
+      const completionData = await completionResponse.json();
+      if (!completionResponse.ok) {
+        return errorRedirect(completionData?.message || "Unable to complete re-verification.");
+      }
+
+      return NextResponse.redirect(`${baseUrl}/Login?reverified=true`);
+    }
+
     // Validate token and fetch user from backend API.
     // This avoids requiring DB credentials in the frontend deployment.
     const userResponse = await fetch(`${API_BASE_URL}/auth/get-user-by-token`, {

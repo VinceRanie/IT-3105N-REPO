@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { setAuthToken, setUserData, redirectByRole } from '@/app/utils/authUtil';
 
 export default function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [showPassword, setShowPassword] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -18,6 +19,12 @@ export default function LoginForm() {
 
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ text: string, type: 'error' | 'success' } | null>(null);
+
+  useEffect(() => {
+    if (searchParams.get('reverified') === 'true') {
+      setMessage({ text: 'Your account has been re-verified. Please sign in to continue.', type: 'success' });
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,6 +56,9 @@ export default function LoginForm() {
 
         // Redirect based on role
         redirectByRole(router, data.role);
+      } else if (response.status === 428 && data?.reverificationUrl) {
+        setMessage({ text: data.message || 'Your account needs re-verification.', type: 'error' });
+        router.push(String(data.reverificationUrl));
       } else {
         setMessage({ text: data.message || 'Invalid credentials. Please try again.', type: 'error' });
       }
