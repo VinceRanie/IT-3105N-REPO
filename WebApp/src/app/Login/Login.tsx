@@ -56,7 +56,7 @@ export default function LoginForm() {
 
         // Redirect based on role
         redirectByRole(router, data.role);
-      } else if (response.status === 428) {
+      } else if (response.status === 428 && data?.reverificationUrl) {
         setMessage({ text: data.message || 'Your account needs re-verification.', type: 'error' });
         const redirectTarget = String(data.reverificationUrl || `/reverify?email=${encodeURIComponent(formData.email)}`);
         window.location.assign(redirectTarget);
