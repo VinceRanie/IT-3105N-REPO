@@ -12,6 +12,7 @@ const ensureAnnouncementsTable = async () => {
       description LONGTEXT NOT NULL,
       image_urls LONGTEXT NULL,
       links LONGTEXT NULL,
+      deleted_by_user_id INT NULL,
       created_by_user_id INT NOT NULL,
       created_by_email VARCHAR(255) NOT NULL,
       created_by_role VARCHAR(50) NOT NULL DEFAULT 'admin',
@@ -20,6 +21,7 @@ const ensureAnnouncementsTable = async () => {
       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       deleted_at TIMESTAMP NULL DEFAULT NULL,
       INDEX idx_announcement_published_created (is_published, deleted_at, created_at),
+      INDEX idx_announcement_deleted_by (deleted_by_user_id),
       INDEX idx_announcement_created_by (created_by_user_id, created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
   `);
@@ -133,4 +135,34 @@ exports.getAnnouncementById = async (announcementId) => {
   );
 
   return rows[0] ? normalizeAnnouncementRow(rows[0]) : null;
+};
+
+exports.softDeleteAnnouncement = async (announcementId, deletedByUserId = null) => {
+  await ensureAnnouncementsTable();
+
+  const [result] = await db.execute(
+    `
+      UPDATE announcement
+      SET deleted_at = CURRENT_TIMESTAMP, is_published = 0, deleted_by_user_id = ?
+      WHERE announcement_id = ? AND deleted_at IS NULL
+    `,
+    [deletedByUserId, announcementId]
+  );
+
+  return result && result.affectedRows ? result.affectedRows : 0;
+};
+
+exports.restoreAnnouncement = async (announcementId) => {
+  await ensureAnnouncementsTable();
+
+  const [result] = await db.execute(
+    `
+      UPDATE announcement
+      SET deleted_at = NULL, is_published = 1, deleted_by_user_id = NULL
+      WHERE announcement_id = ? AND deleted_at IS NOT NULL
+    `,
+    [announcementId]
+  );
+
+  return result && result.affectedRows ? result.affectedRows : 0;
 };

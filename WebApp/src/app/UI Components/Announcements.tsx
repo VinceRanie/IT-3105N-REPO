@@ -45,10 +45,19 @@ const formatRelativeDate = (value: string | null) => {
     year: "numeric",
   });
 };
-
+    import { API_URL } from "@/config/api";
+    import { getUserData, getAuthHeader } from "@/app/utils/authUtil";
+    import { useEffect, useState } from "react";
 const normalizeImageUrl = (value: string) => {
   if (/^https?:\/\//i.test(value)) return value;
-  return `${API_URL}${value.startsWith("/") ? value : `/${value}`}`;
+      const [items, setItems] = useState<AnnouncementCard[]>(announcements.slice(0, 4));
+
+      useEffect(() => {
+        setItems(announcements.slice(0, 4));
+      }, [announcements]);
+
+      const user = getUserData();
+      const isAdmin = (user?.role || '').toString().toLowerCase() === 'admin';
 };
 
 const renderLinkedText = (text: string) => {

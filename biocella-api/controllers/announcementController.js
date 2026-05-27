@@ -122,3 +122,68 @@ exports.createAnnouncement = async (req, res) => {
     return res.status(500).json({ error: 'Failed to create announcement.' });
   }
 };
+
+exports.deleteAnnouncement = async (req, res) => {
+  try {
+    const authUser = parseAuthenticatedUser(req);
+
+    if (!authUser) {
+      return res.status(401).json({ error: 'Unauthorized.' });
+    }
+
+    if (String(authUser.role || '').toLowerCase() !== 'admin') {
+      return res.status(403).json({ error: 'Only administrators can delete announcements.' });
+    }
+
+    const announcementId = Number(req.params.id || 0);
+
+    if (!announcementId || announcementId <= 0) {
+      return res.status(400).json({ error: 'Invalid announcement id.' });
+    }
+
+    const deletedBy = Number(authUser.userId || authUser.user_id || 0) || null;
+    const affected = await Announcement.softDeleteAnnouncement(announcementId, deletedBy);
+
+    if (!affected) {
+      return res.status(404).json({ error: 'Announcement not found or already deleted.' });
+    }
+
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Delete Announcement Error:', error);
+    return res.status(500).json({ error: 'Failed to delete announcement.' });
+  }
+};
+
+exports.restoreAnnouncement = async (req, res) => {
+  try {
+    const authUser = parseAuthenticatedUser(req);
+
+    if (!authUser) {
+      return res.status(401).json({ error: 'Unauthorized.' });
+    }
+
+    if (String(authUser.role || '').toLowerCase() !== 'admin') {
+      return res.status(403).json({ error: 'Only administrators can restore announcements.' });
+    }
+
+    const announcementId = Number(req.params.id || 0);
+
+    if (!announcementId || announcementId <= 0) {
+      return res.status(400).json({ error: 'Invalid announcement id.' });
+    }
+
+    const affected = await Announcement.restoreAnnouncement(announcementId);
+
+    if (!affected) {
+      return res.status(404).json({ error: 'Announcement not found or not deleted.' });
+    }
+
+    const announcement = await Announcement.getAnnouncementById(announcementId);
+
+    return res.status(200).json(announcement);
+  } catch (error) {
+    console.error('Restore Announcement Error:', error);
+    return res.status(500).json({ error: 'Failed to restore announcement.' });
+  }
+};
