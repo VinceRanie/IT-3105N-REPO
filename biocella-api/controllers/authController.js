@@ -1095,7 +1095,7 @@ exports.uploadProfilePhoto = async (req, res) => {
 // GET USER BY TOKEN
 exports.getUserByToken = async (req, res) => {
   try {
-    const { token } = req.body;
+    const { token, purpose } = req.body;
 
     if (!token) {
       return res.status(HttpStatus.BAD_REQUEST).json({
@@ -1121,7 +1121,7 @@ exports.getUserByToken = async (req, res) => {
       });
     }
 
-    if (Number(user.is_setup_complete) === 1) {
+    if (purpose !== "reset-password" && Number(user.is_setup_complete) === 1) {
       return res.status(HttpStatus.CONFLICT).json({
         message: "Account setup is already complete. Please log in.",
         statusCode: HttpStatus.CONFLICT,
@@ -1273,7 +1273,11 @@ exports.reactivateUser = async (req, res) => {
     const tokenExpiry = new Date(Date.now() + RESET_LINK_TTL_MS);
     await authModel.setResetToken(user.user_id, resetToken, tokenExpiry);
 
-    const emailResult = await sendReactivationEmail(user.email, resetToken);
+    const isSetupComplete = Number(user.is_setup_complete) === 1;
+    const emailResult = isSetupComplete
+      ? await sendReactivationEmail(user.email, resetToken)
+      : await sendFinalizeSetupEmail(user.email, resetToken);
+
     if (!emailResult.ok) {
       await authModel.setResetToken(user.user_id, null, null);
       return res.status(emailResult.statusCode).json({
@@ -1285,7 +1289,9 @@ exports.reactivateUser = async (req, res) => {
     await authModel.reactivateUser(user.user_id);
 
     return res.status(HttpStatus.OK).json({
-      message: "User reactivated. Password setup email sent successfully.",
+      message: isSetupComplete
+        ? "User reactivated. Password reset email sent successfully."
+        : "User reactivated. Finalize setup email sent successfully.",
       statusCode: HttpStatus.OK,
     });
   } catch (error) {
