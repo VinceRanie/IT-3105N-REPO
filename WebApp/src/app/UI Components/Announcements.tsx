@@ -2,6 +2,8 @@
 
 import { motion } from "framer-motion";
 import { API_URL } from "@/config/api";
+import { getUserData, getAuthHeader } from "@/app/utils/authUtil";
+import { useEffect, useState } from "react";
 
 type AnnouncementLink = {
   label: string;
@@ -9,6 +11,7 @@ type AnnouncementLink = {
 };
 
 type AnnouncementCard = {
+  announcement_id: number;
   title: string;
   description: string;
   image_urls: string[];
@@ -45,19 +48,10 @@ const formatRelativeDate = (value: string | null) => {
     year: "numeric",
   });
 };
-    import { API_URL } from "@/config/api";
-    import { getUserData, getAuthHeader } from "@/app/utils/authUtil";
-    import { useEffect, useState } from "react";
+
 const normalizeImageUrl = (value: string) => {
   if (/^https?:\/\//i.test(value)) return value;
-      const [items, setItems] = useState<AnnouncementCard[]>(announcements.slice(0, 4));
-
-      useEffect(() => {
-        setItems(announcements.slice(0, 4));
-      }, [announcements]);
-
-      const user = getUserData();
-      const isAdmin = (user?.role || '').toString().toLowerCase() === 'admin';
+  return `${API_URL}${value.startsWith("/") ? value : `/${value}`}`;
 };
 
 const renderLinkedText = (text: string) => {
@@ -89,7 +83,14 @@ const renderLinkedText = (text: string) => {
 };
 
 export default function Announcements({ announcements = [] }: AnnouncementsProps) {
-  const visibleAnnouncements = announcements.slice(0, 4);
+  const [items, setItems] = useState<AnnouncementCard[]>(announcements.slice(0, 4));
+
+  useEffect(() => {
+    setItems(announcements.slice(0, 4));
+  }, [announcements]);
+
+  const user = getUserData();
+  const isAdmin = (user?.role || "").toString().toLowerCase() === "admin";
 
   return (
     <motion.section
@@ -111,7 +112,7 @@ export default function Announcements({ announcements = [] }: AnnouncementsProps
           <div className="w-24 h-1 bg-[#113F67] mx-auto rounded-full mt-6" />
         </div>
 
-        {visibleAnnouncements.length === 0 ? (
+        {items.length === 0 ? (
           <div className="mx-auto max-w-3xl rounded-3xl border border-dashed border-[#113F67]/20 bg-white p-8 text-center shadow-sm">
             <p className="text-lg font-semibold text-[#113F67]">No announcements yet</p>
             <p className="mt-2 text-sm text-gray-600">
@@ -120,9 +121,8 @@ export default function Announcements({ announcements = [] }: AnnouncementsProps
           </div>
         ) : (
           <div className="grid gap-6 lg:grid-cols-2">
-            {visibleAnnouncements.map((announcement, index) => {
+            {items.map((announcement, index) => {
               const hasImages = announcement.image_urls.length > 0;
-              const primaryImage = announcement.image_urls[0];
 
               return (
                 <motion.article
@@ -141,22 +141,16 @@ export default function Announcements({ announcements = [] }: AnnouncementsProps
 
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
-                          <span className="rounded-full bg-[#113F67]/10 px-3 py-1 font-semibold text-[#113F67]">
-                            Official post
-                          </span>
+                          <span className="rounded-full bg-[#113F67]/10 px-3 py-1 font-semibold text-[#113F67]">Official post</span>
                           <span>{formatRelativeDate(announcement.created_at)}</span>
                           <span>by {announcement.created_by_role || "admin"}</span>
                         </div>
-                        <h3 className="mt-3 text-2xl font-bold leading-tight text-[#113F67]">
-                          {announcement.title}
-                        </h3>
+                        <h3 className="mt-3 text-2xl font-bold leading-tight text-[#113F67]">{announcement.title}</h3>
                       </div>
                     </div>
 
                     <div className="mt-5 space-y-4">
-                      <p className="whitespace-pre-wrap text-[15px] leading-7 text-gray-700">
-                        {renderLinkedText(announcement.description)}
-                      </p>
+                      <p className="whitespace-pre-wrap text-[15px] leading-7 text-gray-700">{renderLinkedText(announcement.description)}</p>
 
                       {announcement.links.length > 0 && (
                         <div className="flex flex-wrap gap-2">
@@ -184,11 +178,7 @@ export default function Announcements({ announcements = [] }: AnnouncementsProps
                             key={`${imageUrl}-${imageIndex}`}
                             className={`overflow-hidden rounded-2xl bg-slate-100 ${imageIndex === 0 && announcement.image_urls.length > 1 ? "sm:col-span-2" : ""}`}
                           >
-                            <img
-                              src={normalizeImageUrl(imageUrl)}
-                              alt={`${announcement.title} attachment ${imageIndex + 1}`}
-                              className="h-full w-full max-h-[320px] object-cover"
-                            />
+                            <img src={normalizeImageUrl(imageUrl)} alt={`${announcement.title} attachment ${imageIndex + 1}`} className="h-full w-full max-h-[320px] object-cover" />
                           </div>
                         ))}
                       </div>
@@ -197,7 +187,40 @@ export default function Announcements({ announcements = [] }: AnnouncementsProps
 
                   <div className="flex items-center justify-between gap-4 border-t border-[#113F67]/10 px-6 py-4 text-xs text-gray-500 sm:px-7">
                     <span>{announcement.created_by_email || "admin@biocella"}</span>
-                    <span>Shareable update card</span>
+                    <div className="flex items-center gap-3">
+                      {isAdmin && (
+                        <button
+                          onClick={async () => {
+                            const ok = window.confirm('Delete this announcement? This cannot be undone.');
+                            if (!ok) return;
+
+                            try {
+                              const headers = getAuthHeader();
+                              const resp = await fetch(`${API_URL}/announcements/${announcement.announcement_id}`, {
+                                method: 'DELETE',
+                                headers,
+                              });
+
+                              if (!resp.ok) {
+                                const err = await resp.json().catch(() => ({}));
+                                window.alert(err.error || 'Failed to delete announcement');
+                                return;
+                              }
+
+                              setItems((prev) => prev.filter((a) => a.announcement_id !== announcement.announcement_id));
+                            } catch (e) {
+                              console.error(e);
+                              window.alert('Failed to delete announcement');
+                            }
+                          }}
+                          className="rounded-md bg-red-600 px-3 py-1 text-white text-xs hover:bg-red-700"
+                        >
+                          Delete
+                        </button>
+                      )}
+
+                      <span>Shareable update card</span>
+                    </div>
                   </div>
                 </motion.article>
               );
