@@ -1153,6 +1153,59 @@ exports.getUserByToken = async (req, res) => {
   }
 };
 
+// GET RESET USER BY TOKEN
+exports.getResetUserByToken = async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        message: "Token is required.",
+        statusCode: HttpStatus.BAD_REQUEST,
+      });
+    }
+
+    const user = await authModel.getUserByResetToken(token);
+
+    if (!user) {
+      return res.status(HttpStatus.UNAUTHORIZED).json({
+        message: "Invalid or expired token.",
+        statusCode: HttpStatus.UNAUTHORIZED,
+      });
+    }
+
+    if (user.reset_token_expires && new Date() > new Date(user.reset_token_expires)) {
+      return res.status(HttpStatus.UNAUTHORIZED).json({
+        message: "This reset link has expired. Please request a new one.",
+        statusCode: HttpStatus.UNAUTHORIZED,
+      });
+    }
+
+    return res.status(HttpStatus.OK).json({
+      message: "User data retrieved successfully.",
+      user: {
+        user_id: user.user_id,
+        email: user.email,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        department: user.department,
+        course: user.course,
+        role: user.role,
+        is_setup_complete: user.is_setup_complete || 0,
+        profile_photo: user.profile_photo || null,
+      },
+      statusCode: HttpStatus.OK,
+    });
+  } catch (error) {
+    console.error("Get Reset User By Token Error:", error);
+    return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+      message: "An unexpected error occurred.",
+      error: error.message || error,
+      statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+    });
+  }
+};
+
 // LOGOUT
 exports.logout = async (_req, res) => {
   return res.status(HttpStatus.OK).json({

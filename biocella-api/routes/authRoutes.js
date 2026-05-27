@@ -12,6 +12,7 @@ router.post("/reset-password", authController.resetPassword);
 router.post("/finalize-setup", authController.finalizeSetup);
 router.post("/complete-reverification", authController.completeReverification);
 router.post("/get-user-by-token", authController.getUserByToken);
+router.post("/get-reset-user-by-token", authController.getResetUserByToken);
 router.post("/logout", authController.logout);
 router.get("/verify-token", authController.verifyToken);
 router.get("/profile", authController.getUserProfile);
