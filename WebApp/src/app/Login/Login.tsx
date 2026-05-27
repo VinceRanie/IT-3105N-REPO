@@ -58,7 +58,8 @@ export default function LoginForm() {
         redirectByRole(router, data.role);
       } else if (response.status === 428 && data?.reverificationUrl) {
         setMessage({ text: data.message || 'Your account needs re-verification.', type: 'error' });
-        router.push(String(data.reverificationUrl));
+        const redirectTarget = String(data.reverificationUrl || `/reverify?email=${encodeURIComponent(formData.email)}`);
+        window.location.assign(redirectTarget);
       } else {
         setMessage({ text: data.message || 'Invalid credentials. Please try again.', type: 'error' });
       }
