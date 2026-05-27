@@ -1,9 +1,10 @@
-import Login from "../../app/Login/Login";
+import { Suspense } from 'react';
+import Login from "./Login";
 
 export default function Signin(){
     return(
-        <>
-        <Login/>
-        </>
+        <Suspense fallback={<div />}> 
+          <Login />
+        </Suspense>
     );
 }

@@ -43,6 +43,7 @@ const RESET_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 hours
 const PASSWORD_STRENGTH_ERROR_MESSAGE = "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, and one number.";
 const ACCOUNT_REGISTERED_MESSAGE = "An account with this email is already registered.";
 const ACCOUNT_NOT_REGISTERED_MESSAGE = "No account is registered with this email.";
+const REVERIFICATION_REQUIRED_MESSAGE = "Your account needs semester re-verification. Please sign in with Google to continue.";
 
 // Used only for verifyGoogleProfile
 const googleOauthClient = new google.auth.OAuth2(
@@ -154,6 +155,15 @@ const sendAuthMessageResponse = (res, message, statusCode = HttpStatus.OK) =>
     message,
     statusCode: statusCode,
   });
+
+const buildReverificationPayload = (email) => ({
+  message: REVERIFICATION_REQUIRED_MESSAGE,
+  reverificationRequired: true,
+  reverificationUrl: `/reverify?email=${encodeURIComponent(email)}`,
+});
+
+const isSemesterReverificationDue = (user, referenceDate = new Date()) =>
+  authModel.isSemesterReverificationDue(user, referenceDate);
 
 
 const sendFinalizeSetupEmail = async (email, resetToken) => {
@@ -393,6 +403,13 @@ exports.login = async (req, res) => {
     const passwordMatch = await authModel.comparePassword(password, user.password);
 
     if (passwordMatch) {
+      if (isSemesterReverificationDue(user)) {
+        return res.status(428).json({
+          ...buildReverificationPayload(user.email),
+          statusCode: 428,
+        });
+      }
+
       await authModel.resetFailedLoginAttempts(user.user_id);
 
       const token = jwt.sign(
@@ -592,6 +609,14 @@ exports.requestPasswordResetAuthenticated = async (req, res) => {
         statusCode: HttpStatus.NOT_FOUND,
       });
     }
+
+    if (isSemesterReverificationDue(user)) {
+      return res.status(428).json({
+        ...buildReverificationPayload(user.email),
+        statusCode: 428,
+      });
+    }
+
 
     const resetResult = await issuePasswordResetForUser(user);
     return res.status(resetResult.statusCode).json({
@@ -870,6 +895,13 @@ exports.getUserProfile = async (req, res) => {
       });
     }
 
+    if (isSemesterReverificationDue(user)) {
+      return res.status(428).json({
+        ...buildReverificationPayload(user.email),
+        statusCode: 428,
+      });
+    }
+
     const passwordResetAccount = await authModel.getUserByEmail(user.email);
 
     return res.status(HttpStatus.OK).json({
@@ -1063,7 +1095,7 @@ exports.uploadProfilePhoto = async (req, res) => {
 // GET USER BY TOKEN
 exports.getUserByToken = async (req, res) => {
   try {
-    const { token } = req.body;
+    const { token, purpose } = req.body;
 
     if (!token) {
       return res.status(HttpStatus.BAD_REQUEST).json({
@@ -1089,7 +1121,7 @@ exports.getUserByToken = async (req, res) => {
       });
     }
 
-    if (Number(user.is_setup_complete) === 1) {
+    if (purpose !== "reset-password" && Number(user.is_setup_complete) === 1) {
       return res.status(HttpStatus.CONFLICT).json({
         message: "Account setup is already complete. Please log in.",
         statusCode: HttpStatus.CONFLICT,
@@ -1113,6 +1145,59 @@ exports.getUserByToken = async (req, res) => {
     });
   } catch (error) {
     console.error("Get User By Token Error:", error);
+    return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+      message: "An unexpected error occurred.",
+      error: error.message || error,
+      statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+    });
+  }
+};
+
+// GET RESET USER BY TOKEN
+exports.getResetUserByToken = async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        message: "Token is required.",
+        statusCode: HttpStatus.BAD_REQUEST,
+      });
+    }
+
+    const user = await authModel.getUserByResetToken(token);
+
+    if (!user) {
+      return res.status(HttpStatus.UNAUTHORIZED).json({
+        message: "Invalid or expired token.",
+        statusCode: HttpStatus.UNAUTHORIZED,
+      });
+    }
+
+    if (user.reset_token_expires && new Date() > new Date(user.reset_token_expires)) {
+      return res.status(HttpStatus.UNAUTHORIZED).json({
+        message: "This reset link has expired. Please request a new one.",
+        statusCode: HttpStatus.UNAUTHORIZED,
+      });
+    }
+
+    return res.status(HttpStatus.OK).json({
+      message: "User data retrieved successfully.",
+      user: {
+        user_id: user.user_id,
+        email: user.email,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        department: user.department,
+        course: user.course,
+        role: user.role,
+        is_setup_complete: user.is_setup_complete || 0,
+        profile_photo: user.profile_photo || null,
+      },
+      statusCode: HttpStatus.OK,
+    });
+  } catch (error) {
+    console.error("Get Reset User By Token Error:", error);
     return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
       message: "An unexpected error occurred.",
       error: error.message || error,
@@ -1241,7 +1326,11 @@ exports.reactivateUser = async (req, res) => {
     const tokenExpiry = new Date(Date.now() + RESET_LINK_TTL_MS);
     await authModel.setResetToken(user.user_id, resetToken, tokenExpiry);
 
-    const emailResult = await sendReactivationEmail(user.email, resetToken);
+    const isSetupComplete = Number(user.is_setup_complete) === 1;
+    const emailResult = isSetupComplete
+      ? await sendReactivationEmail(user.email, resetToken)
+      : await sendFinalizeSetupEmail(user.email, resetToken);
+
     if (!emailResult.ok) {
       await authModel.setResetToken(user.user_id, null, null);
       return res.status(emailResult.statusCode).json({
@@ -1253,7 +1342,9 @@ exports.reactivateUser = async (req, res) => {
     await authModel.reactivateUser(user.user_id);
 
     return res.status(HttpStatus.OK).json({
-      message: "User reactivated. Password setup email sent successfully.",
+      message: isSetupComplete
+        ? "User reactivated. Password reset email sent successfully."
+        : "User reactivated. Finalize setup email sent successfully.",
       statusCode: HttpStatus.OK,
     });
   } catch (error) {
@@ -1279,6 +1370,22 @@ exports.verifyToken = async (req, res) => {
     }
 
     const decoded = jwt.verify(token, JWT_SECRET);
+    const user = await authModel.getUserAuthById(decoded.userId);
+
+    if (!user) {
+      return res.status(HttpStatus.UNAUTHORIZED).json({
+        message: "Invalid token.",
+        statusCode: HttpStatus.UNAUTHORIZED,
+      });
+    }
+
+    if (isSemesterReverificationDue(user)) {
+      return res.status(428).json({
+        ...buildReverificationPayload(user.email),
+        statusCode: 428,
+      });
+    }
+
     return res.status(HttpStatus.OK).json({
       message: "Token is valid.",
       user: decoded,
@@ -1364,6 +1471,49 @@ exports.verifyGoogleProfile = async (req, res) => {
 
     return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
       message: "Failed to verify Google token.",
+      error: error.message || error,
+      statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+    });
+  }
+};
+
+// COMPLETE SEMESTER RE-VERIFICATION
+exports.completeReverification = async (req, res) => {
+  try {
+    const { email } = req.body || {};
+
+    if (!email || typeof email !== "string") {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        message: "A valid email address is required.",
+        statusCode: HttpStatus.BAD_REQUEST,
+      });
+    }
+
+    const user = await authModel.getUserByEmail(email);
+    if (!user) {
+      return res.status(HttpStatus.NOT_FOUND).json({
+        message: "User profile not found.",
+        statusCode: HttpStatus.NOT_FOUND,
+      });
+    }
+
+    if (Number(user.is_setup_complete) !== 1 || !user.password) {
+      return res.status(HttpStatus.CONFLICT).json({
+        message: "Account setup is not complete.",
+        statusCode: HttpStatus.CONFLICT,
+      });
+    }
+
+    await authModel.markUserVerified(user.user_id);
+
+    return res.status(HttpStatus.OK).json({
+      message: "Account re-verification completed successfully.",
+      statusCode: HttpStatus.OK,
+    });
+  } catch (error) {
+    console.error("Complete Reverification Error:", error);
+    return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+      message: "An unexpected error occurred during re-verification.",
       error: error.message || error,
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
     });

@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ message: "Token is required." }, { status: 400 });
     }
 
-    const response = await fetch(`${API_BASE_URL}/auth/get-user-by-token`, {
+    const response = await fetch(`${API_BASE_URL}/auth/get-reset-user-by-token`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token }),
@@ -30,15 +30,6 @@ export async function GET(request: NextRequest) {
     }
 
     const user = data.user;
-
-const isSetupComplete = Number(user?.is_setup_complete) === 1;
-
-if (!isSetupComplete) {
-  return NextResponse.json(
-    { message: "Account setup is not complete yet." },
-    { status: 409 }
-  );
-}
 
     return NextResponse.json(
       {
