@@ -34,7 +34,7 @@ exports.createUserByAdmin = async (email, resetToken, role = "student", resetTok
 // READ - Get user by email
 exports.getUserByEmail = async (email) => {
   const [rows] = await db.execute(
-    "SELECT user_id, email, password, failed_login_attempts, lockout_until, role, reset_token, reset_token_expires, is_setup_complete, deleted_at FROM user WHERE email = ?",
+    "SELECT user_id, email, password, failed_login_attempts, lockout_until, role, reset_token, reset_token_expires, is_setup_complete, deleted_at, last_verified_at FROM user WHERE email = ?",
     [email]
   );
   return rows[0] || null;
@@ -43,7 +43,7 @@ exports.getUserByEmail = async (email) => {
 // READ - Get user by reset token
 exports.getUserByResetToken = async (token) => {
   const [rows] = await db.execute(
-    "SELECT user_id, email, password, reset_token, reset_token_expires, first_name, last_name, profile_photo, department, course, role, is_setup_complete, deleted_at FROM user WHERE reset_token = ?",
+    "SELECT user_id, email, password, reset_token, reset_token_expires, first_name, last_name, profile_photo, department, course, role, is_setup_complete, deleted_at, last_verified_at FROM user WHERE reset_token = ?",
     [token]
   );
   return rows[0] || null;
@@ -52,7 +52,7 @@ exports.getUserByResetToken = async (token) => {
 // READ - Get user auth details by id
 exports.getUserAuthById = async (userId) => {
   const [rows] = await db.execute(
-    "SELECT user_id, email, password, role, is_setup_complete, reset_token, reset_token_expires, deleted_at FROM user WHERE user_id = ?",
+    "SELECT user_id, email, password, role, is_setup_complete, reset_token, reset_token_expires, deleted_at, last_verified_at FROM user WHERE user_id = ?",
     [userId]
   );
   return rows[0] || null;
@@ -61,7 +61,7 @@ exports.getUserAuthById = async (userId) => {
 // READ - Get user profile by user id
 exports.getUserProfileById = async (userId) => {
   const [rows] = await db.execute(
-    `SELECT user_id, email, first_name, last_name, profile_photo, department, course, role, is_setup_complete
+    `SELECT user_id, email, first_name, last_name, profile_photo, department, course, role, is_setup_complete, last_verified_at
      FROM user
      WHERE user_id = ?`,
     [userId]
@@ -110,12 +110,61 @@ exports.getAllNonAdminUsers = async () => {
 
   const [rows] = await db.execute(
     `SELECT user_id, email, first_name, last_name, department, course, role, is_setup_complete,
+            last_verified_at,
             ${deletedAtSelect},
             ${createdAtSelect}
      FROM user
      WHERE role <> 'admin'`
   );
   return rows;
+};
+
+// UTILITY - Semester verification cycle start
+exports.getVerificationCycleStart = (referenceDate = new Date()) => {
+  const current = new Date(referenceDate);
+  const year = current.getFullYear();
+  const augustFirst = new Date(year, 7, 1);
+
+  if (current >= augustFirst) {
+    return augustFirst;
+  }
+
+  return new Date(year, 0, 1);
+};
+
+// UTILITY - Determine if a user must re-verify for the current cycle
+exports.isSemesterReverificationDue = (user, referenceDate = new Date()) => {
+  if (!user) {
+    return false;
+  }
+
+  // Only students and faculty are required to re-verify each semester
+  const REVERIFY_ROLES = ["student", "faculty"];
+  if (!REVERIFY_ROLES.includes(String(user.role || "").toLowerCase())) {
+    return false;
+  }
+
+  // Only registered (setup-complete) users with a USC email are subject to re-verification
+  if (!user.is_setup_complete) {
+    return false;
+  }
+
+  if (!exports.validateEmailDomain(user.email)) {
+    return false;
+  }
+
+  const lastVerifiedAt = user.last_verified_at ? new Date(user.last_verified_at) : null;
+  const cycleStart = exports.getVerificationCycleStart(referenceDate);
+
+  return !lastVerifiedAt || Number.isNaN(lastVerifiedAt.getTime()) || lastVerifiedAt < cycleStart;
+};
+
+// UPDATE - Refresh the user's verification timestamp
+exports.markUserVerified = async (userId, verifiedAt = new Date()) => {
+  await db.execute(
+    "UPDATE user SET last_verified_at = ? WHERE user_id = ?",
+    [verifiedAt, userId]
+  );
 };
 
 // UPDATE - Soft deactivate user by removing password
@@ -201,7 +250,7 @@ exports.setPassword = async (userId, hashedPassword, nextResetAllowedAt = null) 
 exports.finalizeUserSetup = async (userId, firstName, lastName, profilePhoto, department, course, hashedPassword) => {
   await db.execute(
     `UPDATE user 
-     SET first_name = ?, last_name = ?, profile_photo = ?, department = ?, course = ?, password = ?, is_setup_complete = 1, reset_token = NULL, reset_token_expires = NULL
+     SET first_name = ?, last_name = ?, profile_photo = ?, department = ?, course = ?, password = ?, is_setup_complete = 1, reset_token = NULL, reset_token_expires = NULL, last_verified_at = NOW()
      WHERE user_id = ?`,
     [firstName, lastName, profilePhoto, department, course, hashedPassword, userId]
   );
