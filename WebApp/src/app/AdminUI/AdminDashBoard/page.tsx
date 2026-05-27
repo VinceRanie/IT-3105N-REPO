@@ -6,7 +6,8 @@ import { getAuthHeader } from "@/app/utils/authUtil";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 
-import { Microscope,FlaskConical,AlertTriangle,CalendarClock,Users,Package,BarChart3,Clock,Loader2 } from "lucide-react";
+import { Microscope,FlaskConical,AlertTriangle,CalendarClock,Users,Package,BarChart3,Clock,Loader2,Megaphone } from "lucide-react";
+import AnnouncementComposerModal from "./Components/AnnouncementComposerModal";
 
 import {BarChart,Bar,XAxis,YAxis,CartesianGrid,Tooltip,ResponsiveContainer,} from "recharts";
 
@@ -584,6 +585,7 @@ const dashboardData = {
   actions: [
     { id: "add-specimen", label: "Add Specimen", icon: Microscope },
     { id: "add-chemical", label: "Add Chemical Stock", icon: FlaskConical },
+    { id: "create-announcement", label: "Create Announcement", icon: Megaphone },
     { id: "set-unavailable", label: "Set Date Unavailable", icon: CalendarClock },
     { id: "see-reports", label: "See Reports", icon: BarChart3 },
   ],
@@ -634,11 +636,13 @@ export default function AdminHome() {
   const [todayNoShowAppointments, setTodayNoShowAppointments] = useState<DashboardAppointmentEntry[]>([]);
   const [tomorrowPendingAppointments, setTomorrowPendingAppointments] = useState<DashboardAppointmentEntry[]>([]);
   const [showUnavailableModal, setShowUnavailableModal] = useState(false);
+  const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
   const [unavailableDate, setUnavailableDate] = useState("");
   const [unavailableReason, setUnavailableReason] = useState("");
   const [unavailableDates, setUnavailableDates] = useState<UnavailableDate[]>([]);
   const [savingUnavailable, setSavingUnavailable] = useState(false);
   const [showReportsNavToast, setShowReportsNavToast] = useState(false);
+  const [showAnnouncementToast, setShowAnnouncementToast] = useState(false);
   const [specimenOverview, setSpecimenOverview] = useState<SpecimenOverviewEntry[]>([]);
   const [userRoleSummary, setUserRoleSummary] = useState<UserRoleSummary>({
     activeUsers: 0,
@@ -754,6 +758,11 @@ export default function AdminHome() {
       return;
     }
 
+    if (actionId === "create-announcement") {
+      setShowAnnouncementModal(true);
+      return;
+    }
+
     if (actionId === "set-unavailable") {
       setShowUnavailableModal(true);
       fetchUnavailableDates();
@@ -765,6 +774,11 @@ export default function AdminHome() {
       setTimeout(() => setShowReportsNavToast(false), 2500);
       router.push("/AdminUI/AdminDashBoard/Features/AdminReports");
     }
+  };
+
+  const handleAnnouncementSuccess = () => {
+    setShowAnnouncementToast(true);
+    window.setTimeout(() => setShowAnnouncementToast(false), 2500);
   };
 
   useEffect(() => {
@@ -1380,6 +1394,19 @@ export default function AdminHome() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      <AnnouncementComposerModal
+        isOpen={showAnnouncementModal}
+        onClose={() => setShowAnnouncementModal(false)}
+        onSuccess={handleAnnouncementSuccess}
+      />
+
+      {showAnnouncementToast && (
+        <div className="fixed bottom-6 right-6 z-50 rounded-2xl border border-emerald-200 bg-white px-4 py-3 shadow-xl shadow-emerald-100">
+          <p className="text-sm font-semibold text-emerald-700">Announcement published</p>
+          <p className="text-xs text-slate-500">The post is now visible on the homepage feed.</p>
         </div>
       )}
         <div className="rounded-2xl border border-white bg-white p-5 shadow-sm">

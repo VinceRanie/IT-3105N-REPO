@@ -15,12 +15,36 @@ type SpecimenTypeStat = {
   imageUrl?: string | null;
 };
 
+type AnnouncementLink = {
+  label?: string | null;
+  url?: string | null;
+};
+
+type AnnouncementItem = {
+  title?: string | null;
+  description?: string | null;
+  image_urls?: string[] | null;
+  links?: AnnouncementLink[] | null;
+  created_at?: string | null;
+  created_by_email?: string | null;
+  created_by_role?: string | null;
+};
+
 type HomepageStats = {
   publishedSpecimens: number;
   carolinianCount: number;
   totalSpecimens: number;
   collectionCategories: number;
   specimenTypes: SpecimenTypeStat[];
+  announcements: {
+    title: string;
+    description: string;
+    image_urls: string[];
+    links: { label: string; url: string }[];
+    created_at: string | null;
+    created_by_email: string;
+    created_by_role: string;
+  }[];
 };
 
 const isPublished = (item: MicrobialItem) => {
@@ -55,6 +79,8 @@ const toAbsoluteImageUrl = (apiBaseUrl: string, rawPath: string) => {
   }
   return `${base}/${normalized}`;
 };
+
+const toAnnouncementImageUrl = (apiBaseUrl: string, rawPath: string) => toAbsoluteImageUrl(apiBaseUrl, rawPath);
 
 const pickRandom = <T,>(items: T[]): T | null => {
   if (!items.length) return null;
@@ -113,6 +139,7 @@ const fetchHomepageStats = async (apiBaseUrl: string): Promise<HomepageStats | n
 
   const publishedMicrobialsData = await fetchJson(`${apiBaseUrl}/microbials?role=staff&publish_status=published`);
   const usersData = await fetchJson(`${apiBaseUrl}/auth/users`);
+  const announcementsData = await fetchJson(`${apiBaseUrl}/announcements?limit=4`);
   const users = Array.isArray(usersData?.users) ? usersData.users : [];
 
   const allMicrobials = allMicrobialsData as MicrobialItem[];
@@ -152,12 +179,38 @@ const fetchHomepageStats = async (apiBaseUrl: string): Promise<HomepageStats | n
     };
   });
 
+  const announcements = Array.isArray(announcementsData)
+    ? (announcementsData as AnnouncementItem[])
+        .map((item) => ({
+          title: String(item.title || 'Announcement').trim() || 'Announcement',
+          description: String(item.description || '').trim(),
+          image_urls: Array.isArray(item.image_urls)
+            ? item.image_urls
+                .map((imageUrl) => toAnnouncementImageUrl(apiBaseUrl, String(imageUrl || '')))
+                .filter((imageUrl): imageUrl is string => Boolean(imageUrl))
+            : [],
+          links: Array.isArray(item.links)
+            ? item.links
+                .map((link) => ({
+                  label: String(link?.label || '').trim(),
+                  url: String(link?.url || '').trim(),
+                }))
+                .filter((link) => Boolean(link.url))
+            : [],
+          created_at: item.created_at || null,
+          created_by_email: String(item.created_by_email || '').trim(),
+          created_by_role: String(item.created_by_role || 'admin').trim().toLowerCase(),
+        }))
+        .slice(0, 4)
+    : [];
+
   return {
     publishedSpecimens: publishedMicrobials.filter(isPublished).length,
     carolinianCount: studentUsers.length,
     totalSpecimens: allMicrobials.length,
     collectionCategories: allSpecimenTypes.length,
     specimenTypes: specimenTypesWithRandomImage,
+    announcements,
   };
 };
 
@@ -183,6 +236,7 @@ export async function GET() {
         totalSpecimens: 0,
         collectionCategories: 0,
         specimenTypes: [],
+        announcements: [],
         error: "Failed to fetch homepage stats",
       }
     );

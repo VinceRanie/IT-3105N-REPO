@@ -5,7 +5,8 @@ const fs = require('fs');
 // Create uploads directories if they don't exist
 const uploadDirs = {
   specimens: path.join(__dirname, '../uploads/specimens'),
-  fasta: path.join(__dirname, '../uploads/fasta')
+  fasta: path.join(__dirname, '../uploads/fasta'),
+  announcements: path.join(__dirname, '../uploads/announcements')
 };
 
 Object.values(uploadDirs).forEach(dir => {
@@ -19,6 +20,8 @@ const specimenStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     if (file.fieldname === 'fasta_file') {
       cb(null, uploadDirs.fasta);
+    } else if (file.fieldname === 'announcement_images') {
+      cb(null, uploadDirs.announcements);
     } else {
       cb(null, uploadDirs.specimens);
     }
@@ -38,7 +41,7 @@ const fileFilter = (req, file, cb) => {
   const textTypes = ['text/plain', 'application/octet-stream']; // common types for FASTA uploads
   const allowedFastaExts = new Set(['.fasta', '.fa', '.fna', '.ffn', '.faa']);
 
-  if (file.fieldname === 'image' || file.fieldname === 'custom_images') {
+  if (file.fieldname === 'image' || file.fieldname === 'custom_images' || file.fieldname === 'announcement_images') {
     if (imageTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
