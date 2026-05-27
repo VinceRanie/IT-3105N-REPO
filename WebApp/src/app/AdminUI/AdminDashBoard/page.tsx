@@ -8,6 +8,7 @@ import { format } from "date-fns";
 
 import { Microscope,FlaskConical,AlertTriangle,CalendarClock,Users,Package,BarChart3,Clock,Loader2,Megaphone } from "lucide-react";
 import AnnouncementComposerModal from "./Components/AnnouncementComposerModal";
+import AnnouncementManagementModal from "./Components/AnnouncementManagementModal";
 
 import {BarChart,Bar,XAxis,YAxis,CartesianGrid,Tooltip,ResponsiveContainer,} from "recharts";
 
@@ -586,6 +587,7 @@ const dashboardData = {
     { id: "add-specimen", label: "Add Specimen", icon: Microscope },
     { id: "add-chemical", label: "Add Chemical Stock", icon: FlaskConical },
     { id: "create-announcement", label: "Create Announcement", icon: Megaphone },
+    { id: "manage-announcements", label: "Manage Announcements", icon: Megaphone },
     { id: "set-unavailable", label: "Set Date Unavailable", icon: CalendarClock },
     { id: "see-reports", label: "See Reports", icon: BarChart3 },
   ],
@@ -637,6 +639,7 @@ export default function AdminHome() {
   const [tomorrowPendingAppointments, setTomorrowPendingAppointments] = useState<DashboardAppointmentEntry[]>([]);
   const [showUnavailableModal, setShowUnavailableModal] = useState(false);
   const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
+  const [showAnnouncementManagementModal, setShowAnnouncementManagementModal] = useState(false);
   const [unavailableDate, setUnavailableDate] = useState("");
   const [unavailableReason, setUnavailableReason] = useState("");
   const [unavailableDates, setUnavailableDates] = useState<UnavailableDate[]>([]);
@@ -760,6 +763,11 @@ export default function AdminHome() {
 
     if (actionId === "create-announcement") {
       setShowAnnouncementModal(true);
+      return;
+    }
+
+    if (actionId === "manage-announcements") {
+      setShowAnnouncementManagementModal(true);
       return;
     }
 
@@ -1401,6 +1409,11 @@ export default function AdminHome() {
         isOpen={showAnnouncementModal}
         onClose={() => setShowAnnouncementModal(false)}
         onSuccess={handleAnnouncementSuccess}
+      />
+
+      <AnnouncementManagementModal
+        isOpen={showAnnouncementManagementModal}
+        onClose={() => setShowAnnouncementManagementModal(false)}
       />
 
       {showAnnouncementToast && (

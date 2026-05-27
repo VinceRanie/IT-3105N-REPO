@@ -2,8 +2,6 @@
 
 import { motion } from "framer-motion";
 import { API_URL } from "@/config/api";
-import { getUserData, getAuthHeader } from "@/app/utils/authUtil";
-import { useEffect, useState } from "react";
 
 type AnnouncementLink = {
   label: string;
@@ -83,14 +81,7 @@ const renderLinkedText = (text: string) => {
 };
 
 export default function Announcements({ announcements = [] }: AnnouncementsProps) {
-  const [items, setItems] = useState<AnnouncementCard[]>(announcements.slice(0, 4));
-
-  useEffect(() => {
-    setItems(announcements.slice(0, 4));
-  }, [announcements]);
-
-  const user = getUserData();
-  const isAdmin = (user?.role || "").toString().toLowerCase() === "admin";
+  const visibleAnnouncements = announcements.slice(0, 4);
 
   return (
     <motion.section
@@ -112,7 +103,7 @@ export default function Announcements({ announcements = [] }: AnnouncementsProps
           <div className="w-24 h-1 bg-[#113F67] mx-auto rounded-full mt-6" />
         </div>
 
-        {items.length === 0 ? (
+        {visibleAnnouncements.length === 0 ? (
           <div className="mx-auto max-w-3xl rounded-3xl border border-dashed border-[#113F67]/20 bg-white p-8 text-center shadow-sm">
             <p className="text-lg font-semibold text-[#113F67]">No announcements yet</p>
             <p className="mt-2 text-sm text-gray-600">
@@ -121,7 +112,7 @@ export default function Announcements({ announcements = [] }: AnnouncementsProps
           </div>
         ) : (
           <div className="grid gap-6 lg:grid-cols-2">
-            {items.map((announcement, index) => {
+            {visibleAnnouncements.map((announcement, index) => {
               const hasImages = announcement.image_urls.length > 0;
 
               return (
@@ -187,46 +178,7 @@ export default function Announcements({ announcements = [] }: AnnouncementsProps
 
                   <div className="flex items-center justify-between gap-4 border-t border-[#113F67]/10 px-6 py-4 text-xs text-gray-500 sm:px-7">
                     <span>{announcement.created_by_email || "admin@biocella"}</span>
-                    <div className="flex items-center gap-3">
-                        {isAdmin && (
-                          <button
-                            onClick={async () => {
-                              const ok = window.confirm('Delete this announcement? This cannot be undone.');
-                              if (!ok) return;
-
-                              const id = announcement.announcement_id;
-                              if (!id) {
-                                window.alert('Cannot delete announcement: missing id.');
-                                return;
-                              }
-
-                              try {
-                                const headers = getAuthHeader();
-                                const resp = await fetch(`${API_URL}/announcements/${id}`, {
-                                  method: 'DELETE',
-                                  headers,
-                                });
-
-                                if (!resp.ok) {
-                                  const err = await resp.json().catch(() => ({}));
-                                  window.alert(err.error || 'Failed to delete announcement');
-                                  return;
-                                }
-
-                                setItems((prev) => prev.filter((a) => a.announcement_id !== id));
-                              } catch (e) {
-                                console.error(e);
-                                window.alert('Failed to delete announcement');
-                              }
-                            }}
-                            className="rounded-md bg-red-600 px-3 py-1 text-white text-xs hover:bg-red-700"
-                          >
-                            Delete
-                          </button>
-                        )}
-
-                      <span>Shareable update card</span>
-                    </div>
+                    <span>Shareable update card</span>
                   </div>
                 </motion.article>
               );

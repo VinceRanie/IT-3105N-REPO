@@ -58,9 +58,11 @@ const normalizeAnnouncementRow = (row) => ({
   created_by_user_id: row.created_by_user_id,
   created_by_email: row.created_by_email,
   created_by_role: row.created_by_role,
+  deleted_by_user_id: row.deleted_by_user_id,
   is_published: Boolean(row.is_published),
   created_at: row.created_at,
   updated_at: row.updated_at,
+  deleted_at: row.deleted_at,
 });
 
 exports.getPublishedAnnouncements = async (limit = 6) => {
@@ -72,6 +74,23 @@ exports.getPublishedAnnouncements = async (limit = 6) => {
       SELECT announcement_id, title, description, image_urls, links, created_by_user_id, created_by_email, created_by_role, is_published, created_at, updated_at
       FROM announcement
       WHERE is_published = 1 AND deleted_at IS NULL
+      ORDER BY created_at DESC, announcement_id DESC
+      LIMIT ?
+    `,
+    [safeLimit]
+  );
+
+  return rows.map(normalizeAnnouncementRow);
+};
+
+exports.getAllAnnouncements = async (limit = 50) => {
+  await ensureAnnouncementsTable();
+
+  const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), 200);
+  const [rows] = await db.execute(
+    `
+      SELECT announcement_id, title, description, image_urls, links, deleted_by_user_id, created_by_user_id, created_by_email, created_by_role, is_published, created_at, updated_at, deleted_at
+      FROM announcement
       ORDER BY created_at DESC, announcement_id DESC
       LIMIT ?
     `,
@@ -126,7 +145,7 @@ exports.getAnnouncementById = async (announcementId) => {
 
   const [rows] = await db.execute(
     `
-      SELECT announcement_id, title, description, image_urls, links, created_by_user_id, created_by_email, created_by_role, is_published, created_at, updated_at
+      SELECT announcement_id, title, description, image_urls, links, deleted_by_user_id, created_by_user_id, created_by_email, created_by_role, is_published, created_at, updated_at, deleted_at
       FROM announcement
       WHERE announcement_id = ? AND deleted_at IS NULL
       LIMIT 1

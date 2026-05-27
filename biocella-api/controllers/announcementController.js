@@ -77,6 +77,28 @@ exports.listAnnouncements = async (req, res) => {
   }
 };
 
+exports.listAnnouncementsAdmin = async (req, res) => {
+  try {
+    const authUser = parseAuthenticatedUser(req);
+
+    if (!authUser) {
+      return res.status(401).json({ error: 'Unauthorized.' });
+    }
+
+    if (String(authUser.role || '').toLowerCase() !== 'admin') {
+      return res.status(403).json({ error: 'Only administrators can view announcement management.' });
+    }
+
+    const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
+    const announcements = await Announcement.getAllAnnouncements(limit);
+
+    return res.status(200).json(announcements);
+  } catch (error) {
+    console.error('List Announcements Admin Error:', error);
+    return res.status(500).json({ error: 'Failed to fetch announcements.' });
+  }
+};
+
 exports.createAnnouncement = async (req, res) => {
   try {
     const authUser = parseAuthenticatedUser(req);
