@@ -14,10 +14,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ message: "Token is required." }, { status: 400 });
     }
 
-    const response = await fetch(`${API_BASE_URL}/auth/get-user-by-token`, {
+    const response = await fetch(`${API_BASE_URL}/auth/get-reset-user-by-token`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token, purpose: "reset-password" }),
+      body: JSON.stringify({ token }),
     });
 
     const data = await response.json();
