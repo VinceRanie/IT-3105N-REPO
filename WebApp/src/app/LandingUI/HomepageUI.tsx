@@ -23,6 +23,7 @@ type HomepageStats = {
     collectionCategories: number;
     specimenTypes: SpecimenTypeStat[];
     announcements: {
+        announcement_id?: number;
         title: string;
         description: string;
         image_urls: string[];

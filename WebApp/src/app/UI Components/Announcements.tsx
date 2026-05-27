@@ -11,7 +11,7 @@ type AnnouncementLink = {
 };
 
 type AnnouncementCard = {
-  announcement_id: number;
+  announcement_id?: number;
   title: string;
   description: string;
   image_urls: string[];
@@ -188,36 +188,42 @@ export default function Announcements({ announcements = [] }: AnnouncementsProps
                   <div className="flex items-center justify-between gap-4 border-t border-[#113F67]/10 px-6 py-4 text-xs text-gray-500 sm:px-7">
                     <span>{announcement.created_by_email || "admin@biocella"}</span>
                     <div className="flex items-center gap-3">
-                      {isAdmin && (
-                        <button
-                          onClick={async () => {
-                            const ok = window.confirm('Delete this announcement? This cannot be undone.');
-                            if (!ok) return;
+                        {isAdmin && (
+                          <button
+                            onClick={async () => {
+                              const ok = window.confirm('Delete this announcement? This cannot be undone.');
+                              if (!ok) return;
 
-                            try {
-                              const headers = getAuthHeader();
-                              const resp = await fetch(`${API_URL}/announcements/${announcement.announcement_id}`, {
-                                method: 'DELETE',
-                                headers,
-                              });
-
-                              if (!resp.ok) {
-                                const err = await resp.json().catch(() => ({}));
-                                window.alert(err.error || 'Failed to delete announcement');
+                              const id = announcement.announcement_id;
+                              if (!id) {
+                                window.alert('Cannot delete announcement: missing id.');
                                 return;
                               }
 
-                              setItems((prev) => prev.filter((a) => a.announcement_id !== announcement.announcement_id));
-                            } catch (e) {
-                              console.error(e);
-                              window.alert('Failed to delete announcement');
-                            }
-                          }}
-                          className="rounded-md bg-red-600 px-3 py-1 text-white text-xs hover:bg-red-700"
-                        >
-                          Delete
-                        </button>
-                      )}
+                              try {
+                                const headers = getAuthHeader();
+                                const resp = await fetch(`${API_URL}/announcements/${id}`, {
+                                  method: 'DELETE',
+                                  headers,
+                                });
+
+                                if (!resp.ok) {
+                                  const err = await resp.json().catch(() => ({}));
+                                  window.alert(err.error || 'Failed to delete announcement');
+                                  return;
+                                }
+
+                                setItems((prev) => prev.filter((a) => a.announcement_id !== id));
+                              } catch (e) {
+                                console.error(e);
+                                window.alert('Failed to delete announcement');
+                              }
+                            }}
+                            className="rounded-md bg-red-600 px-3 py-1 text-white text-xs hover:bg-red-700"
+                          >
+                            Delete
+                          </button>
+                        )}
 
                       <span>Shareable update card</span>
                     </div>
