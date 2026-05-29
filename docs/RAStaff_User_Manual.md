@@ -45,8 +45,10 @@ This guide explains how Research Assistants (RA) and Staff use the Biocella WebA
   - View tabs for appointment statuses and filter by audience (internal/outsider).
   - Approve / Deny appointments with optional remarks.
   - Mark dates unavailable (sends POST to `/API/appointments/unavailable-dates`). Required: a date and a reason.
+    - Standard cancellations must be made at least 24 hours before the appointment date.
+    - If the issue is urgent, use Emergency Cancellation Override and enter a reason.
     - Example alert: "Please select a date and provide a reason." on invalid input.
-    - On success: "Date marked unavailable. Notification payload queued for future system integration.".
+    - On success: "Date marked unavailable" and affected users are emailed automatically.
   - QR scanning:
     - Start camera to scan appointment QR codes (uses `jsqr`).
     - Valid appointment QR auto-verifies when URL contains `/verify-appointment?` or `/scan/appointment?` and includes `token` and `id` params.
@@ -75,7 +77,8 @@ This guide explains how Research Assistants (RA) and Staff use the Biocella WebA
   - "Specimen updated successfully! QR code has been generated."
   - "Project created successfully!"
   - "Project updated successfully!"
-  - "Date marked unavailable. Notification payload queued for future system integration."
+  - "Date marked unavailable"
+  - "Emergency Cancellation Override"
 - Validation / Input:
   - "Please select a date and provide a reason."
   - "Error: Specimen ID is missing"

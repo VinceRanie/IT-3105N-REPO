@@ -367,18 +367,19 @@ exports.autoDenyPastPendingAppointments = async () => {
 };
 
 // MARK DATE AS UNAVAILABLE (upsert by date)
-exports.upsertUnavailableDate = async ({ date, reason, created_by_role = null, created_by_user_id = null }) => {
+exports.upsertUnavailableDate = async ({ date, reason, created_by_role = null, created_by_user_id = null, is_emergency = false }) => {
   const [result] = await db.execute(
     `INSERT INTO appointment_unavailable_dates
-      (unavailable_date, reason, created_by_role, created_by_user_id)
-     VALUES (?, ?, ?, ?)
+      (unavailable_date, reason, created_by_role, created_by_user_id, is_emergency)
+     VALUES (?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE
       reason = VALUES(reason),
       created_by_role = VALUES(created_by_role),
       created_by_user_id = VALUES(created_by_user_id),
+      is_emergency = VALUES(is_emergency),
       deleted_at = NULL,
       updated_at = NOW()`,
-    [date, reason, created_by_role, created_by_user_id]
+    [date, reason, created_by_role, created_by_user_id, is_emergency ? 1 : 0]
   );
   return result.affectedRows;
 };
@@ -390,6 +391,7 @@ exports.getUnavailableDates = async (startDate = null, endDate = null) => {
                       reason,
                       created_by_role,
                       created_by_user_id,
+         is_emergency,
                       created_at,
                       updated_at
                FROM appointment_unavailable_dates

@@ -69,12 +69,15 @@ The Dashboard gives a quick operational view of collection, inventory, appointme
    - Open reports
 5. Open Set Date Unavailable when you need to block booking days.
 6. Add date and reason, then click Mark Unavailable.
-7. Remove blocked dates from the same panel when needed.
+7. If the cancellation is urgent, enable Emergency Cancellation Override and provide a reason.
+8. Remove blocked dates from the same panel when needed.
 
 ### 1.4 Available Features
 - Immediate navigation to major modules.
 - Appointment snapshot and activity visibility.
 - Booking date blocking with reason and date list.
+- Standard cancellation lead-time enforcement for non-emergency changes.
+- Emergency cancellation override with logged reason and email notification.
 
 ### 1.5 Module Limitations
 - Date blocking currently prepares payload for notification integration; notification behavior may depend on backend integrations.

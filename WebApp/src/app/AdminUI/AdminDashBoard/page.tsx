@@ -135,6 +135,7 @@ type UnavailableDate = {
   unavailable_id: number;
   unavailable_date: string;
   reason: string;
+  is_emergency?: number | boolean;
 };
 
 const DEFAULT_SUMMARY_CARDS: SummaryCard[] = [
@@ -642,6 +643,7 @@ export default function AdminHome() {
   const [showAnnouncementManagementModal, setShowAnnouncementManagementModal] = useState(false);
   const [unavailableDate, setUnavailableDate] = useState("");
   const [unavailableReason, setUnavailableReason] = useState("");
+  const [isEmergencyCancellation, setIsEmergencyCancellation] = useState(false);
   const [unavailableDates, setUnavailableDates] = useState<UnavailableDate[]>([]);
   const [savingUnavailable, setSavingUnavailable] = useState(false);
   const [showReportsNavToast, setShowReportsNavToast] = useState(false);
@@ -698,6 +700,7 @@ export default function AdminHome() {
           reason: unavailableReason.trim(),
           created_by_role: "admin",
           created_by_user_id: getCurrentUserId(),
+          is_emergency: isEmergencyCancellation,
         }),
       });
 
@@ -723,6 +726,7 @@ export default function AdminHome() {
       }
       setUnavailableDate("");
       setUnavailableReason("");
+      setIsEmergencyCancellation(false);
       fetchUnavailableDates();
     } catch (err) {
       console.error("Error marking date unavailable:", err);
@@ -1349,7 +1353,7 @@ export default function AdminHome() {
 
             <div className="space-y-4 px-5 py-4">
               <p className="text-sm text-gray-600">
-                This blocks booking for students/faculty and prepares data for the upcoming notification system.
+                Standard cancellations must be made at least 24 hours before the appointment date. Use Emergency Cancellation Override only for urgent cases such as outages, maintenance, or safety issues.
               </p>
 
               <div className="grid gap-3 md:grid-cols-3">
@@ -1367,6 +1371,21 @@ export default function AdminHome() {
                   className="rounded-md border border-gray-300 px-3 py-2 md:col-span-2"
                 />
               </div>
+
+              <label className="flex items-start gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={isEmergencyCancellation}
+                  onChange={(e) => setIsEmergencyCancellation(e.target.checked)}
+                  className="mt-1 h-4 w-4 rounded border-gray-300 text-[#113F67] focus:ring-[#113F67]"
+                />
+                <span>
+                  Emergency Cancellation Override
+                  <span className="block text-xs text-gray-500">
+                    Requires a reason, logs the override, and emails affected users immediately.
+                  </span>
+                </span>
+              </label>
 
               <div>
                 <button
@@ -1388,7 +1407,8 @@ export default function AdminHome() {
                       className="flex items-center justify-between rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm"
                     >
                       <span>
-                        {format(new Date(`${item.unavailable_date}T00:00:00`), "MMM dd, yyyy")} - {item.reason}
+                          {format(new Date(`${item.unavailable_date}T00:00:00`), "MMM dd, yyyy")} - {item.reason}
+                          {item.is_emergency ? " • Emergency override" : ""}
                       </span>
                       <button
                         onClick={() => handleRemoveUnavailableDate(item.unavailable_date)}

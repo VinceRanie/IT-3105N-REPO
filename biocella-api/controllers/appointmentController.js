@@ -108,6 +108,12 @@ const getAppointmentDepartment = (appointment) => {
   return appointment.department || appointment.user_department || 'N/A';
 };
 
+const STANDARD_CANCELLATION_LEAD_HOURS = Number(process.env.APPOINTMENT_CANCELLATION_LEAD_HOURS || 24);
+
+const isEmergencyCancellation = (value) => {
+  return value === true || value === 1 || String(value).toLowerCase() === 'true';
+};
+
 // CREATE
 exports.create = async (req, res) => {
   try {
@@ -698,7 +704,8 @@ exports.getCalendarOverview = async (req, res) => {
 // MARK DATE AS UNAVAILABLE (Admin/RA)
 exports.markDateUnavailable = async (req, res) => {
   try {
-    const { date, reason, created_by_role, created_by_user_id } = req.body;
+    const { date, reason, created_by_role, created_by_user_id, is_emergency } = req.body;
+    const emergencyOverride = isEmergencyCancellation(is_emergency);
 
     if (!date) {
       return res.status(400).json({ message: "Date is required (YYYY-MM-DD)" });
@@ -706,6 +713,20 @@ exports.markDateUnavailable = async (req, res) => {
 
     if (!reason || !String(reason).trim()) {
       return res.status(400).json({ message: "Reason is required" });
+    }
+
+    const blockedDate = new Date(`${date}T00:00:00`);
+    if (Number.isNaN(blockedDate.getTime())) {
+      return res.status(400).json({ message: "Date must be in YYYY-MM-DD format" });
+    }
+
+    const hoursUntilBlockedDate = (blockedDate.getTime() - Date.now()) / (1000 * 60 * 60);
+    if (!emergencyOverride && hoursUntilBlockedDate < STANDARD_CANCELLATION_LEAD_HOURS) {
+      return res.status(409).json({
+        message: `Standard cancellation requires at least ${STANDARD_CANCELLATION_LEAD_HOURS} hours before the appointment date. Use Emergency Cancellation Override for urgent cases.`,
+        leadTimeHours: STANDARD_CANCELLATION_LEAD_HOURS,
+        hoursUntilBlockedDate: Math.max(0, Number(hoursUntilBlockedDate.toFixed(2)))
+      });
     }
 
     const existing = await Appointment.isDateUnavailable(date);
@@ -727,6 +748,7 @@ exports.markDateUnavailable = async (req, res) => {
     const deniedAppointments = [];
     const cancelledAppointments = [];
     const emailErrors = [];
+    const cancellationTypeLabel = emergencyOverride ? 'Emergency Cancellation Override' : 'Standard Cancellation';
 
     // Process each appointment
     for (const appointment of appointmentsOnDate) {
@@ -756,13 +778,14 @@ exports.markDateUnavailable = async (req, res) => {
         if (recipientEmail) {
           await sendEmail({
             to: recipientEmail,
-            subject: 'Appointment Request Denied - Date Unavailable - Biocella',
+            subject: `${cancellationTypeLabel} - Appointment Request Denied - Biocella`,
             html: `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                 <h2 style="color: #f44336;">Your appointment request has been denied</h2>
                 <p><strong>Requested Date:</strong> ${formattedDate}</p>
                 <p><strong>Department:</strong> ${getAppointmentDepartment(appointment)}</p>
                 <p><strong>Purpose:</strong> ${appointment.purpose}</p>
+                <p><strong>Cancellation Type:</strong> ${cancellationTypeLabel}</p>
                 ${identityLabel}
                 <hr>
                 <p><strong>Reason:</strong> The requested date has been marked as unavailable. ${trimmedReason}</p>
@@ -783,13 +806,14 @@ exports.markDateUnavailable = async (req, res) => {
         if (recipientEmail) {
           await sendEmail({
             to: recipientEmail,
-            subject: 'Appointment Cancelled - Date Unavailable - Biocella',
+            subject: `${cancellationTypeLabel} - Appointment Cancelled - Biocella`,
             html: `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                 <h2 style="color: #f44336;">Your appointment has been cancelled</h2>
                 <p><strong>Appointment Date:</strong> ${formattedDate}</p>
                 <p><strong>Department:</strong> ${getAppointmentDepartment(appointment)}</p>
                 <p><strong>Purpose:</strong> ${appointment.purpose}</p>
+                <p><strong>Cancellation Type:</strong> ${cancellationTypeLabel}</p>
                 ${identityLabel}
                 <hr>
                 <p><strong>Reason for Cancellation:</strong> The scheduled date has been marked as unavailable. ${trimmedReason}</p>
@@ -809,7 +833,8 @@ exports.markDateUnavailable = async (req, res) => {
       date,
       reason: trimmedReason,
       created_by_role: created_by_role || null,
-      created_by_user_id: Number.isFinite(creatorId) ? creatorId : null
+      created_by_user_id: Number.isFinite(creatorId) ? creatorId : null,
+      is_emergency: emergencyOverride
     });
 
     res.status(201).json({
@@ -817,6 +842,8 @@ exports.markDateUnavailable = async (req, res) => {
       unavailable: true,
       date,
       reason: trimmedReason,
+      is_emergency: emergencyOverride,
+      leadTimeHours: STANDARD_CANCELLATION_LEAD_HOURS,
       affectedAppointments: {
         denied: deniedAppointments.length,
         cancelled: cancelledAppointments.length,

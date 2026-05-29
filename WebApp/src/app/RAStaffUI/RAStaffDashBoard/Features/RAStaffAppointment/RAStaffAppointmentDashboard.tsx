@@ -31,6 +31,7 @@ interface UnavailableDate {
   unavailable_id: number;
   unavailable_date: string;
   reason: string;
+  is_emergency?: number | boolean;
 }
 
 type TabType = 'pending' | 'ongoing' | 'visited' | 'denied' | 'no_show';
@@ -57,6 +58,7 @@ export default function RAStaffAppointmentDashboard() {
   const [cameraFacingMode, setCameraFacingMode] = useState<'environment' | 'user'>('environment');
   const [unavailableDate, setUnavailableDate] = useState('');
   const [unavailableReason, setUnavailableReason] = useState('');
+  const [isEmergencyCancellation, setIsEmergencyCancellation] = useState(false);
   const [unavailableDates, setUnavailableDates] = useState<UnavailableDate[]>([]);
   const [savingUnavailable, setSavingUnavailable] = useState(false);
   const [showUnavailablePanel, setShowUnavailablePanel] = useState(false);
@@ -215,7 +217,8 @@ export default function RAStaffAppointmentDashboard() {
           date: unavailableDate,
           reason: unavailableReason.trim(),
           created_by_role: 'ra',
-          created_by_user_id: getCurrentUserId()
+          created_by_user_id: getCurrentUserId(),
+          is_emergency: isEmergencyCancellation
         })
       });
 
@@ -242,6 +245,7 @@ export default function RAStaffAppointmentDashboard() {
       }
       setUnavailableDate('');
       setUnavailableReason('');
+      setIsEmergencyCancellation(false);
       fetchUnavailableDates();
     } catch (err) {
       console.error('Error marking date unavailable:', err);
@@ -571,7 +575,7 @@ export default function RAStaffAppointmentDashboard() {
 
         {showUnavailablePanel && (
           <>
-            <p className="text-sm text-orange-800 mb-4 mt-3">This blocks booking for students/faculty and prepares data for the upcoming notification system.</p>
+            <p className="text-sm text-orange-800 mb-2 mt-3">Standard cancellations must be made at least 24 hours before the appointment date. Use Emergency Cancellation Override only for urgent cases such as outages, maintenance, or safety issues.</p>
             <div className="grid gap-3 md:grid-cols-3">
               <input
                 type="date"
@@ -587,6 +591,20 @@ export default function RAStaffAppointmentDashboard() {
                 className="rounded-md border border-orange-300 px-3 py-2 md:col-span-2"
               />
             </div>
+            <label className="mt-3 flex items-start gap-2 text-sm text-orange-900">
+              <input
+                type="checkbox"
+                checked={isEmergencyCancellation}
+                onChange={(e) => setIsEmergencyCancellation(e.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-orange-400 text-orange-600 focus:ring-orange-500"
+              />
+              <span>
+                Emergency Cancellation Override
+                <span className="block text-xs text-orange-700">
+                  Requires a reason, logs the override, and emails affected users immediately.
+                </span>
+              </span>
+            </label>
             <div className="mt-3 flex items-center gap-3">
               <button
                 onClick={handleSetUnavailableDate}
@@ -604,6 +622,7 @@ export default function RAStaffAppointmentDashboard() {
                   <div key={item.unavailable_id} className="flex items-center justify-between rounded-md bg-white px-3 py-2 text-sm border border-orange-100">
                     <span>
                       {format(new Date(`${item.unavailable_date}T00:00:00`), 'MMM dd, yyyy')} - {item.reason}
+                      {item.is_emergency ? ' • Emergency override' : ''}
                     </span>
                     <button
                       onClick={() => handleRemoveUnavailableDate(item.unavailable_date)}
